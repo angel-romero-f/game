@@ -1,11 +1,11 @@
-[gd_scene load_steps=7 format=3 uid="uid://d3e4f5g6h7i8j9"]
+[gd_scene load_steps=7 format=3 uid="uid://cunpolt6kudj1"]
 
-[ext_resource type="PackedScene" uid="uid://b1x2y3z4a5b6c7" path="res://scenes/Player.tscn" id="1_3"]
-[ext_resource type="Script" path="res://scripts/GameUI.gd" id="1_5"]
-[ext_resource type="Script" path="res://scripts/Game.gd" id="1_7"]
-[ext_resource type="SpriteFrames" path="res://assets/waterfallbg.pxo" id="2_bg"]
+[ext_resource type="PackedScene" uid="uid://cyxw86cioa1yq" path="res://scenes/Player.tscn" id="1_3"]
+[ext_resource type="Script" uid="uid://dlv7u88b01v3p" path="res://scripts/GameUI.gd" id="1_5"]
+[ext_resource type="Script" uid="uid://c7hbk6ymsdy4v" path="res://scripts/Game.gd" id="1_7"]
+[ext_resource type="SpriteFrames" uid="uid://dobxel0abln86" path="res://assets/waterfallbg.pxo" id="2_bg"]
 [ext_resource type="Script" path="res://scripts/RockSpawner.gd" id="3_rocks"]
-[ext_resource type="PackedScene" uid="uid://rock_scene_001" path="res://scenes/Rock.tscn" id="4_rock"]
+[ext_resource type="PackedScene" path="res://scenes/Rock.tscn" id="4_rock"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_7")
@@ -15,7 +15,6 @@ z_index = -10
 scale = Vector2(3, 3)
 sprite_frames = ExtResource("2_bg")
 autoplay = "default"
-centered = true
 
 [node name="RockSpawner" type="Node2D" parent="."]
 script = ExtResource("3_rocks")
@@ -27,7 +26,6 @@ position = Vector2(-160, -140)
 
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(0, 50)
-current = true
 zoom = Vector2(0.8, 0.8)
 
 [node name="UI" type="CanvasLayer" parent="."]

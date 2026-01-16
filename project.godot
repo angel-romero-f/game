@@ -11,9 +11,18 @@ config_version=5
 [application]
 
 config/name="minigame"
-run/main_scene="res://scenes/Game.tscn"
+run/main_scene="res://scenes/ui/TitleScreen.tscn"
 config/features=PackedStringArray("4.5", "Forward Plus")
 config/icon="res://icon.svg"
+
+[autoload]
+
+App="*res://autoload/App.gd"
+Net="*res://autoload/Net.gd"
+
+[display]
+
+window/stretch/mode="canvas_items"
 
 [editor_plugins]
 
