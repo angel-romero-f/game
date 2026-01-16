@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dobxel0abln86"
+path="res://.godot/imported/waterfallbg.pxo-0ee5b0b8a9d024f3eebeca71eb86eaa4.res"
+
+[deps]
+
+source_file="res://assets/waterfallbg.pxo"
+dest_files=["res://.godot/imported/waterfallbg.pxo-0ee5b0b8a9d024f3eebeca71eb86eaa4.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
