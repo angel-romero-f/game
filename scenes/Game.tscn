@@ -1,104 +1,34 @@
-[gd_scene load_steps=12 format=3 uid="uid://d3e4f5g6h7i8j9"]
+[gd_scene load_steps=7 format=3 uid="uid://d3e4f5g6h7i8j9"]
 
 [ext_resource type="PackedScene" uid="uid://b1x2y3z4a5b6c7" path="res://scenes/Player.tscn" id="1_3"]
-[ext_resource type="Script" path="res://scripts/EnemySpawner.gd" id="1_4"]
 [ext_resource type="Script" path="res://scripts/GameUI.gd" id="1_5"]
-[ext_resource type="PackedScene" uid="uid://c2d3e4f5g6h7i8" path="res://scenes/Enemy.tscn" id="1_6"]
 [ext_resource type="Script" path="res://scripts/Game.gd" id="1_7"]
-[ext_resource type="Script" path="res://scripts/ConsumableSpawner.gd" id="1_8"]
-[ext_resource type="PackedScene" uid="uid://e4f5g6h7i8j9k0" path="res://scenes/Consumable.tscn" id="1_9"]
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_h"]
-size = Vector2(800, 20)
-
-[sub_resource type="RectangleShape2D" id="RectangleShape2D_wall_v"]
-size = Vector2(20, 600)
+[ext_resource type="SpriteFrames" path="res://assets/waterfallbg.pxo" id="2_bg"]
+[ext_resource type="Script" path="res://scripts/RockSpawner.gd" id="3_rocks"]
+[ext_resource type="PackedScene" uid="uid://rock_scene_001" path="res://scenes/Rock.tscn" id="4_rock"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_7")
 
+[node name="Background" type="AnimatedSprite2D" parent="."]
+z_index = -10
+scale = Vector2(3, 3)
+sprite_frames = ExtResource("2_bg")
+autoplay = "default"
+centered = true
+
+[node name="RockSpawner" type="Node2D" parent="."]
+script = ExtResource("3_rocks")
+rock_scene = ExtResource("4_rock")
+
 [node name="Player" parent="." instance=ExtResource("1_3")]
-position = Vector2(0, 0)
+z_index = 5
+position = Vector2(-160, -140)
 
-[node name="EnemySpawner" type="Node2D" parent="."]
-script = ExtResource("1_4")
-enemy_scene = ExtResource("1_6")
-
-[node name="Enemies" type="Node2D" parent="."]
-groups = ["enemies_container"]
-
-[node name="ConsumableSpawner" type="Node2D" parent="."]
-script = ExtResource("1_8")
-consumable_scene = ExtResource("1_9")
-spawn_bounds = Rect2(-380, -280, 760, 560)
-
-[node name="Consumables" type="Node2D" parent="."]
-groups = ["consumables_container"]
-
-[node name="Boundaries" type="Node2D" parent="."]
-
-[node name="TopWall" type="StaticBody2D" parent="Boundaries"]
-collision_layer = 4
-position = Vector2(0, -300)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundaries/TopWall"]
-shape = SubResource("RectangleShape2D_wall_h")
-
-[node name="Visual" type="ColorRect" parent="Boundaries/TopWall"]
-offset_left = -400.0
-offset_top = -10.0
-offset_right = 400.0
-offset_bottom = 10.0
-color = Color(0.5, 0.5, 0.5, 1)
-
-[node name="BottomWall" type="StaticBody2D" parent="Boundaries"]
-collision_layer = 4
-position = Vector2(0, 300)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundaries/BottomWall"]
-shape = SubResource("RectangleShape2D_wall_h")
-
-[node name="Visual" type="ColorRect" parent="Boundaries/BottomWall"]
-offset_left = -400.0
-offset_top = -10.0
-offset_right = 400.0
-offset_bottom = 10.0
-color = Color(0.5, 0.5, 0.5, 1)
-
-[node name="LeftWall" type="StaticBody2D" parent="Boundaries"]
-collision_layer = 4
-position = Vector2(-400, 0)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundaries/LeftWall"]
-shape = SubResource("RectangleShape2D_wall_v")
-
-[node name="Visual" type="ColorRect" parent="Boundaries/LeftWall"]
-offset_left = -10.0
-offset_top = -300.0
-offset_right = 10.0
-offset_bottom = 300.0
-color = Color(0.5, 0.5, 0.5, 1)
-
-[node name="RightWall" type="StaticBody2D" parent="Boundaries"]
-collision_layer = 4
-position = Vector2(400, 0)
-
-[node name="CollisionShape2D" type="CollisionShape2D" parent="Boundaries/RightWall"]
-shape = SubResource("RectangleShape2D_wall_v")
-
-[node name="Visual" type="ColorRect" parent="Boundaries/RightWall"]
-offset_left = -10.0
-offset_top = -300.0
-offset_right = 10.0
-offset_bottom = 300.0
-color = Color(0.5, 0.5, 0.5, 1)
-
-[node name="Camera2D" type="Camera2D" parent="Player"]
+[node name="Camera2D" type="Camera2D" parent="."]
+position = Vector2(0, 50)
 current = true
-limit_left = -400
-limit_top = -300
-limit_right = 400
-limit_bottom = 300
+zoom = Vector2(0.8, 0.8)
 
 [node name="UI" type="CanvasLayer" parent="."]
 script = ExtResource("1_5")
@@ -112,45 +42,19 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 
-[node name="HealthBar" type="ProgressBar" parent="UI/UI"]
+[node name="InstructionsLabel" type="Label" parent="UI/UI"]
 layout_mode = 1
-anchors_preset = 2
-anchor_top = 1.0
-anchor_bottom = 1.0
-offset_left = 20.0
-offset_top = -100.0
-offset_right = 320.0
-offset_bottom = -60.0
-grow_vertical = 0
-max_value = 100.0
-value = 100.0
-show_percentage = false
-
-[node name="TimerLabel" type="Label" parent="UI/UI"]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -200.0
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -250.0
 offset_top = 20.0
-offset_right = -20.0
-offset_bottom = 60.0
-grow_horizontal = 0
-text = "Time: 30.00"
-horizontal_alignment = 2
-
-[node name="ItemsLabel" type="Label" parent="UI/UI"]
-layout_mode = 1
-anchors_preset = 1
-anchor_left = 1.0
-anchor_right = 1.0
-offset_left = -200.0
-offset_top = 60.0
-offset_right = -20.0
-offset_bottom = 100.0
-grow_horizontal = 0
-text = "Items Collected: 0"
-horizontal_alignment = 2
+offset_right = 250.0
+offset_bottom = 70.0
+grow_horizontal = 2
+theme_override_font_sizes/font_size = 24
+text = "Press SPACE to jump across the rocks!"
+horizontal_alignment = 1
 
 [node name="GameOverPanel" type="Panel" parent="UI/UI"]
 visible = false
@@ -180,11 +84,14 @@ offset_right = 180.0
 offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "Game Over!"
+theme_override_font_sizes/font_size = 20
+text = "Game Over!
+You fell in the water!
+Press R to Restart"
 horizontal_alignment = 1
 vertical_alignment = 1
 
-[node name="PhaseCompletePanel" type="Panel" parent="UI/UI"]
+[node name="WinPanel" type="Panel" parent="UI/UI"]
 visible = false
 layout_mode = 1
 anchors_preset = 8
@@ -199,7 +106,7 @@ offset_bottom = 100.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="PhaseCompleteLabel" type="Label" parent="UI/UI/PhaseCompletePanel"]
+[node name="WinLabel" type="Label" parent="UI/UI/WinPanel"]
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -212,6 +119,9 @@ offset_right = 180.0
 offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
-text = "Phase Complete!"
+theme_override_font_sizes/font_size = 20
+text = "You Made It!
+You crossed the river!
+Press R to Play Again"
 horizontal_alignment = 1
 vertical_alignment = 1
