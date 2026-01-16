@@ -1,73 +1,166 @@
 extends CharacterBody2D
 
-@export var speed: float = 200.0
-@export var max_health: int = 100
+# Jump settings
+@export var jump_duration: float = 0.2
 
-var health: int
-var items_collected: int = 0
+# How far along the flow direction to search for a rock (timing window)
+@export var rock_catch_range: float = 100.0
 
-signal health_changed(new_health)
+# Current lane (-1 = starting bank, 0-3 = river lanes, 4+ = safe zone)
+var current_lane: int = -1
+var max_lane: int = 4  # 4 lanes (0-3), then victory
+
+# State
+var is_jumping: bool = false
+var game_over: bool = false
+var current_rock: Area2D = null
+
+# Reference to spawner
+var rock_spawner: Node2D = null
+
 signal player_died
-signal item_collected(item_type: String)
-signal items_count_changed(count: int)
+signal player_won
 
 func _ready():
-	health = max_health
 	add_to_group("player")
-	health_changed.emit(health)
+	await get_tree().process_frame
+	rock_spawner = get_tree().current_scene.get_node_or_null("RockSpawner")
 
-func _physics_process(_delta):
-	# Handle movement
-	var input_vector = Vector2.ZERO
-	if Input.is_action_pressed("move_up"):
-		input_vector.y -= 1
-	if Input.is_action_pressed("move_down"):
-		input_vector.y += 1
-	if Input.is_action_pressed("move_left"):
-		input_vector.x -= 1
-	if Input.is_action_pressed("move_right"):
-		input_vector.x += 1
+func _process(_delta):
+	if game_over:
+		return
 	
-	# Normalize diagonal movement
-	if input_vector.length() > 0:
-		input_vector = input_vector.normalized()
-		velocity = input_vector * speed
+	# Follow the rock we're standing on
+	if current_rock and is_instance_valid(current_rock) and not is_jumping:
+		global_position = current_rock.global_position
+		
+		# Fell off screen?
+		if global_position.x < -350 or global_position.y > 350:
+			fall_in_water()
+			return
+	
+	# Jump input
+	if not is_jumping:
+		if Input.is_action_just_pressed("ui_accept") or Input.is_action_just_pressed("attack"):
+			try_jump()
+
+func try_jump():
+	if is_jumping or game_over:
+		return
+	
+	var next_lane = current_lane + 1
+	
+	# Jumping to victory?
+	if next_lane > max_lane - 1:
+		jump_to_victory()
+		return
+	
+	# Find a rock in the next lane
+	var target = find_rock_in_lane(next_lane)
+	
+	if target:
+		jump_to_rock(target, next_lane)
 	else:
-		velocity = Vector2.ZERO
+		jump_to_water(next_lane)
+
+func find_rock_in_lane(lane_idx: int) -> Area2D:
+	if not rock_spawner:
+		return null
 	
-	move_and_slide()
+	var rocks = rock_spawner.get_rocks_in_lane(lane_idx)
+	var best_rock: Area2D = null
+	var best_dist: float = rock_catch_range
 	
-	# Check for collisions with enemies (contact damage)
-	check_enemy_collisions()
-
-func check_enemy_collisions():
-	var enemies = get_tree().get_nodes_in_group("enemies")
-	for enemy in enemies:
-		if enemy and is_instance_valid(enemy):
-			var distance = enemy.global_position.distance_to(global_position)
-			if distance < 45.0: # Contact range (player 16px + enemy 14px + buffer)
-				if enemy.has_method("deal_contact_damage"):
-					enemy.deal_contact_damage()
-
-func take_damage(amount: int):
-	health -= amount
-	health = max(0, health)
-	health_changed.emit(health)
+	# River flow direction
+	var flow_dir = Vector2(-1, 1).normalized()
 	
-	if health <= 0:
-		die()
+	# Find a rock that's within catch range ALONG THE FLOW DIRECTION
+	# This means timing matters, not distance perpendicular to flow
+	for rock in rocks:
+		if not is_instance_valid(rock):
+			continue
+		
+		# Vector from player to rock
+		var to_rock = rock.global_position - global_position
+		
+		# Project onto flow direction - this is the "timing" distance
+		# Positive = rock is downstream, Negative = rock is upstream
+		var flow_distance = to_rock.dot(flow_dir)
+		
+		# We want rocks that are roughly "aligned" with our jump
+		# Check distance along flow direction (timing)
+		var abs_flow_dist = abs(flow_distance)
+		
+		if abs_flow_dist < best_dist:
+			best_dist = abs_flow_dist
+			best_rock = rock
+	
+	return best_rock
 
-func die():
-	player_died.emit()
-	# Stop movement
-	set_physics_process(false)
-	# Could add death animation here
+func jump_to_rock(rock: Area2D, lane_idx: int):
+	is_jumping = true
+	current_rock = null
+	current_lane = lane_idx
+	
+	# Animate jump to the rock
+	var destination = rock.global_position
+	var mid = (global_position + destination) / 2.0 + Vector2(0, -20)
+	
+	var tween = create_tween()
+	tween.tween_property(self, "global_position", mid, jump_duration * 0.5)
+	tween.tween_property(self, "global_position", destination, jump_duration * 0.5)
+	tween.tween_callback(func(): land_on_rock(rock))
 
-func heal(amount: int):
-	health = min(max_health, health + amount)
-	health_changed.emit(health)
+func land_on_rock(rock: Area2D):
+	is_jumping = false
+	if is_instance_valid(rock):
+		current_rock = rock
+		global_position = rock.global_position
+	else:
+		fall_in_water()
 
-func collect_item(item_type: String):
-	items_collected += 1
-	item_collected.emit(item_type)
-	items_count_changed.emit(items_collected)
+func jump_to_water(lane_idx: int):
+	is_jumping = true
+	current_rock = null
+	current_lane = lane_idx
+	
+	# Jump to where we expected a rock to be
+	var jump_offset = Vector2(80, 80)
+	var destination = global_position + jump_offset
+	var mid = (global_position + destination) / 2.0 + Vector2(0, -20)
+	
+	var tween = create_tween()
+	tween.tween_property(self, "global_position", mid, jump_duration * 0.5)
+	tween.tween_property(self, "global_position", destination, jump_duration * 0.5)
+	tween.tween_callback(fall_in_water)
+
+func jump_to_victory():
+	is_jumping = true
+	current_rock = null
+	current_lane = max_lane
+	
+	var destination = global_position + Vector2(80, 60)
+	var mid = (global_position + destination) / 2.0 + Vector2(0, -20)
+	
+	var tween = create_tween()
+	tween.tween_property(self, "global_position", mid, jump_duration * 0.5)
+	tween.tween_property(self, "global_position", destination, jump_duration * 0.5)
+	tween.tween_callback(win_game)
+
+func fall_in_water():
+	if game_over:
+		return
+	
+	game_over = true
+	is_jumping = false
+	current_rock = null
+	
+	var tween = create_tween()
+	tween.tween_property(self, "modulate:a", 0.0, 0.3)
+	tween.tween_property(self, "global_position:y", global_position.y + 20, 0.3)
+	tween.tween_callback(func(): player_died.emit())
+
+func win_game():
+	game_over = true
+	is_jumping = false
+	player_won.emit()

@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://c1sk2df6op8al"
+path="res://.godot/imported/hoodedfigure.pxo-b820d38184aa849bf4f56da0a75d379f.res"
+
+[deps]
+
+source_file="res://assets/hoodedfigure.pxo"
+dest_files=["res://.godot/imported/hoodedfigure.pxo-b820d38184aa849bf4f56da0a75d379f.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
