@@ -26,13 +26,16 @@ func _ready() -> void:
 		back_button.pressed.connect(_on_back_pressed)
 
 func _on_host_pressed() -> void:
-	App.go("res://scenes/ui/HostLobby.tscn")
+	App.set_next_scene("res://scenes/ui/HostLobby.tscn")
+	App.go("res://scenes/ui/NameEntry.tscn")
 
 func _on_join_pressed() -> void:
-	App.go("res://scenes/ui/JoinScreen.tscn")
+	App.set_next_scene("res://scenes/ui/JoinScreen.tscn")
+	App.go("res://scenes/ui/NameEntry.tscn")
 
 func _on_single_pressed() -> void:
-	App.go("res://scenes/ui/RaceSelect.tscn")
+	App.set_next_scene("res://scenes/ui/RaceSelect.tscn")
+	App.go("res://scenes/ui/NameEntry.tscn")
 
 func _on_back_pressed() -> void:
 	App.go("res://scenes/ui/MainMenu.tscn")

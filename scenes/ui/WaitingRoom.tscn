@@ -65,6 +65,11 @@ theme_override_font_sizes/font_size = 35
 text = "Waiting"
 horizontal_alignment = 1
 
+[node name="NameLabel" type="Label" parent="Card/Margin/VBoxContainer"]
+layout_mode = 2
+text = "Name: "
+horizontal_alignment = 1
+
 [node name="InfoLabel" type="Label" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 text = "Waiting for host to start..."

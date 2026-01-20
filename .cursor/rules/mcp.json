@@ -1,0 +1,12 @@
+{
+    "mcpServers": {
+      "godot": {
+        "command": "node",
+        "args": ["C:/Users/temmy/Documents/godot-mcp/build/index.js"],
+        "env": {
+          "DEBUG": "true",
+          "GODOT_PROJECT_PATH": "C:/Users/temmy/Documents/game"
+        }
+      }
+    }
+  }

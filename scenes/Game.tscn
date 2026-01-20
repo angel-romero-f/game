@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://cunpolt6kudj1"]
+[gd_scene load_steps=8 format=3 uid="uid://cunpolt6kudj1"]
 
 [ext_resource type="PackedScene" uid="uid://cyxw86cioa1yq" path="res://scenes/Player.tscn" id="1_3"]
 [ext_resource type="Script" uid="uid://dlv7u88b01v3p" path="res://scripts/GameUI.gd" id="1_5"]
@@ -6,6 +6,7 @@
 [ext_resource type="SpriteFrames" uid="uid://dobxel0abln86" path="res://assets/waterfallbg.pxo" id="2_bg"]
 [ext_resource type="Script" path="res://scripts/RockSpawner.gd" id="3_rocks"]
 [ext_resource type="PackedScene" path="res://scenes/Rock.tscn" id="4_rock"]
+[ext_resource type="AudioStream" uid="uid://cfgchbs7flen5" path="res://music/lose_music.mp3" id="5_lose"]
 
 [node name="Game" type="Node2D"]
 script = ExtResource("1_7")
@@ -27,6 +28,9 @@ position = Vector2(-160, -140)
 [node name="Camera2D" type="Camera2D" parent="."]
 position = Vector2(0, 50)
 zoom = Vector2(0.8, 0.8)
+
+[node name="LoseMusic" type="AudioStreamPlayer" parent="."]
+stream = ExtResource("5_lose")
 
 [node name="UI" type="CanvasLayer" parent="."]
 script = ExtResource("1_5")

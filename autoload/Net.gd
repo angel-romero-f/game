@@ -7,6 +7,9 @@ var peer: ENetMultiplayerPeer
 
 signal joined_game
 signal left_game
+signal player_names_updated
+
+var player_names: Dictionary = {}
 
 ## Host a game server
 func host_game() -> void:
@@ -106,6 +109,9 @@ func _on_peer_disconnected(id: int) -> void:
 	# Only server handles despawns
 	if multiplayer.is_server():
 		get_tree().call_group("game", "server_despawn_player", id)
+		if player_names.has(id):
+			player_names.erase(id)
+			_sync_player_names()
 
 ## Internal cleanup (doesn't emit left_game signal)
 func _cleanup_connection() -> void:
@@ -114,11 +120,50 @@ func _cleanup_connection() -> void:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = null
 	peer = null
+	player_names.clear()
 
 ## Disconnect from multiplayer session
 func disconnect_from_game() -> void:
 	_cleanup_connection()
 	left_game.emit()
+
+## Submit local player's name to the host
+func submit_player_name(name: String) -> void:
+	var cleaned := name.strip_edges()
+	if cleaned.is_empty():
+		return
+	
+	if multiplayer.is_server():
+		_set_player_name(multiplayer.get_unique_id(), cleaned)
+		_sync_player_names()
+	else:
+		set_player_name.rpc_id(1, cleaned)
+
+@rpc("any_peer", "reliable")
+func set_player_name(name: String) -> void:
+	if not multiplayer.is_server():
+		return
+	
+	var cleaned := name.strip_edges()
+	if cleaned.is_empty():
+		return
+	
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_set_player_name(id, cleaned)
+	_sync_player_names()
+
+@rpc("authority", "call_local", "reliable")
+func sync_player_names(names: Dictionary) -> void:
+	player_names = names.duplicate(true)
+	player_names_updated.emit()
+
+func _set_player_name(id: int, name: String) -> void:
+	player_names[id] = name
+
+func _sync_player_names() -> void:
+	sync_player_names.rpc(player_names)
 
 ## RPC: Start the game (called by host, transitions everyone to Game scene)
 @rpc("authority", "call_local", "reliable")

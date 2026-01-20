@@ -1,6 +1,6 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=4 format=3 uid="uid://b4ybds7fc26iu"]
 
-[ext_resource type="Script" path="res://scripts/ui/JoinScreen.gd" id="1"]
+[ext_resource type="Script" uid="uid://bgp3j2rh2hatr" path="res://scripts/ui/JoinScreen.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b0flo2kxj716s" path="res://pictures/title_bg_1.png" id="2_6jbdy"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_6jbdy"]
@@ -68,6 +68,7 @@ horizontal_alignment = 1
 [node name="CodeInput" type="LineEdit" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 placeholder_text = "Enter host code (e.g. 192.168.1.12:9999)"
+alignment = 1
 
 [node name="JoinButton" type="Button" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
@@ -75,7 +76,6 @@ text = "Join"
 
 [node name="StatusLabel" type="Label" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
-text = ""
 horizontal_alignment = 1
 
 [node name="BackButton" type="Button" parent="Card/Margin/VBoxContainer"]
