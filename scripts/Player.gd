@@ -18,11 +18,21 @@ var current_rock: Area2D = null
 # Reference to spawner
 var rock_spawner: Node2D = null
 
+var jump_sfx: AudioStreamPlayer
+
 signal player_died
 signal player_won
 
 func _ready():
 	add_to_group("player")
+	# Jump SFX (kept local to the player so it works in-game regardless of UI audio).
+	jump_sfx = AudioStreamPlayer.new()
+	jump_sfx.name = "JumpSfx"
+	add_child(jump_sfx)
+	var jump_stream: AudioStream = load("res://sounds/jump.wav")
+	if jump_stream:
+		jump_sfx.stream = jump_stream
+		jump_sfx.volume_db = -2.0
 	await get_tree().process_frame
 	rock_spawner = get_tree().current_scene.get_node_or_null("RockSpawner")
 
@@ -49,6 +59,7 @@ func try_jump():
 		return
 	
 	var next_lane = current_lane + 1
+	_play_jump_sfx()
 	
 	# Jumping to victory?
 	if next_lane > max_lane - 1:
@@ -62,6 +73,13 @@ func try_jump():
 		jump_to_rock(target, next_lane)
 	else:
 		jump_to_water(next_lane)
+
+func _play_jump_sfx() -> void:
+	if not jump_sfx or not jump_sfx.stream:
+		return
+	if jump_sfx.playing:
+		jump_sfx.stop()
+	jump_sfx.play()
 
 func find_rock_in_lane(lane_idx: int) -> Area2D:
 	if not rock_spawner:
