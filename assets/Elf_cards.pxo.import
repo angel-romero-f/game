@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dvak7aktofje2"
+path="res://.godot/imported/Elf_cards.pxo-52329fef47a75dc0ce02a38f5aae63a4.res"
+
+[deps]
+
+source_file="res://assets/Elf_cards.pxo"
+dest_files=["res://.godot/imported/Elf_cards.pxo-52329fef47a75dc0ce02a38f5aae63a4.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
