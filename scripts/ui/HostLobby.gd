@@ -78,7 +78,7 @@ func _refresh_players_list() -> void:
 func _on_start_pressed() -> void:
 	if multiplayer.is_server():
 		# Call RPC on Net autoload (available to all peers)
-		Net.start_game.rpc()
+		Net.start_race_select.rpc()
 
 func _on_back_pressed() -> void:
 	Net.disconnect_from_game()

@@ -8,8 +8,12 @@ var peer: ENetMultiplayerPeer
 signal joined_game
 signal left_game
 signal player_names_updated
+signal player_races_updated
 
 var player_names: Dictionary = {}
+var player_races: Dictionary = {} # peer_id -> race_name (String)
+
+const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
 
 ## Host a game server
 func host_game() -> void:
@@ -112,6 +116,9 @@ func _on_peer_disconnected(id: int) -> void:
 		if player_names.has(id):
 			player_names.erase(id)
 			_sync_player_names()
+		if player_races.has(id):
+			player_races.erase(id)
+			_sync_player_races()
 
 ## Internal cleanup (doesn't emit left_game signal)
 func _cleanup_connection() -> void:
@@ -121,6 +128,7 @@ func _cleanup_connection() -> void:
 	multiplayer.multiplayer_peer = null
 	peer = null
 	player_names.clear()
+	player_races.clear()
 
 ## Disconnect from multiplayer session
 func disconnect_from_game() -> void:
@@ -138,6 +146,16 @@ func submit_player_name(name: String) -> void:
 		_sync_player_names()
 	else:
 		set_player_name.rpc_id(1, cleaned)
+
+## Submit local player's race to the host.
+## Pass "" to unselect.
+func submit_player_race(race: String) -> void:
+	var cleaned := race.strip_edges()
+	if multiplayer.is_server():
+		_server_try_set_player_race(multiplayer.get_unique_id(), cleaned)
+		_sync_player_races()
+	else:
+		set_player_race.rpc_id(1, cleaned)
 
 @rpc("any_peer", "reliable")
 func set_player_name(name: String) -> void:
@@ -164,6 +182,46 @@ func _set_player_name(id: int, name: String) -> void:
 
 func _sync_player_names() -> void:
 	sync_player_names.rpc(player_names)
+
+func _server_try_set_player_race(id: int, race: String) -> void:
+	# Unselect
+	if race.is_empty():
+		if player_races.has(id):
+			player_races.erase(id)
+		return
+	# Validate
+	if not RACES.has(race):
+		return
+	# Enforce "one race per player"
+	for pid in player_races.keys():
+		if int(pid) != id and String(player_races[pid]) == race:
+			return
+	player_races[id] = race
+
+func _sync_player_races() -> void:
+	sync_player_races.rpc(player_races)
+
+@rpc("any_peer", "reliable")
+func set_player_race(race: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_try_set_player_race(id, race.strip_edges())
+	_sync_player_races()
+
+@rpc("authority", "call_local", "reliable")
+func sync_player_races(races: Dictionary) -> void:
+	player_races = races.duplicate(true)
+	player_races_updated.emit()
+
+## RPC: Start the multiplayer race selection screen (called by host).
+@rpc("authority", "call_local", "reliable")
+func start_race_select() -> void:
+	if multiplayer.is_server():
+		_sync_player_races()
+	App.go("res://scenes/ui/MultiplayerRaceSelect.tscn")
 
 ## RPC: Start the game (called by host, transitions everyone to Game scene)
 @rpc("authority", "call_local", "reliable")
