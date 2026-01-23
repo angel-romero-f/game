@@ -58,6 +58,18 @@ theme_override_font_sizes/font_size = 24
 text = "Press SPACE to jump across the rocks!"
 horizontal_alignment = 1
 
+[node name="SettingsButton" type="Button" parent="UI/UI"]
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -100.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 50.0
+grow_horizontal = 0
+text = "Settings"
+
 [node name="GameOverPanel" type="Panel" parent="UI/UI"]
 visible = false
 layout_mode = 1
@@ -127,3 +139,104 @@ You crossed the river!
 Press R to Play Again"
 horizontal_alignment = 1
 vertical_alignment = 1
+
+[node name="SettingsPanel" type="Panel" parent="UI/UI"]
+process_mode = 3
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SettingsContainer" type="VBoxContainer" parent="UI/UI/SettingsPanel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -250.0
+offset_right = 250.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="SettingsLabel" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Paused - Settings"
+horizontal_alignment = 1
+
+[node name="MasterVolume" type="VBoxContainer" parent="UI/UI/SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer/MasterVolume"]
+layout_mode = 2
+text = "Master Volume"
+
+[node name="Slider" type="HSlider" parent="UI/UI/SettingsPanel/SettingsContainer/MasterVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="MusicVolume" type="VBoxContainer" parent="UI/UI/SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer/MusicVolume"]
+layout_mode = 2
+text = "Music Volume"
+
+[node name="Slider" type="HSlider" parent="UI/UI/SettingsPanel/SettingsContainer/MusicVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="SFXVolume" type="VBoxContainer" parent="UI/UI/SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer/SFXVolume"]
+layout_mode = 2
+text = "Game Elements Volume"
+
+[node name="Slider" type="HSlider" parent="UI/UI/SettingsPanel/SettingsContainer/SFXVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="UIVolume" type="VBoxContainer" parent="UI/UI/SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer/UIVolume"]
+layout_mode = 2
+text = "UI Volume"
+
+[node name="Slider" type="HSlider" parent="UI/UI/SettingsPanel/SettingsContainer/UIVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="ButtonContainer" type="HBoxContainer" parent="UI/UI/SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ResumeButton" type="Button" parent="UI/UI/SettingsPanel/SettingsContainer/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Resume"
+
+[node name="MainMenuButton" type="Button" parent="UI/UI/SettingsPanel/SettingsContainer/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Main Menu"

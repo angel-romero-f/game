@@ -28,6 +28,7 @@ func _ready():
 	# Jump SFX (kept local to the player so it works in-game regardless of UI audio).
 	jump_sfx = AudioStreamPlayer.new()
 	jump_sfx.name = "JumpSfx"
+	jump_sfx.bus = "SFX"  # Assign to SFX bus for game elements
 	add_child(jump_sfx)
 	var jump_stream: AudioStream = load("res://sounds/jump.wav")
 	if jump_stream:

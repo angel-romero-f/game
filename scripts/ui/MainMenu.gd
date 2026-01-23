@@ -30,8 +30,7 @@ func _on_play_pressed() -> void:
 	App.go("res://scenes/ui/PlayMenu.tscn")
 
 func _on_settings_pressed() -> void:
-	if status_label:
-		status_label.text = "Settings (coming soon)"
+	App.go("res://scenes/ui/Settings.tscn")
 
 func _on_credits_pressed() -> void:
 	if status_label:

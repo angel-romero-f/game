@@ -9,9 +9,13 @@ var ui_sfx: AudioStreamPlayer
 var blip_select_stream: AudioStream
 
 func _ready() -> void:
+	# Ensure audio buses exist
+	_setup_audio_buses()
+	
 	# Create and start main music immediately on game launch
 	main_music = AudioStreamPlayer.new()
 	main_music.name = "MainMusic"
+	main_music.bus = "Music"  # Assign to Music bus
 	add_child(main_music)
 	
 	# Load the music stream
@@ -29,6 +33,7 @@ func _ready() -> void:
 	# UI SFX (button blips, etc.)
 	ui_sfx = AudioStreamPlayer.new()
 	ui_sfx.name = "UISfx"
+	ui_sfx.bus = "UI"  # Assign to UI bus
 	add_child(ui_sfx)
 	blip_select_stream = load("res://sounds/blipSelect.wav")
 	if blip_select_stream:
@@ -84,3 +89,31 @@ func _connect_button_sfx(button: BaseButton) -> void:
 	var cb := Callable(self, "play_blip_select")
 	if not button.pressed.is_connected(cb):
 		button.pressed.connect(cb)
+
+func _setup_audio_buses() -> void:
+	# Check if Music bus exists, if not create it
+	var music_bus_idx = AudioServer.get_bus_index("Music")
+	if music_bus_idx == -1:
+		AudioServer.add_bus()
+		var new_bus_idx = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(new_bus_idx, "Music")
+		AudioServer.set_bus_send(new_bus_idx, "Master")
+		print("Created Music audio bus")
+	
+	# Check if SFX bus exists, if not create it
+	var sfx_bus_idx = AudioServer.get_bus_index("SFX")
+	if sfx_bus_idx == -1:
+		AudioServer.add_bus()
+		var new_bus_idx = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(new_bus_idx, "SFX")
+		AudioServer.set_bus_send(new_bus_idx, "Master")
+		print("Created SFX audio bus")
+	
+	# Check if UI bus exists, if not create it
+	var ui_bus_idx = AudioServer.get_bus_index("UI")
+	if ui_bus_idx == -1:
+		AudioServer.add_bus()
+		var new_bus_idx = AudioServer.bus_count - 1
+		AudioServer.set_bus_name(new_bus_idx, "UI")
+		AudioServer.set_bus_send(new_bus_idx, "Master")
+		print("Created UI audio bus")
