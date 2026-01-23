@@ -81,7 +81,7 @@ size_flags_vertical = 3
 
 [node name="StartButton" type="Button" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
-text = "Start Game"
+text = "Continue"
 
 [node name="BackButton" type="Button" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2

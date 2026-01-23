@@ -97,7 +97,7 @@ theme_override_constants/separation = 20
 alignment = 1
 
 [node name="ElfCard" type="PanelContainer" parent="MainContainer/CardsMargin/CardsContainer"]
-custom_minimum_size = Vector2(170, 255)
+custom_minimum_size = Vector2(160, 224)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_Elf")
 
@@ -131,7 +131,7 @@ text = "Elf"
 horizontal_alignment = 1
 
 [node name="OrcCard" type="PanelContainer" parent="MainContainer/CardsMargin/CardsContainer"]
-custom_minimum_size = Vector2(170, 255)
+custom_minimum_size = Vector2(160, 224)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_Orc")
 
@@ -157,7 +157,7 @@ text = "Orc"
 horizontal_alignment = 1
 
 [node name="FairyCard" type="PanelContainer" parent="MainContainer/CardsMargin/CardsContainer"]
-custom_minimum_size = Vector2(170, 255)
+custom_minimum_size = Vector2(160, 224)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_Fairy")
 
@@ -183,7 +183,7 @@ text = "Fairy"
 horizontal_alignment = 1
 
 [node name="InfernalCard" type="PanelContainer" parent="MainContainer/CardsMargin/CardsContainer"]
-custom_minimum_size = Vector2(170, 255)
+custom_minimum_size = Vector2(160, 224)
 layout_mode = 2
 theme_override_styles/panel = SubResource("StyleBoxFlat_Infernal")
 
