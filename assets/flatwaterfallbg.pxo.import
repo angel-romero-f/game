@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://cwavpwnu3nl7x"
+path="res://.godot/imported/flatwaterfallbg.pxo-f10ab4870d1e1e45147574cdad0781ea.res"
+
+[deps]
+
+source_file="res://assets/flatwaterfallbg.pxo"
+dest_files=["res://.godot/imported/flatwaterfallbg.pxo-f10ab4870d1e1e45147574cdad0781ea.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
