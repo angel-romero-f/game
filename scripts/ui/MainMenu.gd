@@ -33,5 +33,4 @@ func _on_settings_pressed() -> void:
 	App.go("res://scenes/ui/Settings.tscn")
 
 func _on_credits_pressed() -> void:
-	if status_label:
-		status_label.text = "Credits (coming soon)"
+	App.go("res://scenes/ui/Credits.tscn")

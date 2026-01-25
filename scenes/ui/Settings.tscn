@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=4 format=3 uid="uid://c4xi88wgdiow0"]
 
 [ext_resource type="Script" uid="uid://bvwx8k7j5a2qd" path="res://scripts/ui/Settings.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b0flo2kxj716s" path="res://pictures/title_bg_1.png" id="2"]
@@ -81,7 +81,6 @@ text = "Master Volume"
 
 [node name="Slider" type="HSlider" parent="Card/Margin/VBoxContainer/MasterVolume"]
 layout_mode = 2
-min_value = 0.0
 max_value = 1.0
 step = 0.01
 value = 0.8
@@ -98,7 +97,6 @@ text = "Music Volume"
 
 [node name="Slider" type="HSlider" parent="Card/Margin/VBoxContainer/MusicVolume"]
 layout_mode = 2
-min_value = 0.0
 max_value = 1.0
 step = 0.01
 value = 0.8
@@ -115,7 +113,6 @@ text = "Game Elements Volume"
 
 [node name="Slider" type="HSlider" parent="Card/Margin/VBoxContainer/SFXVolume"]
 layout_mode = 2
-min_value = 0.0
 max_value = 1.0
 step = 0.01
 value = 0.8
@@ -132,7 +129,6 @@ text = "UI Volume"
 
 [node name="Slider" type="HSlider" parent="Card/Margin/VBoxContainer/UIVolume"]
 layout_mode = 2
-min_value = 0.0
 max_value = 1.0
 step = 0.01
 value = 0.8
@@ -147,7 +143,7 @@ theme_override_constants/separation = 8
 
 [node name="SaveButton" type="Button" parent="Card/Margin/VBoxContainer/Buttons"]
 layout_mode = 2
-text = "Save Settings"
+text = "Save"
 
 [node name="HowToPlayButton" type="Button" parent="Card/Margin/VBoxContainer/Buttons"]
 layout_mode = 2

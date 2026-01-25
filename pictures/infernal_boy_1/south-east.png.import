@@ -2,16 +2,16 @@
 
 importer="texture"
 type="CompressedTexture2D"
-uid="uid://bjhlybjxcg3wh"
-path="res://.godot/imported/eg1_south-east.png-e1937a3c4d0dcedb695b669ec261c6fb.ctex"
+uid="uid://dl48lsshuy7ke"
+path="res://.godot/imported/south-east.png-2f3db5bc104247d5ad2785a8bfa06d1a.ctex"
 metadata={
 "vram_texture": false
 }
 
 [deps]
 
-source_file="res://pictures/elf_girl_1/eg1_south-east.png"
-dest_files=["res://.godot/imported/eg1_south-east.png-e1937a3c4d0dcedb695b669ec261c6fb.ctex"]
+source_file="res://pictures/infernal_boy_1/south-east.png"
+dest_files=["res://.godot/imported/south-east.png-2f3db5bc104247d5ad2785a8bfa06d1a.ctex"]
 
 [params]
 

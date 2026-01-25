@@ -3,6 +3,7 @@ extends Node
 ## Simple scene navigation helper + small UI state
 var player_name: String = ""
 var next_scene: String = ""
+var selected_race: String = "Elf"
 
 var main_music: AudioStreamPlayer
 var ui_sfx: AudioStreamPlayer
@@ -53,6 +54,9 @@ func set_player_name(name: String) -> void:
 
 func set_next_scene(path: String) -> void:
 	next_scene = path
+
+func set_selected_race(race: String) -> void:
+	selected_race = race.strip_edges()
 
 func stop_main_music() -> void:
 	if main_music and main_music.playing:

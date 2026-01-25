@@ -1,16 +1,16 @@
 {
   "character": {
-    "id": "aa8a267a-7165-46c6-bc85-36d7098c6a9a",
-    "name": "A grounded, humanoid elf with a balanced silhouette that emphasizes agility and practicality over ornamentation. Her design features muted earth tones, simple layered clothing, and a visible belt pouch that suggests travel, utility, and self-reliance. Facial details are minimal and calm, with expression conveyed through posture rather than emotion. The overall form blends soft, traditionally feminine traits with sturdy, functional design, creating a character that feels capable, adaptable, and rooted in a lived-in fantasy world.",
-    "prompt": "A grounded, humanoid elf with a balanced silhouette that emphasizes agility and practicality over ornamentation. Her design features muted earth tones, simple layered clothing, and a visible belt pouch that suggests travel, utility, and self-reliance. Facial details are minimal and calm, with expression conveyed through posture rather than emotion. The overall form blends soft, traditionally feminine traits with sturdy, functional design, creating a character that feels capable, adaptable, and rooted in a lived-in fantasy world.",
+    "id": "7a36b4e8-8232-4dc2-b97f-5ea81c22bfb9",
+    "name": "A humanoid infernal characterized by a restrained, controlled silhouette rather than overt monstrosity. Distinct infernal traits\u2014such as horns, tail, or subtle skin coloration\u2014are simplified into clear shapes to remain readable at small pixel scales. Clothing favors cloaks, layered fabric, and minimal armor, using dark, desaturated tones to imply magic and discipline. Facial detail is intentionally reduced, with identity conveyed through posture and silhouette instead of expression. The design balances traditionally masculine structure with refined, almost scholarly elements, creating an infernal presence that feels intelligent, deliberate, and dangerous without excess.",
+    "prompt": "A humanoid infernal characterized by a restrained, controlled silhouette rather than overt monstrosity. Distinct infernal traits\u2014such as horns, tail, or subtle skin coloration\u2014are simplified into clear shapes to remain readable at small pixel scales. Clothing favors cloaks, layered fabric, and minimal armor, using dark, desaturated tones to imply magic and discipline. Facial detail is intentionally reduced, with identity conveyed through posture and silhouette instead of expression. The design balances traditionally masculine structure with refined, almost scholarly elements, creating an infernal presence that feels intelligent, deliberate, and dangerous without excess.",
     "size": {
-      "width": 124,
-      "height": 124
+      "width": 160,
+      "height": 160
     },
     "template_id": "mannequin",
     "directions": 8,
     "view": "low top-down",
-    "created_at": "2026-01-21T03:00:41.660673+00:00"
+    "created_at": "2026-01-22T22:04:03.382319+00:00"
   },
   "frames": {
     "rotations": {
@@ -1071,5 +1071,5 @@
     "animations": {}
   },
   "export_version": "1.0",
-  "export_date": "2026-01-22T22:40:27.348762"
+  "export_date": "2026-01-23T20:37:29.693428"
 }
