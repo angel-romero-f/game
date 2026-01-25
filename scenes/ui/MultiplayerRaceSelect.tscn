@@ -324,12 +324,12 @@ layout_mode = 2
 theme_override_constants/separation = 10
 alignment = 1
 
-[node name="StartButton" type="Button" parent="MainContainer/BottomSection/Margin/VBoxContainer/ButtonContainer"]
-layout_mode = 2
-size_flags_horizontal = 3
-text = "Start Game"
-
 [node name="BackButton" type="Button" parent="MainContainer/BottomSection/Margin/VBoxContainer/ButtonContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 text = "Leave"
+
+[node name="StartButton" type="Button" parent="MainContainer/BottomSection/Margin/VBoxContainer/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Start Game"

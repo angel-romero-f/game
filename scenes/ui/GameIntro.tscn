@@ -1,0 +1,383 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/GameIntro.gd" id="1_script"]
+[ext_resource type="Texture2D" uid="uid://dm5oueriefmf3" path="res://pictures/map.png" id="2_map"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_D20"]
+bg_color = Color(0.9, 0.15, 0.15, 1)
+border_width_left = 6
+border_width_top = 6
+border_width_right = 6
+border_width_bottom = 6
+border_color = Color(0.2, 0.2, 0.2, 1)
+corner_radius_left_top = 16
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+corner_radius_left_bottom = 16
+shadow_color = Color(0, 0, 0, 0.6)
+shadow_size = 12
+
+[node name="GameIntro" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_script")
+
+[node name="MapBackground" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_map")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="MapOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.15, 0.6)
+
+[node name="ShowcaseContainer" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ShowcaseContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="RaceImageContainer" type="CenterContainer" parent="ShowcaseContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="RaceImageBG" type="Panel" parent="ShowcaseContainer/VBoxContainer/RaceImageContainer"]
+custom_minimum_size = Vector2(280, 280)
+layout_mode = 2
+
+[node name="RaceImage" type="TextureRect" parent="ShowcaseContainer/VBoxContainer/RaceImageContainer"]
+custom_minimum_size = Vector2(256, 256)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="NameLabel" type="Label" parent="ShowcaseContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_font_sizes/font_size = 48
+text = "Player Name"
+horizontal_alignment = 1
+
+[node name="D20Container" type="CenterContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="D20Container"]
+layout_mode = 2
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="RollingLabel" type="Label" parent="D20Container/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 28
+text = "Rolling..."
+horizontal_alignment = 1
+
+[node name="D20Sprite" type="Panel" parent="D20Container/VBoxContainer"]
+custom_minimum_size = Vector2(160, 160)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_D20")
+
+[node name="D20Label" type="Label" parent="D20Container/VBoxContainer/D20Sprite"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_font_sizes/font_size = 56
+text = "D20"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RollResultLabel" type="Label" parent="D20Container/VBoxContainer"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 64
+text = "20"
+horizontal_alignment = 1
+
+[node name="PlayerRollContainer" type="CenterContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="PlayerRollContainer"]
+custom_minimum_size = Vector2(300, 200)
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlayerRollContainer/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="RollTextLabel" type="Label" parent="PlayerRollContainer/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_font_sizes/font_size = 32
+text = "Your Roll"
+horizontal_alignment = 1
+
+[node name="RollValueLabel" type="Label" parent="PlayerRollContainer/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_font_sizes/font_size = 96
+text = "20"
+horizontal_alignment = 1
+
+[node name="OrderCenterContainer" type="CenterContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="OrderCenterContainer"]
+custom_minimum_size = Vector2(400, 350)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="OrderCenterContainer/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="OrderCenterContainer/Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="TitleLabel" type="Label" parent="OrderCenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 32
+text = "Turn Order"
+horizontal_alignment = 1
+
+[node name="OrderList" type="VBoxContainer" parent="OrderCenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="OrderCornerContainer" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 0
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 180.0
+offset_bottom = 200.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="OrderCornerContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="TitleLabel" type="Label" parent="OrderCornerContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_font_sizes/font_size = 16
+text = "Turn Order"
+horizontal_alignment = 1
+
+[node name="MinigameButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -100.0
+offset_top = -80.0
+offset_right = 100.0
+offset_bottom = -30.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 20
+text = "Start Minigame"
+
+[node name="BattleButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 20.0
+offset_top = -25.0
+offset_right = 170.0
+offset_bottom = 25.0
+grow_vertical = 2
+theme_override_font_sizes/font_size = 20
+text = "Start Battle"
+
+[node name="SettingsButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -100.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 50.0
+grow_horizontal = 0
+text = "Settings"
+
+[node name="SettingsPanel" type="Panel" parent="."]
+process_mode = 3
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="SettingsContainer" type="VBoxContainer" parent="SettingsPanel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -250.0
+offset_right = 250.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="SettingsLabel" type="Label" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_font_sizes/font_size = 32
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="MasterVolume" type="VBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/MasterVolume"]
+layout_mode = 2
+text = "Master Volume"
+
+[node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/MasterVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="MusicVolume" type="VBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/MusicVolume"]
+layout_mode = 2
+text = "Music Volume"
+
+[node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/MusicVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="SFXVolume" type="VBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/SFXVolume"]
+layout_mode = 2
+text = "Game Elements Volume"
+
+[node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/SFXVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="UIVolume" type="VBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/UIVolume"]
+layout_mode = 2
+text = "UI Volume"
+
+[node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/UIVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="ButtonContainer" type="HBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ResumeButton" type="Button" parent="SettingsPanel/SettingsContainer/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Close"
+
+[node name="MainMenuButton" type="Button" parent="SettingsPanel/SettingsContainer/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Main Menu"

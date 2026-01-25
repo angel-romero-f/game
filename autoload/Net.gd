@@ -223,7 +223,8 @@ func start_race_select() -> void:
 		_sync_player_races()
 	App.go("res://scenes/ui/MultiplayerRaceSelect.tscn")
 
-## RPC: Start the game (called by host, transitions everyone to Game scene)
+## RPC: Start the game (called by host, transitions everyone to GameIntro scene)
 @rpc("authority", "call_local", "reliable")
 func start_game() -> void:
-	App.go("res://scenes/Game.tscn")
+	App.setup_multiplayer_game()
+	App.go("res://scenes/ui/GameIntro.tscn")

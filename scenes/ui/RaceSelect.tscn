@@ -270,14 +270,14 @@ layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="StartButton" type="Button" parent="MainContainer/BottomMargin/ButtonContainer"]
-custom_minimum_size = Vector2(150, 50)
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Start Game"
-
 [node name="BackButton" type="Button" parent="MainContainer/BottomMargin/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
+
+[node name="StartButton" type="Button" parent="MainContainer/BottomMargin/ButtonContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Start Game"

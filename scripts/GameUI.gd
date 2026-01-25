@@ -62,19 +62,28 @@ func find_player():
 			player.player_won.connect(_on_player_won)
 
 func _on_player_died():
-	show_game_over()
+	var is_final_death := App.lose_life()
+	show_game_over(is_final_death)
 
 func _on_player_won():
 	show_win()
 
-func show_game_over():
+func show_game_over(is_final: bool):
 	game_over_panel.visible = true
-	if game_over_label:
-		game_over_label.text = "Game Over!\nYou fell in the water!\nPress R to Restart"
-	if lose_music:
-		App.stop_main_music()
-		lose_music.stop()
-		lose_music.play()
+	
+	if is_final:
+		# Final death - show game over and play lose music
+		if game_over_label:
+			game_over_label.text = "Game Over!\nYou've used all your chances!\nPress R to return to map"
+		if lose_music:
+			App.stop_main_music()
+			lose_music.stop()
+			lose_music.play()
+	else:
+		# Not final - show remaining lives
+		var lives_left := App.get_lives()
+		if game_over_label:
+			game_over_label.text = "You fell in!\n%d chance%s remaining\nPress R to try again" % [lives_left, "s" if lives_left != 1 else ""]
 
 func _on_lose_music_finished() -> void:
 	App.play_main_music()
@@ -82,7 +91,7 @@ func _on_lose_music_finished() -> void:
 func show_win():
 	win_panel.visible = true
 	if win_label:
-		win_label.text = "You Made It!\nYou crossed the river!\nPress R to Play Again"
+		win_label.text = "You Made It!\nYou crossed the river!\nPress R to return to map"
 
 func _on_settings_pressed():
 	toggle_pause()
