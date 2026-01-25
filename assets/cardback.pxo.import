@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://b55gl2d0yo2w4"
+path="res://.godot/imported/cardback.pxo-df870248139e50aa2dc57f2d5e590e83.res"
+
+[deps]
+
+source_file="res://assets/cardback.pxo"
+dest_files=["res://.godot/imported/cardback.pxo-df870248139e50aa2dc57f2d5e590e83.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
