@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://xq1g15j4dvua"
+path="res://.godot/imported/elf_sprite3.pxo-b2a6eb5749bbb4d5bec8037b40d9a698.res"
+
+[deps]
+
+source_file="res://assets/elf_sprite3.pxo"
+dest_files=["res://.godot/imported/elf_sprite3.pxo-b2a6eb5749bbb4d5bec8037b40d9a698.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

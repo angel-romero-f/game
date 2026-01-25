@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3 uid="uid://8s4xj8qvpi8a"]
+
+[ext_resource type="PackedScene" uid="uid://ctx5wlgevt7qi" path="res://scenes/card.tscn" id="1_j85tk"]
+[ext_resource type="Script" uid="uid://p40834bmanry" path="res://scripts/CardManager.gd" id="2_cardmanager"]
+[ext_resource type="SpriteFrames" uid="uid://b55gl2d0yo2w4" path="res://assets/cardback.pxo" id="3_uesyd"]
+
+[node name="CardBattle" type="Node2D"]
+
+[node name="CardManager" type="Node2D" parent="."]
+script = ExtResource("2_cardmanager")
+
+[node name="FlameSpiral" parent="." instance=ExtResource("1_j85tk")]
+position = Vector2(570, 575)
+frame_index = 1
+card_size = Vector2(128, 128)
+
+[node name="FireArrow" parent="." instance=ExtResource("1_j85tk")]
+position = Vector2(439, 575)
+card_size = Vector2(128, 128)
+
+[node name="Card" parent="." instance=ExtResource("1_j85tk")]
+position = Vector2(1083, 580)
+card_sprite_frames = ExtResource("3_uesyd")
+frame_index = 0
+card_size = Vector2(128, 128)

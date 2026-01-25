@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://cbh87m7wl3bg0"
+path="res://.godot/imported/cardslot.pxo-a6f92dadc229e2c8bb28b783855c59b9.res"
+
+[deps]
+
+source_file="res://assets/cardslot.pxo"
+dest_files=["res://.godot/imported/cardslot.pxo-a6f92dadc229e2c8bb28b783855c59b9.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
