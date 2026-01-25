@@ -61,8 +61,9 @@ func _on_race_pressed(race: String) -> void:
 func _on_start_pressed() -> void:
 	if selected_race.is_empty():
 		return
-	# TODO: Store selected race in App or pass to Game scene
-	App.go("res://scenes/Game.tscn")
+	App.set_selected_race(selected_race)
+	App.setup_single_player_game()
+	App.go("res://scenes/ui/GameIntro.tscn")
 
 func _on_back_pressed() -> void:
 	App.go("res://scenes/ui/PlayMenu.tscn")

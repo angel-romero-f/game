@@ -116,8 +116,10 @@ func _on_race_pressed(race: String) -> void:
 		return
 	if _my_race() == race:
 		Net.submit_player_race("")
+		App.set_selected_race("")
 	else:
 		Net.submit_player_race(race)
+		App.set_selected_race(race)
 
 func _on_start_pressed() -> void:
 	if multiplayer.is_server():

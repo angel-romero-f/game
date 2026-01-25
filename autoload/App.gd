@@ -3,6 +3,28 @@ extends Node
 ## Simple scene navigation helper + small UI state
 var player_name: String = ""
 var next_scene: String = ""
+var selected_race: String = "Elf"
+
+## Game players data for turn order
+## Array of dictionaries: { "id": int, "name": String, "race": String, "roll": int, "is_local": bool }
+var game_players: Array = []
+var turn_order: Array = []  # Sorted game_players by roll (highest first)
+var is_multiplayer: bool = false
+
+## Lives system for minigame
+const MAX_LIVES: int = 3
+var current_lives: int = MAX_LIVES
+
+func reset_lives() -> void:
+	current_lives = MAX_LIVES
+
+func lose_life() -> bool:
+	## Returns true if game over (no lives left)
+	current_lives -= 1
+	return current_lives <= 0
+
+func get_lives() -> int:
+	return current_lives
 
 var main_music: AudioStreamPlayer
 var ui_sfx: AudioStreamPlayer
@@ -53,6 +75,89 @@ func set_player_name(name: String) -> void:
 
 func set_next_scene(path: String) -> void:
 	next_scene = path
+
+func set_selected_race(race: String) -> void:
+	selected_race = race.strip_edges()
+
+func setup_single_player_game() -> void:
+	is_multiplayer = false
+	game_players.clear()
+	turn_order.clear()
+	reset_lives()
+	
+	# Add the local player
+	var local_player := {
+		"id": 1,
+		"name": player_name if not player_name.is_empty() else "Player",
+		"race": selected_race,
+		"roll": 0,
+		"is_local": true
+	}
+	game_players.append(local_player)
+	
+	# Generate 3 AI opponents with the remaining races
+	var all_races := ["Elf", "Orc", "Fairy", "Infernal"]
+	var available_races: Array = []
+	for r in all_races:
+		if r != selected_race:
+			available_races.append(r)
+	available_races.shuffle()
+	
+	var ai_names := ["Thorne", "Mira", "Grak", "Lyra", "Korrin", "Sable", "Dusk", "Ember"]
+	ai_names.shuffle()
+	
+	for i in range(3):
+		var ai_player := {
+			"id": i + 100,  # AI IDs start at 100
+			"name": ai_names[i],
+			"race": available_races[i],
+			"roll": 0,
+			"is_local": false
+		}
+		game_players.append(ai_player)
+
+func setup_multiplayer_game() -> void:
+	is_multiplayer = true
+	game_players.clear()
+	turn_order.clear()
+	reset_lives()
+	
+	# Build player list from Net.player_names and Net.player_races
+	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	
+	for pid in Net.player_races.keys():
+		var p := {
+			"id": int(pid),
+			"name": String(Net.player_names.get(pid, "Player")),
+			"race": String(Net.player_races[pid]),
+			"roll": 0,
+			"is_local": int(pid) == my_id
+		}
+		game_players.append(p)
+
+func get_race_texture_path(race: String) -> String:
+	match race:
+		"Elf":
+			return "res://pictures/elf_girl_1/eg1_south.png"
+		"Orc":
+			return "res://pictures/orc_boy_1/ob1_south.png"
+		"Fairy":
+			return "res://pictures/fairy_girl_1/fg1_south.png"
+		"Infernal":
+			return "res://pictures/infernal_boy_1/ib1_south.png"
+	return ""
+
+func get_race_color(race: String) -> Color:
+	match race:
+		"Elf":
+			return Color(1, 0.9, 0.2, 1)  # Yellow
+		"Orc":
+			return Color(0.2, 0.8, 0.2, 1)  # Green
+		"Fairy":
+			return Color(0.7, 0.3, 0.9, 1)  # Purple
+		"Infernal":
+			return Color(0.9, 0.2, 0.2, 1)  # Red
+	return Color.WHITE
 
 func stop_main_music() -> void:
 	if main_music and main_music.playing:

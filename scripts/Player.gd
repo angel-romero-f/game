@@ -25,6 +25,7 @@ signal player_won
 
 func _ready():
 	add_to_group("player")
+	_apply_selected_race_visual()
 	# Jump SFX (kept local to the player so it works in-game regardless of UI audio).
 	jump_sfx = AudioStreamPlayer.new()
 	jump_sfx.name = "JumpSfx"
@@ -36,6 +37,51 @@ func _ready():
 		jump_sfx.volume_db = -2.0
 	await get_tree().process_frame
 	rock_spawner = get_tree().current_scene.get_node_or_null("RockSpawner")
+
+func _apply_selected_race_visual() -> void:
+	var visual := get_node_or_null("Visual") as Sprite2D
+	if not visual:
+		return
+
+	var race := String(App.selected_race).strip_edges()
+	if race.is_empty():
+		race = "Elf"
+
+	var texture_paths: Array[String] = []
+	match race:
+		"Fairy":
+			# Prefer south-east for the minigame, fall back to south if needed.
+			texture_paths = [
+				"res://pictures/fairy_girl_1/fg1_south-east.png",
+				"res://pictures/fairy_girl_1/fg1_south.png",
+			]
+		"Orc":
+			# Prefer the requested naming; fall back to current file names in repo.
+			texture_paths = [
+				"res://pictures/orc_boy_1/ob1_south-east.png",
+				"res://pictures/orc_boy_1/south-east.png",
+				"res://pictures/orc_boy_1/ob1_south.png",
+			]
+		"Infernal":
+			texture_paths = [
+				"res://pictures/infernal_boy_1/ib1_south-east.png",
+				"res://pictures/infernal_boy_1/south-east.png",
+				"res://pictures/infernal_boy_1/ib1_south.png",
+			]
+		_:
+			# Elf default (also used for Fairy).
+			texture_paths = [
+				"res://pictures/elf_girl_1/eg1_south-east.png",
+				"res://pictures/elf_girl_1/eg1_east.png",
+				"res://pictures/elf_girl_1/eg1_south.png",
+			]
+
+	for p in texture_paths:
+		if FileAccess.file_exists(p):
+			var tex := load(p) as Texture2D
+			if tex:
+				visual.texture = tex
+				return
 
 func _process(_delta):
 	if game_over:

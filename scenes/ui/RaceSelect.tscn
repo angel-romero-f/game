@@ -1,8 +1,11 @@
-[gd_scene load_steps=8 format=3]
+[gd_scene load_steps=11 format=3 uid="uid://c0s71t1777p37"]
 
-[ext_resource type="Script" path="res://scripts/ui/RaceSelect.gd" id="1"]
+[ext_resource type="Script" uid="uid://b81b5scec4ff" path="res://scripts/ui/RaceSelect.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b0flo2kxj716s" path="res://pictures/title_bg_1.png" id="2_6jbdy"]
-[ext_resource type="Texture2D" uid="uid://b6pjgjm43g033" path="res://pictures/elf_girl_1/eg1_south.png" id="3_elf"]
+[ext_resource type="Texture2D" uid="uid://cm5hpu4rgmddj" path="res://pictures/elf_girl_1/eg1_south.png" id="3_elf"]
+[ext_resource type="Texture2D" uid="uid://d2g5mk1tr6p5n" path="res://pictures/infernal_boy_1/ib1_south.png" id="4_infernal"]
+[ext_resource type="Texture2D" uid="uid://b1astpgoh5jlk" path="res://pictures/orc_boy_1/ob1_south.png" id="5_orc"]
+[ext_resource type="Texture2D" uid="uid://bcsw25qtjh2v3" path="res://pictures/fairy_girl_1/fg1_south.png" id="6_fairy"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_Elf"]
 bg_color = Color(1, 0.9, 0.2, 1)
@@ -60,6 +63,7 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
+offset_bottom = -140.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -124,7 +128,6 @@ stretch_mode = 5
 
 [node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/ElfCard/Content"]
 layout_mode = 2
-mouse_filter = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 24
 text = "Elf"
@@ -148,9 +151,27 @@ layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/OrcCard/Content"]
+[node name="OrcImageRow" type="HBoxContainer" parent="MainContainer/CardsMargin/CardsContainer/OrcCard/Content/CenterContainer"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="ShiftRight" type="Control" parent="MainContainer/CardsMargin/CardsContainer/OrcCard/Content/CenterContainer/OrcImageRow"]
+custom_minimum_size = Vector2(11, 0)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="OrcImage" type="TextureRect" parent="MainContainer/CardsMargin/CardsContainer/OrcCard/Content/CenterContainer/OrcImageRow"]
+custom_minimum_size = Vector2(155, 155)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("5_orc")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/OrcCard/Content"]
+layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 24
 text = "Orc"
@@ -159,11 +180,17 @@ horizontal_alignment = 1
 [node name="FairyCard" type="PanelContainer" parent="MainContainer/CardsMargin/CardsContainer"]
 custom_minimum_size = Vector2(170, 255)
 layout_mode = 2
+clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_Fairy")
 
 [node name="FairyButton" type="Button" parent="MainContainer/CardsMargin/CardsContainer/FairyCard"]
 layout_mode = 2
 flat = true
+
+[node name="FairySprite" type="Sprite2D" parent="MainContainer/CardsMargin/CardsContainer/FairyCard"]
+position = Vector2(85, 115)
+scale = Vector2(1.7, 1.7)
+texture = ExtResource("6_fairy")
 
 [node name="Content" type="VBoxContainer" parent="MainContainer/CardsMargin/CardsContainer/FairyCard"]
 layout_mode = 2
@@ -174,9 +201,17 @@ layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/FairyCard/Content"]
+[node name="FairyImage" type="TextureRect" parent="MainContainer/CardsMargin/CardsContainer/FairyCard/Content/CenterContainer"]
+custom_minimum_size = Vector2(145, 145)
 layout_mode = 2
 mouse_filter = 2
+visible = false
+texture = ExtResource("6_fairy")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/FairyCard/Content"]
+layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 24
 text = "Fairy"
@@ -195,14 +230,32 @@ flat = true
 layout_mode = 2
 mouse_filter = 2
 
-[node name="CenterContainer" type="CenterContainer" parent="MainContainer/CardsMargin/CardsContainer/InfernalCard/Content"]
+[node name="ImageContainer" type="CenterContainer" parent="MainContainer/CardsMargin/CardsContainer/InfernalCard/Content"]
 layout_mode = 2
 size_flags_vertical = 3
 mouse_filter = 2
 
-[node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/InfernalCard/Content"]
+[node name="InfernalImageRow" type="HBoxContainer" parent="MainContainer/CardsMargin/CardsContainer/InfernalCard/Content/ImageContainer"]
 layout_mode = 2
 mouse_filter = 2
+theme_override_constants/separation = 0
+alignment = 1
+
+[node name="ShiftRight" type="Control" parent="MainContainer/CardsMargin/CardsContainer/InfernalCard/Content/ImageContainer/InfernalImageRow"]
+custom_minimum_size = Vector2(12, 0)
+layout_mode = 2
+mouse_filter = 2
+
+[node name="InfernalImage" type="TextureRect" parent="MainContainer/CardsMargin/CardsContainer/InfernalCard/Content/ImageContainer/InfernalImageRow"]
+custom_minimum_size = Vector2(155, 155)
+layout_mode = 2
+mouse_filter = 2
+texture = ExtResource("4_infernal")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/InfernalCard/Content"]
+layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 24
 text = "Infernal"
@@ -217,14 +270,14 @@ layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="StartButton" type="Button" parent="MainContainer/BottomMargin/ButtonContainer"]
-custom_minimum_size = Vector2(150, 50)
-layout_mode = 2
-theme_override_font_sizes/font_size = 20
-text = "Start Game"
-
 [node name="BackButton" type="Button" parent="MainContainer/BottomMargin/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
 theme_override_font_sizes/font_size = 20
 text = "Back"
+
+[node name="StartButton" type="Button" parent="MainContainer/BottomMargin/ButtonContainer"]
+custom_minimum_size = Vector2(150, 50)
+layout_mode = 2
+theme_override_font_sizes/font_size = 20
+text = "Start Game"
