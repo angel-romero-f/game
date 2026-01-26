@@ -245,14 +245,31 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -100.0
+offset_left = -210.0
 offset_top = -80.0
-offset_right = 100.0
+offset_right = -10.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_font_sizes/font_size = 20
-text = "Start Minigame"
+theme_override_font_sizes/font_size = 18
+text = "River Minigame"
+
+[node name="BridgeMinigameButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -80.0
+offset_right = 210.0
+offset_bottom = -30.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_font_sizes/font_size = 18
+text = "Bridge Minigame"
 
 [node name="BattleButton" type="Button" parent="."]
 visible = false

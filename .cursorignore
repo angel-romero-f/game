@@ -1,0 +1,2 @@
+# Allow .cursor/mcp.json to be accessed
+!.cursor/mcp.json
