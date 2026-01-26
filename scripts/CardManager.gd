@@ -9,9 +9,11 @@ var screen_bounds: Rect2
 var hovered_card: Node2D = null
 var card_original_scales: Dictionary = {}  # Store original scales for each card
 var hover_scale: float = 1.15  # Scale factor when hovering (15% larger)
+var snapped_cards: Dictionary = {}  # Track which cards are snapped to slots (card -> slot)
 
 signal card_drag_started(card: Node2D)
 signal card_drag_ended(card: Node2D)
+signal card_snapped_to_slot(card: Node2D, slot: Node2D)
 
 func _ready():
 	# Calculate screen bounds
@@ -58,10 +60,10 @@ func _connect_card(card: Node2D):
 	if area and area is Area2D:
 		# Enable input detection
 		area.input_pickable = true
-		# Connect input event
+		# Connect input event (only if not already connected)
 		if not area.input_event.is_connected(_on_card_input_event):
 			area.input_event.connect(_on_card_input_event.bind(card))
-		# Connect mouse enter/exit for hover effects
+		# Connect mouse enter/exit for hover effects (only if not already connected)
 		if not area.mouse_entered.is_connected(_on_card_mouse_entered):
 			area.mouse_entered.connect(_on_card_mouse_entered.bind(card))
 		if not area.mouse_exited.is_connected(_on_card_mouse_exited):
@@ -72,6 +74,9 @@ func _on_card_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, c
 		var mouse_event = event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT:
 			if mouse_event.pressed:
+				# If card is snapped, unsnap it first
+				if snapped_cards.has(card):
+					_unsnap_card(card)
 				_start_drag(card, get_global_mouse_position())
 			else:
 				_end_drag()
@@ -137,7 +142,19 @@ func _start_drag(card: Node2D, mouse_pos: Vector2):
 
 func _end_drag():
 	if dragged_card:
-		card_drag_ended.emit(dragged_card)
+		var card = dragged_card
+		var card_pos = card.global_position
+		
+		# Check if card should snap to a nearby slot
+		var nearest_slot = _find_nearest_slot(card_pos)
+		if nearest_slot:
+			_snap_card_to_slot(card, nearest_slot)
+		else:
+			# Unsnap if card was previously snapped but moved away
+			if snapped_cards.has(card):
+				_unsnap_card(card)
+		
+		card_drag_ended.emit(card)
 		dragged_card = null
 		drag_offset = Vector2.ZERO
 
@@ -159,6 +176,14 @@ func _process(_delta):
 		
 		# Update card position
 		dragged_card.global_position = desired_pos
+	
+	# Keep snapped cards in place (only if not being dragged)
+	for card in snapped_cards.keys():
+		if is_instance_valid(card) and is_instance_valid(snapped_cards[card]):
+			# Don't lock position if card is being dragged
+			if card != dragged_card:
+				var slot = snapped_cards[card]
+				card.global_position = slot.global_position
 
 func _get_card_size(card: Node2D) -> Vector2:
 	# Try to get size from Card script if it has the method
@@ -175,6 +200,84 @@ func _get_card_size(card: Node2D) -> Vector2:
 	
 	# Default size if we can't determine
 	return Vector2(64, 96)
+
+func _find_nearest_slot(card_pos: Vector2) -> Node2D:
+	"""Finds the nearest slot to the given position within snap distance."""
+	var parent_scene = get_parent()
+	if not parent_scene:
+		return null
+	
+	var nearest_slot: Node2D = null
+	var nearest_distance: float = INF
+	
+	# Find all CardSlot instances recursively
+	var all_slots = _find_all_slots(parent_scene)
+	
+	for slot in all_slots:
+		if slot == self:
+			continue
+		
+		if slot.has_method("is_card_nearby") and slot.has_method("snap_card"):
+			# Check if slot can snap using a method call (more reliable than property access)
+			if slot.has_method("can_snap_cards"):
+				if not slot.can_snap_cards():
+					continue  # Skip this slot if snapping is disabled
+			else:
+				# Fallback: try to access property directly
+				var can_snap_value = slot.get("can_snap")
+				# Only skip if explicitly false (not null or true)
+				if can_snap_value == false:
+					continue
+			
+			if slot.is_card_nearby(card_pos):
+				var distance = card_pos.distance_to(slot.global_position)
+				if distance < nearest_distance:
+					nearest_distance = distance
+					nearest_slot = slot
+	
+	return nearest_slot
+
+func _find_all_slots(parent: Node) -> Array:
+	"""Recursively finds all CardSlot instances in the scene."""
+	var slots: Array = []
+	
+	for child in parent.get_children():
+		var slot_script = child.get_script()
+		if slot_script and slot_script.resource_path == "res://scripts/CardSlot.gd":
+			slots.append(child)
+		
+		# Recursively search children
+		var child_slots = _find_all_slots(child)
+		slots.append_array(child_slots)
+	
+	return slots
+
+func _snap_card_to_slot(card: Node2D, slot: Node2D):
+	"""Snaps a card to a slot and makes it stationary."""
+	if slot.has_method("snap_card"):
+		if slot.snap_card(card):
+			snapped_cards[card] = slot
+			
+			# Don't disconnect input events - allow cards to be removed by dragging
+			# The card will still be kept in place by _process, but can be dragged to unsnap
+			
+			# Restore original scale
+			if card_original_scales.has(card):
+				card.scale = card_original_scales[card]
+			
+			card_snapped_to_slot.emit(card, slot)
+
+func _unsnap_card(card: Node2D):
+	"""Removes a card from its slot and allows it to be dragged again."""
+	if snapped_cards.has(card):
+		var slot = snapped_cards[card]
+		if is_instance_valid(slot) and slot.has_method("unsnap_card"):
+			slot.unsnap_card()
+		
+		snapped_cards.erase(card)
+		
+		# Reconnect card input events
+		_connect_card(card)
 
 func _input(event: InputEvent):
 	# Handle mouse release even if not over a card
