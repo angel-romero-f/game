@@ -9,9 +9,11 @@ signal joined_game
 signal left_game
 signal player_names_updated
 signal player_races_updated
+signal player_rolls_updated
 
 var player_names: Dictionary = {}
 var player_races: Dictionary = {} # peer_id -> race_name (String)
+var player_rolls: Dictionary = {} # peer_id -> roll value (int)
 
 const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
 
@@ -129,6 +131,7 @@ func _cleanup_connection() -> void:
 	peer = null
 	player_names.clear()
 	player_races.clear()
+	player_rolls.clear()
 
 ## Disconnect from multiplayer session
 func disconnect_from_game() -> void:
@@ -228,3 +231,84 @@ func start_race_select() -> void:
 func start_game() -> void:
 	App.setup_multiplayer_game()
 	App.go("res://scenes/ui/GameIntro.tscn")
+
+## Host generates rolls for all players and syncs to everyone
+func host_generate_and_sync_rolls() -> void:
+	if not multiplayer.is_server():
+		push_warning("Only host can generate rolls")
+		return
+	
+	player_rolls.clear()
+	
+	# Generate initial rolls for all players
+	for pid in player_races.keys():
+		player_rolls[pid] = randi_range(1, 20)
+	
+	# Resolve ties by rerolling until all rolls are unique
+	_resolve_roll_ties()
+	
+	print("Host generated rolls: ", player_rolls)
+	
+	# Sync to all clients
+	_sync_player_rolls()
+
+func _resolve_roll_ties() -> void:
+	var max_attempts := 20
+	var attempts := 0
+	
+	while attempts < max_attempts:
+		var has_ties := false
+		var roll_counts := {}  # roll_value -> array of player ids
+		
+		# Count occurrences of each roll
+		for pid in player_rolls.keys():
+			var roll_val: int = player_rolls[pid]
+			if not roll_counts.has(roll_val):
+				roll_counts[roll_val] = []
+			roll_counts[roll_val].append(pid)
+		
+		# Find and resolve ties
+		for roll_val in roll_counts.keys():
+			if roll_counts[roll_val].size() > 1:
+				has_ties = true
+				print("Tie at roll ", roll_val, " - rerolling for: ", roll_counts[roll_val])
+				# Reroll for all tied players
+				for pid in roll_counts[roll_val]:
+					player_rolls[pid] = randi_range(1, 20)
+		
+		if not has_ties:
+			break
+		attempts += 1
+	
+	if attempts >= max_attempts:
+		push_warning("Could not fully resolve roll ties after ", max_attempts, " attempts")
+
+func _sync_player_rolls() -> void:
+	sync_player_rolls.rpc(player_rolls)
+
+@rpc("authority", "call_local", "reliable")
+func sync_player_rolls(rolls: Dictionary) -> void:
+	player_rolls = rolls.duplicate(true)
+	print("Received synced rolls: ", player_rolls)
+	
+	# Update App.game_players with the synced rolls
+	for i in range(App.game_players.size()):
+		var pid = App.game_players[i].get("id", -1)
+		if player_rolls.has(pid):
+			App.game_players[i]["roll"] = player_rolls[pid]
+			print("Updated player ", App.game_players[i].get("name"), " roll to ", player_rolls[pid])
+	
+	player_rolls_updated.emit()
+
+## Request host to generate rolls (called by GameIntro when ready)
+func request_roll_generation() -> void:
+	if multiplayer.is_server():
+		host_generate_and_sync_rolls()
+	else:
+		# Client requests host to generate
+		request_rolls_from_host.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func request_rolls_from_host() -> void:
+	if multiplayer.is_server():
+		host_generate_and_sync_rolls()

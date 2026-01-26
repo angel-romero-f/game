@@ -4,9 +4,10 @@ extends CanvasLayer
 @onready var game_over_label: Label = $UI/GameOverPanel/GameOverLabel
 @onready var win_panel: Panel = $UI/WinPanel
 @onready var win_label: Label = $UI/WinPanel/WinLabel
-@onready var lose_music: AudioStreamPlayer = get_node_or_null("../LoseMusic")
 @onready var settings_button: Button = $UI/SettingsButton
 @onready var settings_panel: Panel = $UI/SettingsPanel
+
+var lose_music: AudioStreamPlayer = null
 
 var player: Node2D = null
 var is_paused: bool = false
@@ -16,9 +17,15 @@ func _ready():
 	win_panel.visible = false
 	settings_panel.visible = false
 	
+	# Find the LoseMusic node - it's a sibling under the Game root
+	lose_music = get_parent().get_node_or_null("LoseMusic")
+	
 	# Assign lose music to Music bus
 	if lose_music:
 		lose_music.bus = "Music"
+		print("LoseMusic node found and configured")
+	else:
+		push_warning("LoseMusic node not found!")
 	
 	# Fallback: load stream if the import is missing at runtime.
 	if lose_music and lose_music.stream == null:
@@ -72,13 +79,17 @@ func show_game_over(is_final: bool):
 	game_over_panel.visible = true
 	
 	if is_final:
-		# Final death - show game over and play lose music
+		# Final death (third loss) - show game over and play lose music
+		print("Final death! Playing lose music...")
 		if game_over_label:
 			game_over_label.text = "Game Over!\nYou've used all your chances!\nPress R to return to map"
 		if lose_music:
 			App.stop_main_music()
 			lose_music.stop()
 			lose_music.play()
+			print("Lose music started playing")
+		else:
+			push_warning("Cannot play lose music - node not found!")
 	else:
 		# Not final - show remaining lives
 		var lives_left := App.get_lives()

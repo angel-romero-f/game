@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=4 format=3 uid="uid://beatj4utlqeyh"]
 
 [ext_resource type="Script" path="res://scripts/ui/Credits.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://b0flo2kxj716s" path="res://pictures/title_bg_1.png" id="2"]
@@ -55,8 +55,8 @@ theme_override_constants/margin_bottom = 20
 
 [node name="VBoxContainer" type="VBoxContainer" parent="Card/Margin"]
 layout_mode = 2
-alignment = 1
 theme_override_constants/separation = 12
+alignment = 1
 
 [node name="TitleLabel" type="Label" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
@@ -88,14 +88,14 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 18
-text = "Oyinkansola Sobakin-Ashebu: networking, music, ui"
+text = "Oyinkansola Sobakin-Ashebu: networking, music, UI"
 horizontal_alignment = 1
 
 [node name="Entry4" type="Label" parent="Card/Margin/VBoxContainer/CreditsList"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_font_sizes/font_size = 18
-text = "Noah Villa: background art, card design"
+text = "Noah Villa: background art, card design, character design"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="Card/Margin/VBoxContainer"]
@@ -105,4 +105,3 @@ layout_mode = 2
 [node name="BackButton" type="Button" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 text = "Back to Menu"
-

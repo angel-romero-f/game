@@ -146,7 +146,69 @@ func _start_rolling_phase() -> void:
 func _begin_rolling_sequence() -> void:
 	current_phase = Phase.ROLLING
 	current_rolling_player_idx = 0
-	_roll_for_player(current_rolling_player_idx)
+	
+	# In multiplayer, host generates all rolls and syncs to clients
+	if App.is_multiplayer:
+		rolling_label.text = "Rolling for turn order..."
+		rolling_label.visible = true
+		roll_result_label.visible = false
+		
+		# Connect to roll sync signal
+		if not Net.player_rolls_updated.is_connected(_on_rolls_synced):
+			Net.player_rolls_updated.connect(_on_rolls_synced)
+		
+		# Request roll generation (host will generate and sync)
+		Net.request_roll_generation()
+	else:
+		# Single player: use animated rolling sequence
+		_roll_for_player(current_rolling_player_idx)
+
+func _on_rolls_synced() -> void:
+	# Disconnect the signal to avoid duplicate calls
+	if Net.player_rolls_updated.is_connected(_on_rolls_synced):
+		Net.player_rolls_updated.disconnect(_on_rolls_synced)
+	
+	print("Rolls synced, displaying results...")
+	
+	# Show a quick animation of the final rolls
+	_display_multiplayer_rolls()
+
+func _display_multiplayer_rolls() -> void:
+	# Display each player's roll with a brief delay between them
+	for i in range(App.game_players.size()):
+		var player = App.game_players[i]
+		var player_name: String = player.get("name", "Player")
+		var roll_value: int = player.get("roll", 0)
+		
+		# Animate the roll display briefly
+		roll_animation_timer = 0.0
+		roll_tick_timer = 0.0
+		var anim_duration := 0.8  # Shorter animation for multiplayer
+		
+		rolling_label.text = player_name + " rolling..."
+		rolling_label.visible = true
+		
+		# Quick roll animation
+		while roll_animation_timer < anim_duration:
+			await get_tree().process_frame
+			var delta := get_process_delta_time()
+			roll_animation_timer += delta
+			roll_tick_timer += delta
+			
+			if roll_tick_timer >= 0.06:
+				roll_tick_timer = 0.0
+				roll_result_label.text = str(randi_range(1, 20))
+				roll_result_label.visible = true
+		
+		# Show final synced roll
+		roll_result_label.text = str(roll_value)
+		rolling_label.text = player_name + " rolled " + str(roll_value) + "!"
+		
+		# Wait before next player
+		await get_tree().create_timer(0.8).timeout
+	
+	# All rolls displayed, finalize turn order
+	_finalize_turn_order()
 
 func _roll_for_player(idx: int) -> void:
 	if idx >= App.game_players.size():
@@ -179,15 +241,22 @@ func _process_rolling(delta: float) -> void:
 		_finish_current_roll()
 
 func _finish_current_roll() -> void:
-	var player = App.game_players[current_rolling_player_idx]
+	if current_rolling_player_idx >= App.game_players.size():
+		push_warning("Invalid rolling player index: ", current_rolling_player_idx)
+		_finalize_turn_order()
+		return
 	
-	# Generate actual roll
+	# Generate actual roll (always 1-20, never 0)
 	var final_roll := randi_range(1, 20)
-	player["roll"] = final_roll
-	App.game_players[current_rolling_player_idx] = player
+	
+	# Update the player's roll directly by index
+	App.game_players[current_rolling_player_idx]["roll"] = final_roll
+	
+	var player_name: String = App.game_players[current_rolling_player_idx].get("name", "Player")
+	print("Roll complete: ", player_name, " rolled ", final_roll)
 	
 	roll_result_label.text = str(final_roll)
-	rolling_label.text = player.get("name", "Player") + " rolled " + str(final_roll) + "!"
+	rolling_label.text = player_name + " rolled " + str(final_roll) + "!"
 	
 	# Wait a moment then move to next player
 	await get_tree().create_timer(1.2).timeout
@@ -199,13 +268,19 @@ func _finish_current_roll() -> void:
 		_finalize_turn_order()
 
 func _finalize_turn_order() -> void:
-	# Handle ties by re-rolling
-	_resolve_ties()
+	# In single player, handle ties locally. In multiplayer, host already resolved ties.
+	if not App.is_multiplayer:
+		_resolve_ties()
 	
 	# Sort players by roll (highest first)
 	var sorted_players := App.game_players.duplicate()
 	sorted_players.sort_custom(func(a, b): return a.get("roll", 0) > b.get("roll", 0))
 	App.turn_order = sorted_players
+	
+	print("Turn order finalized:")
+	for i in range(App.turn_order.size()):
+		var p = App.turn_order[i]
+		print("  ", i + 1, ". ", p.get("name", "Unknown"), " - Roll: ", p.get("roll", 0))
 	
 	# First show the player's roll by itself
 	current_phase = Phase.SHOW_PLAYER_ROLL
@@ -256,31 +331,41 @@ func _resolve_ties() -> void:
 	var max_attempts := 10  # Prevent infinite loops
 	var attempts := 0
 	
+	# First, ensure all players have valid rolls (no zeros)
+	for i in range(App.game_players.size()):
+		var current_roll = App.game_players[i].get("roll", 0)
+		if current_roll <= 0:
+			App.game_players[i]["roll"] = randi_range(1, 20)
+			print("Fixed invalid roll for player: ", App.game_players[i].get("name", "Unknown"))
+	
 	while attempts < max_attempts:
 		var has_ties := false
 		var rolls_count := {}
 		
-		# Count rolls
-		for p in App.game_players:
-			var roll = p.get("roll", 0)
+		# Count rolls by value, storing player indices
+		for i in range(App.game_players.size()):
+			var roll = App.game_players[i].get("roll", 0)
 			if not rolls_count.has(roll):
 				rolls_count[roll] = []
-			rolls_count[roll].append(p)
+			rolls_count[roll].append(i)  # Store index instead of reference
 		
 		# Check for ties and re-roll
 		for roll in rolls_count.keys():
 			if rolls_count[roll].size() > 1:
 				has_ties = true
+				print("Tie detected at roll ", roll, " - rerolling for tied players")
 				# Re-roll for tied players
-				for p in rolls_count[roll]:
-					var idx := App.game_players.find(p)
-					if idx >= 0:
-						var new_roll := randi_range(1, 20)
-						App.game_players[idx]["roll"] = new_roll
+				for idx in rolls_count[roll]:
+					var new_roll := randi_range(1, 20)
+					App.game_players[idx]["roll"] = new_roll
+					print("  ", App.game_players[idx].get("name", "Unknown"), " rerolled: ", new_roll)
 		
 		if not has_ties:
 			break
 		attempts += 1
+	
+	if attempts >= max_attempts:
+		push_warning("Reached max tie resolution attempts - some ties may remain")
 
 func _display_center_order() -> void:
 	rolling_label.visible = false
