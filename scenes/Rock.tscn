@@ -16,7 +16,7 @@ script = ExtResource("1_1")
 shape = SubResource("RectangleShape2D_rock")
 
 [node name="Visual" type="AnimatedSprite2D" parent="."]
-z_index = 1
+z_index = 0
 scale = Vector2(1, 1)
 sprite_frames = ExtResource("2_rock_frames")
 animation = "default"

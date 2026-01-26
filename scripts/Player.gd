@@ -4,11 +4,11 @@ extends CharacterBody2D
 @export var jump_duration: float = 0.2
 
 # How far along the flow direction to search for a rock (timing window)
-@export var rock_catch_range: float = 100.0
+@export var rock_catch_range: float = 150.0
 
-# Current lane (-1 = starting bank, 0-3 = river lanes, 4+ = safe zone)
+# Current lane (-1 = starting bank, 0-2 = river lanes, 3+ = safe zone)
 var current_lane: int = -1
-var max_lane: int = 4  # 4 lanes (0-3), then victory
+var max_lane: int = 3  # 3 lanes (0-2), then victory
 
 # State
 var is_jumping: bool = false
@@ -145,6 +145,10 @@ func find_rock_in_lane(lane_idx: int) -> Area2D:
 		if not is_instance_valid(rock):
 			continue
 		
+		# Skip the rock we're currently standing on
+		if rock == current_rock:
+			continue
+		
 		# Vector from player to rock
 		var to_rock = rock.global_position - global_position
 		
@@ -167,9 +171,9 @@ func jump_to_rock(rock: Area2D, lane_idx: int):
 	current_rock = null
 	current_lane = lane_idx
 	
-	# Animate jump to the rock
+	# Animate jump to the rock (higher arc for bigger river)
 	var destination = rock.global_position
-	var mid = (global_position + destination) / 2.0 + Vector2(0, -20)
+	var mid = (global_position + destination) / 2.0 + Vector2(0, -30)
 	
 	var tween = create_tween()
 	tween.tween_property(self, "global_position", mid, jump_duration * 0.5)
@@ -189,10 +193,10 @@ func jump_to_water(lane_idx: int):
 	current_rock = null
 	current_lane = lane_idx
 	
-	# Jump to where we expected a rock to be
-	var jump_offset = Vector2(80, 80)
+	# Jump to where we expected a rock to be (larger for bigger river)
+	var jump_offset = Vector2(100, 100)
 	var destination = global_position + jump_offset
-	var mid = (global_position + destination) / 2.0 + Vector2(0, -20)
+	var mid = (global_position + destination) / 2.0 + Vector2(0, -25)
 	
 	var tween = create_tween()
 	tween.tween_property(self, "global_position", mid, jump_duration * 0.5)
@@ -204,12 +208,13 @@ func jump_to_victory():
 	current_rock = null
 	current_lane = max_lane
 	
-	var destination = global_position + Vector2(80, 60)
-	var mid = (global_position + destination) / 2.0 + Vector2(0, -20)
+	# Jump forward to the far bank (right and down towards terrain)
+	var destination = global_position + Vector2(100, 80)
+	var mid = (global_position + destination) / 2.0 + Vector2(0, -35)
 	
 	var tween = create_tween()
-	tween.tween_property(self, "global_position", mid, jump_duration * 0.5)
-	tween.tween_property(self, "global_position", destination, jump_duration * 0.5)
+	tween.tween_property(self, "global_position", mid, jump_duration * 0.6)
+	tween.tween_property(self, "global_position", destination, jump_duration * 0.6)
 	tween.tween_callback(win_game)
 
 func fall_in_water():

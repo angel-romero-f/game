@@ -1,12 +1,11 @@
 extends Node2D
 
 @export var rock_scene: PackedScene
-
-var move_direction: Vector2 = Vector2(-1, 1).normalized()
+@export var lane_paths: Array[NodePath] = []
 
 # Lane configuration
-var num_lanes: int = 4
-var lane_origins: Array = []
+var num_lanes: int = 3
+var paths: Array[Path2D] = []
 
 # Each lane has its own fixed speed (set randomly at start)
 var lane_speeds: Array = []
@@ -16,29 +15,30 @@ var lane_timers: Array = []
 var spawn_interval_min: float = 3.0
 var spawn_interval_max: float = 5.5
 
-# Spacing
-var min_rock_spacing: float = 180.0
+# Spacing - minimum progress difference between rocks in same lane
+var min_progress_spacing: float = 0.15
 
 func _ready():
 	if rock_scene == null:
 		rock_scene = load("res://scenes/Rock.tscn")
 	
-	# Lane origins
-	lane_origins = [
-		Vector2(-80, -60),
-		Vector2(0, 20),
-		Vector2(80, 100),
-		Vector2(160, 180),
-	]
+	# Get Path2D references
+	for path_node in lane_paths:
+		var path = get_node_or_null(path_node) as Path2D
+		if path:
+			paths.append(path)
+	
+	num_lanes = paths.size()
+	
+	if num_lanes == 0:
+		push_warning("RockSpawner: No lane paths assigned!")
+		return
 	
 	# Assign a FIXED speed to each lane (high variance between lanes)
 	# This way rocks in the same lane never catch up to each other
-	lane_speeds = [
-		randf_range(25, 70),  # Lane 0
-		randf_range(25, 70),  # Lane 1
-		randf_range(25, 70),  # Lane 2
-		randf_range(25, 70),  # Lane 3
-	]
+	# Speed varies significantly each game (30-120 range)
+	for i in range(num_lanes):
+		lane_speeds.append(randf_range(30, 120))
 	
 	# Initialize timers
 	for i in range(num_lanes):
@@ -56,48 +56,58 @@ func _process(delta):
 			try_spawn_rock_in_lane(i)
 
 func spawn_initial_rocks_in_lane(lane_idx: int):
-	var origin = lane_origins[lane_idx]
-	
-	# Spawn 1-2 rocks with good spacing
+	# Spawn 1-2 rocks at different progress points along the path
 	var num_rocks = randi_range(1, 2)
 	
 	for i in range(num_rocks):
-		var offset = 220.0 * i + randf_range(50, 150)
-		var pos = origin - move_direction * offset
-		
-		var perp = Vector2(move_direction.y, -move_direction.x)
-		pos += perp * randf_range(-8, 8)
-		
-		spawn_rock_at_position(lane_idx, pos)
+		# Start at different points along the path (0.1 to 0.5)
+		var start_progress = 0.1 + (0.2 * i) + randf_range(0, 0.1)
+		spawn_rock_at_progress(lane_idx, start_progress)
 
 func try_spawn_rock_in_lane(lane_idx: int):
-	var spawn_pos = lane_origins[lane_idx] - move_direction * 420
+	var spawn_progress = 0.0  # Start at the beginning of the path
 	
-	var perp = Vector2(move_direction.y, -move_direction.x)
-	spawn_pos += perp * randf_range(-8, 8)
-	
-	# Check spacing
+	# Check spacing against other rocks in this lane
 	var rocks = get_rocks_in_lane(lane_idx)
 	for rock in rocks:
 		if not is_instance_valid(rock):
 			continue
-		if spawn_pos.distance_to(rock.global_position) < min_rock_spacing:
-			return
+		var rock_progress = rock.get_progress_ratio()
+		if abs(rock_progress - spawn_progress) < min_progress_spacing:
+			return  # Too close to another rock
 	
-	spawn_rock_at_position(lane_idx, spawn_pos)
+	spawn_rock_at_progress(lane_idx, spawn_progress)
 
-func spawn_rock_at_position(lane_idx: int, pos: Vector2):
+func spawn_rock_at_progress(lane_idx: int, progress_ratio: float):
+	if lane_idx >= paths.size():
+		return
+	
+	var path = paths[lane_idx]
+	
+	# Create a PathFollow2D for this rock
+	var path_follow = PathFollow2D.new()
+	path_follow.rotates = false
+	path_follow.loop = false
+	# Add to tree FIRST, then set progress_ratio
+	path.add_child(path_follow)
+	path_follow.progress_ratio = progress_ratio
+	
+	# Instantiate the rock as a child of the PathFollow2D
 	var rock = rock_scene.instantiate()
-	rock.global_position = pos
 	rock.lane_index = lane_idx
-	rock.move_speed = lane_speeds[lane_idx]  # All rocks in same lane = same speed
-	rock.move_direction = move_direction
-	add_child(rock)
+	rock.move_speed = lane_speeds[lane_idx]
+	rock.path_follow = path_follow
+	path_follow.add_child(rock)
 
 func get_rocks_in_lane(lane_idx: int) -> Array:
 	var result = []
-	for child in get_children():
-		if child is Area2D and child.has_method("get_lane_index"):
-			if child.get_lane_index() == lane_idx:
-				result.append(child)
+	if lane_idx >= paths.size():
+		return result
+	
+	var path = paths[lane_idx]
+	for path_follow in path.get_children():
+		if path_follow is PathFollow2D:
+			for child in path_follow.get_children():
+				if child is Area2D and child.has_method("get_lane_index"):
+					result.append(child)
 	return result
