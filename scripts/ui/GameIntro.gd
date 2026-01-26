@@ -19,6 +19,7 @@ var order_center_container: CenterContainer
 var order_list_center: VBoxContainer
 var order_corner_container: VBoxContainer
 var minigame_button: Button
+var bridge_minigame_button: Button
 var battle_button: Button
 var rolling_label: Label
 var settings_button: Button
@@ -53,6 +54,7 @@ func _ready() -> void:
 	order_list_center = $OrderCenterContainer/Panel/MarginContainer/VBoxContainer/OrderList
 	order_corner_container = $OrderCornerContainer/VBoxContainer
 	minigame_button = $MinigameButton
+	bridge_minigame_button = $BridgeMinigameButton
 	battle_button = $BattleButton
 	settings_button = $SettingsButton
 	settings_panel = $SettingsPanel
@@ -66,6 +68,7 @@ func _ready() -> void:
 	order_center_container.visible = false
 	order_corner_container.get_parent().visible = false
 	minigame_button.visible = false
+	bridge_minigame_button.visible = false
 	battle_button.visible = false
 	settings_button.visible = false
 	settings_panel.visible = false
@@ -74,8 +77,9 @@ func _ready() -> void:
 	# Setup showcase with local player
 	_setup_showcase()
 	
-	# Connect minigame button
+	# Connect minigame buttons
 	minigame_button.pressed.connect(_on_minigame_pressed)
+	bridge_minigame_button.pressed.connect(_on_bridge_minigame_pressed)
 	
 	# Connect settings
 	if settings_button:
@@ -474,10 +478,12 @@ func _show_corner_order() -> void:
 	map_tween.tween_property(map_overlay, "modulate:a", 0.0, 0.8)
 	map_tween.tween_property(corner_parent, "modulate:a", 1.0, 0.5)
 	
-	# Show minigame button, battle button, and settings
+	# Show minigame buttons, battle button, and settings
 	await map_tween.finished
 	minigame_button.visible = true
 	minigame_button.modulate.a = 0.0
+	bridge_minigame_button.visible = true
+	bridge_minigame_button.modulate.a = 0.0
 	battle_button.visible = true
 	battle_button.modulate.a = 0.0
 	settings_button.visible = true
@@ -486,6 +492,7 @@ func _show_corner_order() -> void:
 	var btn_tween := create_tween()
 	btn_tween.set_parallel(true)
 	btn_tween.tween_property(minigame_button, "modulate:a", 1.0, 0.3)
+	btn_tween.tween_property(bridge_minigame_button, "modulate:a", 1.0, 0.3)
 	btn_tween.tween_property(battle_button, "modulate:a", 1.0, 0.3)
 	btn_tween.tween_property(settings_button, "modulate:a", 1.0, 0.3)
 	
@@ -493,6 +500,9 @@ func _show_corner_order() -> void:
 
 func _on_minigame_pressed() -> void:
 	App.go("res://scenes/Game.tscn")
+
+func _on_bridge_minigame_pressed() -> void:
+	App.go("res://scenes/BridgeGame.tscn")
 
 func _skip_to_game_ready() -> void:
 	# Skip all intro animations and go directly to game ready state
@@ -517,6 +527,7 @@ func _skip_to_game_ready() -> void:
 	
 	# Show UI elements
 	minigame_button.visible = true
+	bridge_minigame_button.visible = true
 	battle_button.visible = true
 	settings_button.visible = true
 	
