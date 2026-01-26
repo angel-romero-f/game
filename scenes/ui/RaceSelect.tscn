@@ -1,7 +1,7 @@
 [gd_scene load_steps=11 format=3 uid="uid://c0s71t1777p37"]
 
 [ext_resource type="Script" uid="uid://b81b5scec4ff" path="res://scripts/ui/RaceSelect.gd" id="1"]
-[ext_resource type="Texture2D" uid="uid://b0flo2kxj716s" path="res://pictures/title_bg_1.png" id="2_6jbdy"]
+[ext_resource type="Texture2D" uid="uid://0hby3feg8k8g" path="res://pictures/title_bg_2.png" id="2_6jbdy"]
 [ext_resource type="Texture2D" uid="uid://cm5hpu4rgmddj" path="res://pictures/elf_girl_1/eg1_south.png" id="3_elf"]
 [ext_resource type="Texture2D" uid="uid://d2g5mk1tr6p5n" path="res://pictures/infernal_boy_1/ib1_south.png" id="4_infernal"]
 [ext_resource type="Texture2D" uid="uid://b1astpgoh5jlk" path="res://pictures/orc_boy_1/ob1_south.png" id="5_orc"]
