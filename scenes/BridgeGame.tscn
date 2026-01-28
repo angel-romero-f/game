@@ -1,10 +1,11 @@
-[gd_scene load_steps=6 format=3 uid="uid://bridge_game_001"]
+[gd_scene load_steps=7 format=3 uid="uid://bridge_game_001"]
 
 [ext_resource type="PackedScene" uid="uid://bridge_player_001" path="res://scenes/BridgePlayer.tscn" id="1_player"]
 [ext_resource type="Script" path="res://scripts/BridgeGameUI.gd" id="2_ui"]
 [ext_resource type="Script" path="res://scripts/BridgeGame.gd" id="3_game"]
 [ext_resource type="Script" path="res://scripts/ObstacleSpawner.gd" id="4_spawner"]
 [ext_resource type="AudioStream" uid="uid://cfgchbs7flen5" path="res://music/lose_music.mp3" id="5_lose"]
+[ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="6_iwbf0"]
 
 [node name="BridgeGame" type="Node2D"]
 script = ExtResource("3_game")
@@ -92,7 +93,8 @@ offset_top = 20.0
 offset_right = 250.0
 offset_bottom = 70.0
 grow_horizontal = 2
-theme_override_font_sizes/font_size = 24
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 28
 text = "Use WASD to cross the bridge! Avoid the obstacles!"
 horizontal_alignment = 1
 
@@ -106,6 +108,8 @@ offset_top = 10.0
 offset_right = -10.0
 offset_bottom = 50.0
 grow_horizontal = 0
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Settings"
 
 [node name="GameOverPanel" type="Panel" parent="UI/UI"]
@@ -136,7 +140,8 @@ offset_right = 180.0
 offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_font_sizes/font_size = 20
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 26
 text = "Game Over!
 You hit an obstacle!
 Press R to Restart"
@@ -171,7 +176,8 @@ offset_right = 180.0
 offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
-theme_override_font_sizes/font_size = 20
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 26
 text = "You Made It!
 You crossed the bridge!
 Press R to Continue"
@@ -205,7 +211,8 @@ theme_override_constants/separation = 10
 
 [node name="SettingsLabel" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 32
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 40
 text = "Paused - Settings"
 horizontal_alignment = 1
 
@@ -215,6 +222,8 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer/MasterVolume"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Master Volume"
 
 [node name="Slider" type="HSlider" parent="UI/UI/SettingsPanel/SettingsContainer/MasterVolume"]
@@ -229,6 +238,8 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer/MusicVolume"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Music Volume"
 
 [node name="Slider" type="HSlider" parent="UI/UI/SettingsPanel/SettingsContainer/MusicVolume"]
@@ -243,6 +254,8 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer/SFXVolume"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Game Elements Volume"
 
 [node name="Slider" type="HSlider" parent="UI/UI/SettingsPanel/SettingsContainer/SFXVolume"]
@@ -257,6 +270,8 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="UI/UI/SettingsPanel/SettingsContainer/UIVolume"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "UI Volume"
 
 [node name="Slider" type="HSlider" parent="UI/UI/SettingsPanel/SettingsContainer/UIVolume"]
@@ -272,9 +287,13 @@ theme_override_constants/separation = 10
 [node name="ResumeButton" type="Button" parent="UI/UI/SettingsPanel/SettingsContainer/ButtonContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 24
 text = "Resume"
 
 [node name="MainMenuButton" type="Button" parent="UI/UI/SettingsPanel/SettingsContainer/ButtonContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("6_iwbf0")
+theme_override_font_sizes/font_size = 24
 text = "Main Menu"

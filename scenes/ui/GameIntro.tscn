@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/GameIntro.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://dm5oueriefmf3" path="res://pictures/map.png" id="2_map"]
+[ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="3_iwbf0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_D20"]
 bg_color = Color(0.9, 0.15, 0.15, 1)
@@ -77,7 +78,8 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
-theme_override_font_sizes/font_size = 48
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 60
 text = "Player Name"
 horizontal_alignment = 1
 
@@ -100,7 +102,8 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 28
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 36
 text = "Rolling..."
 horizontal_alignment = 1
 
@@ -120,7 +123,8 @@ grow_vertical = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
-theme_override_font_sizes/font_size = 56
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 68
 text = "D20"
 horizontal_alignment = 1
 vertical_alignment = 1
@@ -131,7 +135,8 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 64
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 80
 text = "20"
 horizontal_alignment = 1
 
@@ -163,7 +168,8 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 32
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 40
 text = "Your Roll"
 horizontal_alignment = 1
 
@@ -172,7 +178,8 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 5
-theme_override_font_sizes/font_size = 96
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 110
 text = "20"
 horizontal_alignment = 1
 
@@ -208,7 +215,8 @@ theme_override_constants/separation = 15
 [node name="TitleLabel" type="Label" parent="OrderCenterContainer/Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
-theme_override_font_sizes/font_size = 32
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 42
 text = "Turn Order"
 horizontal_alignment = 1
 
@@ -233,7 +241,8 @@ theme_override_constants/separation = 5
 [node name="TitleLabel" type="Label" parent="OrderCornerContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
-theme_override_font_sizes/font_size = 16
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 20
 text = "Turn Order"
 horizontal_alignment = 1
 
@@ -251,7 +260,8 @@ offset_right = -10.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_font_sizes/font_size = 18
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 24
 text = "River Minigame"
 
 [node name="BridgeMinigameButton" type="Button" parent="."]
@@ -268,7 +278,8 @@ offset_right = 210.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_font_sizes/font_size = 18
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 24
 text = "Bridge Minigame"
 
 [node name="BattleButton" type="Button" parent="."]
@@ -282,7 +293,8 @@ offset_top = -25.0
 offset_right = 170.0
 offset_bottom = 25.0
 grow_vertical = 2
-theme_override_font_sizes/font_size = 20
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 26
 text = "Start Battle"
 
 [node name="SettingsButton" type="Button" parent="."]
@@ -296,6 +308,8 @@ offset_top = 10.0
 offset_right = -10.0
 offset_bottom = 50.0
 grow_horizontal = 0
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Settings"
 
 [node name="SettingsPanel" type="Panel" parent="."]
@@ -325,7 +339,8 @@ theme_override_constants/separation = 10
 
 [node name="SettingsLabel" type="Label" parent="SettingsPanel/SettingsContainer"]
 layout_mode = 2
-theme_override_font_sizes/font_size = 32
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 40
 text = "Settings"
 horizontal_alignment = 1
 
@@ -335,6 +350,8 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/MasterVolume"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Master Volume"
 
 [node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/MasterVolume"]
@@ -349,6 +366,8 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/MusicVolume"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Music Volume"
 
 [node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/MusicVolume"]
@@ -363,6 +382,8 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/SFXVolume"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Game Elements Volume"
 
 [node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/SFXVolume"]
@@ -377,6 +398,8 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/UIVolume"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "UI Volume"
 
 [node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/UIVolume"]
@@ -392,9 +415,13 @@ theme_override_constants/separation = 10
 [node name="ResumeButton" type="Button" parent="SettingsPanel/SettingsContainer/ButtonContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 24
 text = "Close"
 
 [node name="MainMenuButton" type="Button" parent="SettingsPanel/SettingsContainer/ButtonContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 24
 text = "Main Menu"

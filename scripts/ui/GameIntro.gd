@@ -80,6 +80,7 @@ func _ready() -> void:
 	# Connect minigame buttons
 	minigame_button.pressed.connect(_on_minigame_pressed)
 	bridge_minigame_button.pressed.connect(_on_bridge_minigame_pressed)
+	battle_button.pressed.connect(_on_battle_button_pressed)
 	
 	# Connect settings
 	if settings_button:
@@ -503,6 +504,9 @@ func _on_minigame_pressed() -> void:
 
 func _on_bridge_minigame_pressed() -> void:
 	App.go("res://scenes/BridgeGame.tscn")
+
+func _on_battle_button_pressed() -> void:
+	App.go("res://scenes/card_battle.tscn")
 
 func _skip_to_game_ready() -> void:
 	# Skip all intro animations and go directly to game ready state

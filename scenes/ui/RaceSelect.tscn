@@ -1,4 +1,4 @@
-[gd_scene load_steps=11 format=3 uid="uid://c0s71t1777p37"]
+[gd_scene load_steps=12 format=3 uid="uid://c0s71t1777p37"]
 
 [ext_resource type="Script" uid="uid://b81b5scec4ff" path="res://scripts/ui/RaceSelect.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://0hby3feg8k8g" path="res://pictures/title_bg_2.png" id="2_6jbdy"]
@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" uid="uid://d2g5mk1tr6p5n" path="res://pictures/infernal_boy_1/ib1_south.png" id="4_infernal"]
 [ext_resource type="Texture2D" uid="uid://b1astpgoh5jlk" path="res://pictures/orc_boy_1/ob1_south.png" id="5_orc"]
 [ext_resource type="Texture2D" uid="uid://bcsw25qtjh2v3" path="res://pictures/fairy_girl_1/fg1_south.png" id="6_fairy"]
+[ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="7_iwbf0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_Elf"]
 bg_color = Color(1, 0.9, 0.2, 1)
@@ -75,7 +76,8 @@ theme_override_constants/margin_top = 20
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_constants/outline_size = 3
-theme_override_font_sizes/font_size = 45
+theme_override_fonts/font = ExtResource("7_iwbf0")
+theme_override_font_sizes/font_size = 56
 text = "Select Race"
 horizontal_alignment = 1
 
@@ -83,7 +85,8 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 20
+theme_override_fonts/font = ExtResource("7_iwbf0")
+theme_override_font_sizes/font_size = 26
 text = "Choose your race"
 horizontal_alignment = 1
 
@@ -129,7 +132,8 @@ stretch_mode = 5
 [node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/ElfCard/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_fonts/font = ExtResource("7_iwbf0")
+theme_override_font_sizes/font_size = 32
 text = "Elf"
 horizontal_alignment = 1
 
@@ -173,7 +177,8 @@ stretch_mode = 5
 [node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/OrcCard/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_fonts/font = ExtResource("7_iwbf0")
+theme_override_font_sizes/font_size = 32
 text = "Orc"
 horizontal_alignment = 1
 
@@ -213,7 +218,8 @@ stretch_mode = 5
 [node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/FairyCard/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_fonts/font = ExtResource("7_iwbf0")
+theme_override_font_sizes/font_size = 32
 text = "Fairy"
 horizontal_alignment = 1
 
@@ -257,7 +263,8 @@ stretch_mode = 5
 [node name="Label" type="Label" parent="MainContainer/CardsMargin/CardsContainer/InfernalCard/Content"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 24
+theme_override_fonts/font = ExtResource("7_iwbf0")
+theme_override_font_sizes/font_size = 32
 text = "Infernal"
 horizontal_alignment = 1
 
@@ -273,11 +280,13 @@ alignment = 1
 [node name="BackButton" type="Button" parent="MainContainer/BottomMargin/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_fonts/font = ExtResource("7_iwbf0")
+theme_override_font_sizes/font_size = 26
 text = "Back"
 
 [node name="StartButton" type="Button" parent="MainContainer/BottomMargin/ButtonContainer"]
 custom_minimum_size = Vector2(150, 50)
 layout_mode = 2
-theme_override_font_sizes/font_size = 20
+theme_override_fonts/font = ExtResource("7_iwbf0")
+theme_override_font_sizes/font_size = 26
 text = "Start Game"

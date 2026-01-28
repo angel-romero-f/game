@@ -1,15 +1,16 @@
-[gd_scene load_steps=4 format=3 uid="uid://c4xi88wgdiow0"]
+[gd_scene load_steps=5 format=3 uid="uid://c4xi88wgdiow0"]
 
 [ext_resource type="Script" uid="uid://bvwx8k7j5a2qd" path="res://scripts/ui/Settings.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://0hby3feg8k8g" path="res://pictures/title_bg_2.png" id="2"]
+[ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="3_iwbf0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_main"]
-bg_color = Color(0.39853665, 0.60576653, 0.90561056, 0.53333336)
+bg_color = Color(0.39906177, 0.67744213, 0.3954853, 0.53333336)
 border_width_left = 1
 border_width_top = 1
 border_width_right = 1
 border_width_bottom = 1
-border_color = Color(0.33566442, 0.19361043, 0.9999874, 1)
+border_color = Color(0.022258613, 0.36141455, 0, 1)
 shadow_size = 2
 
 [node name="Settings" type="Control"]
@@ -61,7 +62,8 @@ theme_override_constants/separation = 15
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
-theme_override_font_sizes/font_size = 35
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 48
 text = "Settings"
 horizontal_alignment = 1
 
@@ -76,7 +78,8 @@ theme_override_constants/separation = 5
 [node name="Label" type="Label" parent="Card/Margin/VBoxContainer/MasterVolume"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Master Volume"
 
 [node name="Slider" type="HSlider" parent="Card/Margin/VBoxContainer/MasterVolume"]
@@ -92,7 +95,8 @@ theme_override_constants/separation = 5
 [node name="Label" type="Label" parent="Card/Margin/VBoxContainer/MusicVolume"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Music Volume"
 
 [node name="Slider" type="HSlider" parent="Card/Margin/VBoxContainer/MusicVolume"]
@@ -108,7 +112,8 @@ theme_override_constants/separation = 5
 [node name="Label" type="Label" parent="Card/Margin/VBoxContainer/SFXVolume"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Game Elements Volume"
 
 [node name="Slider" type="HSlider" parent="Card/Margin/VBoxContainer/SFXVolume"]
@@ -124,7 +129,8 @@ theme_override_constants/separation = 5
 [node name="Label" type="Label" parent="Card/Margin/VBoxContainer/UIVolume"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
-theme_override_font_sizes/font_size = 18
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "UI Volume"
 
 [node name="Slider" type="HSlider" parent="Card/Margin/VBoxContainer/UIVolume"]
@@ -143,16 +149,24 @@ theme_override_constants/separation = 8
 
 [node name="SaveButton" type="Button" parent="Card/Margin/VBoxContainer/Buttons"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Save"
 
 [node name="HowToPlayButton" type="Button" parent="Card/Margin/VBoxContainer/Buttons"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "How to Play"
 
 [node name="BackButton" type="Button" parent="Card/Margin/VBoxContainer/Buttons"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Back to Menu"
 
 [node name="QuitButton" type="Button" parent="Card/Margin/VBoxContainer/Buttons"]
 layout_mode = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
 text = "Quit Game"

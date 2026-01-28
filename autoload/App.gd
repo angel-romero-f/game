@@ -27,6 +27,7 @@ func get_lives() -> int:
 	return current_lives
 
 var main_music: AudioStreamPlayer
+var battle_music: AudioStreamPlayer
 var ui_sfx: AudioStreamPlayer
 var blip_select_stream: AudioStream
 
@@ -51,6 +52,23 @@ func _ready() -> void:
 		main_music.stream = stream
 		main_music.play()
 		print("Main music started from App autoload")
+	
+	# Create battle music player
+	battle_music = AudioStreamPlayer.new()
+	battle_music.name = "BattleMusic"
+	battle_music.bus = "Music"  # Assign to Music bus
+	add_child(battle_music)
+	
+	# Load the battle music stream
+	var battle_stream: AudioStreamMP3 = load("res://music/battle_music.mp3")
+	if battle_stream == null and FileAccess.file_exists("res://music/battle_music.mp3"):
+		battle_stream = AudioStreamMP3.new()
+		battle_stream.data = FileAccess.get_file_as_bytes("res://music/battle_music.mp3")
+	
+	if battle_stream:
+		battle_stream.loop = true
+		battle_music.stream = battle_stream
+		print("Battle music loaded in App autoload")
 
 	# UI SFX (button blips, etc.)
 	ui_sfx = AudioStreamPlayer.new()
@@ -166,6 +184,22 @@ func stop_main_music() -> void:
 func play_main_music() -> void:
 	if main_music and not main_music.playing:
 		main_music.play()
+
+func stop_battle_music() -> void:
+	if battle_music and battle_music.playing:
+		battle_music.stop()
+
+func play_battle_music() -> void:
+	if battle_music and not battle_music.playing:
+		battle_music.play()
+
+func switch_to_battle_music() -> void:
+	stop_main_music()
+	play_battle_music()
+
+func switch_to_main_music() -> void:
+	stop_battle_music()
+	play_main_music()
 
 func play_blip_select() -> void:
 	if not ui_sfx or not ui_sfx.stream:

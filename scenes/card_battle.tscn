@@ -1,5 +1,6 @@
-[gd_scene load_steps=11 format=3 uid="uid://8s4xj8qvpi8a"]
+[gd_scene load_steps=13 format=3 uid="uid://8s4xj8qvpi8a"]
 
+[ext_resource type="Script" path="res://scripts/CardBattleScene.gd" id="1_scene"]
 [ext_resource type="Script" uid="uid://bkwfgx4dtvma" path="res://scripts/BattleManager.gd" id="2_battle_manager"]
 [ext_resource type="Script" uid="uid://p40834bmanry" path="res://scripts/CardManager.gd" id="2_cardmanager"]
 [ext_resource type="SpriteFrames" uid="uid://dvak7aktofje2" path="res://assets/Elf_cards.pxo" id="3_elfcards"]
@@ -9,11 +10,13 @@
 [ext_resource type="PackedScene" uid="uid://ca7ctiluaej" path="res://scenes/deck.tscn" id="5_sp37g"]
 [ext_resource type="SpriteFrames" uid="uid://t4ia5h4y42jg" path="res://assets/infernal_cards.pxo" id="8_x2u0b"]
 [ext_resource type="Script" uid="uid://bumkisumq4jxt" path="res://scripts/battle/AttributeConfig.gd" id="9_attr_cfg_script"]
+[ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="10_iwbf0"]
 
 [sub_resource type="Resource" id="Resource_attr_cfg"]
 script = ExtResource("9_attr_cfg_script")
 
 [node name="CardBattle" type="Node2D"]
+script = ExtResource("1_scene")
 
 [node name="CardSlotPM" parent="." instance=ExtResource("3_u4xae")]
 position = Vector2(535, 426)
@@ -89,6 +92,8 @@ offset_right = 72.0
 offset_bottom = 30.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_fonts/font = ExtResource("10_iwbf0")
+theme_override_font_sizes/font_size = 28
 text = "Start Battle"
 
 [node name="ResultLabel" type="Label" parent="BattleUI/UI"]
@@ -105,6 +110,8 @@ offset_right = 250.0
 offset_bottom = 20.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_fonts/font = ExtResource("10_iwbf0")
+theme_override_font_sizes/font_size = 32
 horizontal_alignment = 1
 
 [node name="ContinueLabel" type="Label" parent="BattleUI/UI"]
@@ -121,5 +128,7 @@ offset_right = 250.0
 offset_bottom = 20.0
 grow_horizontal = 2
 grow_vertical = 2
+theme_override_fonts/font = ExtResource("10_iwbf0")
+theme_override_font_sizes/font_size = 24
 text = "Press SPACE to return to menu"
 horizontal_alignment = 1

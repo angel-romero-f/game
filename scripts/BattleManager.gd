@@ -307,5 +307,6 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key := event as InputEventKey
 		if key.pressed and key.keycode == KEY_SPACE:
+			App.switch_to_main_music()
 			App.go(MAIN_MENU_PATH)
 
