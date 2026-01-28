@@ -127,6 +127,19 @@ func snap_card(card: Node2D) -> bool:
 	card_snapped.emit(card)
 	return true
 
+func force_snap_card(card: Node2D) -> void:
+	"""Force-snaps a card to this slot (ignores can_snap). Intended for battle/UI logic."""
+	if has_card and snapped_card and snapped_card != card:
+		# Clear existing reference; caller manages old card lifetime.
+		snapped_card = null
+		has_card = false
+	
+	has_card = true
+	snapped_card = card
+	if card:
+		card.global_position = global_position
+	card_snapped.emit(card)
+
 func unsnap_card():
 	"""Removes the card from this slot."""
 	if snapped_card:

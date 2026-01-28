@@ -49,11 +49,7 @@ var _card_sprite_frames_backing: SpriteFrames
 
 func _ready():
 	# Set the initial texture if one was assigned in the editor
-	if Engine.is_editor_hint():
-		# In editor, make sure we update when properties change
-		_update_texture()
-	else:
-		_update_texture()
+	_update_texture()
 
 func _enter_tree():
 	# Also update in editor when entering the tree
@@ -104,6 +100,7 @@ func _update_collision_size(texture: Texture2D):
 	var texture_size = texture.get_size()
 	
 	# Account for the Sprite2D's scale
+	# -Vector2(0.4,0) is a manual adjustment for aestetics
 	var scaled_size = texture_size * (card_image.scale-Vector2(0.4,0))
 	
 	# Update the collision shape size

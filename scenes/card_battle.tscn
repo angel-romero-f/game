@@ -1,14 +1,22 @@
-[gd_scene load_steps=5 format=3 uid="uid://8s4xj8qvpi8a"]
+[gd_scene load_steps=11 format=3 uid="uid://8s4xj8qvpi8a"]
 
-[ext_resource type="PackedScene" uid="uid://ctx5wlgevt7qi" path="res://scenes/card.tscn" id="1_j85tk"]
+[ext_resource type="Script" uid="uid://bkwfgx4dtvma" path="res://scripts/BattleManager.gd" id="2_battle_manager"]
 [ext_resource type="Script" uid="uid://p40834bmanry" path="res://scripts/CardManager.gd" id="2_cardmanager"]
+[ext_resource type="SpriteFrames" uid="uid://dvak7aktofje2" path="res://assets/Elf_cards.pxo" id="3_elfcards"]
 [ext_resource type="PackedScene" uid="uid://bafobj10bgihh" path="res://scenes/card_slot.tscn" id="3_u4xae"]
+[ext_resource type="SpriteFrames" uid="uid://b55gl2d0yo2w4" path="res://assets/cardback.pxo" id="3_uesyd"]
 [ext_resource type="SpriteFrames" uid="uid://cbh87m7wl3bg0" path="res://assets/cardslot.pxo" id="4_aiscu"]
+[ext_resource type="PackedScene" uid="uid://ca7ctiluaej" path="res://scenes/deck.tscn" id="5_sp37g"]
+[ext_resource type="SpriteFrames" uid="uid://t4ia5h4y42jg" path="res://assets/infernal_cards.pxo" id="8_x2u0b"]
+[ext_resource type="Script" uid="uid://bumkisumq4jxt" path="res://scripts/battle/AttributeConfig.gd" id="9_attr_cfg_script"]
+
+[sub_resource type="Resource" id="Resource_attr_cfg"]
+script = ExtResource("9_attr_cfg_script")
 
 [node name="CardBattle" type="Node2D"]
 
 [node name="CardSlotPM" parent="." instance=ExtResource("3_u4xae")]
-position = Vector2(509, 426)
+position = Vector2(535, 426)
 slot_sprite_frames = ExtResource("4_aiscu")
 
 [node name="CardSlotPL" parent="." instance=ExtResource("3_u4xae")]
@@ -16,27 +24,33 @@ position = Vector2(397, 426)
 slot_sprite_frames = ExtResource("4_aiscu")
 
 [node name="CardSlotPR" parent="." instance=ExtResource("3_u4xae")]
-position = Vector2(625, 425)
+position = Vector2(680, 425)
 slot_sprite_frames = ExtResource("4_aiscu")
 
 [node name="CardManager" type="Node2D" parent="."]
 position = Vector2(0, -1)
 script = ExtResource("2_cardmanager")
 
-[node name="FlameSpiral" parent="." instance=ExtResource("1_j85tk")]
-position = Vector2(570, 575)
-frame_index = 1
-card_size = Vector2(128, 128)
+[node name="BattleManager" type="Node" parent="."]
+script = ExtResource("2_battle_manager")
+attribute_config = SubResource("Resource_attr_cfg")
 
-[node name="FireArrow" parent="." instance=ExtResource("1_j85tk")]
-position = Vector2(439, 575)
-card_size = Vector2(128, 128)
+[node name="DeckP" parent="." instance=ExtResource("5_sp37g")]
+position = Vector2(1106, 593)
+deck_sprite_frames = ExtResource("3_uesyd")
+card_sprite_pool = Array[SpriteFrames]([ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("8_x2u0b"), ExtResource("8_x2u0b")])
+card_frame_indices = Array[int]([0, 1, 2, 3, 3, 1])
+card_row_height = 0.9
 
-[node name="Deck" type="Node2D" parent="."]
-position = Vector2(1086, 592)
+[node name="DeckO" parent="." instance=ExtResource("5_sp37g")]
+position = Vector2(35, 50)
+deck_sprite_frames = ExtResource("3_uesyd")
+spawn_on_click = false
+card_sprite_pool = Array[SpriteFrames]([ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("8_x2u0b"), ExtResource("8_x2u0b")])
+card_frame_indices = Array[int]([0, 1, 2, 3, 3, 1])
 
 [node name="CardSlotOM" parent="." instance=ExtResource("3_u4xae")]
-position = Vector2(506, 120)
+position = Vector2(534, 120)
 slot_sprite_frames = ExtResource("4_aiscu")
 can_snap = false
 
@@ -46,6 +60,66 @@ slot_sprite_frames = ExtResource("4_aiscu")
 can_snap = false
 
 [node name="CardSlotOR" parent="." instance=ExtResource("3_u4xae")]
-position = Vector2(621, 120)
+position = Vector2(676, 120)
 slot_sprite_frames = ExtResource("4_aiscu")
 can_snap = false
+
+[node name="BattleUI" type="CanvasLayer" parent="."]
+
+[node name="UI" type="Control" parent="BattleUI"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="StartBattleButton" type="Button" parent="BattleUI/UI"]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -148.0
+offset_top = -20.0
+offset_right = 72.0
+offset_bottom = 30.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Start Battle"
+
+[node name="ResultLabel" type="Label" parent="BattleUI/UI"]
+visible = false
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.35
+anchor_right = 0.5
+anchor_bottom = 0.35
+offset_left = -250.0
+offset_top = -20.0
+offset_right = 250.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_alignment = 1
+
+[node name="ContinueLabel" type="Label" parent="BattleUI/UI"]
+visible = false
+layout_mode = 1
+anchors_preset = -1
+anchor_left = 0.5
+anchor_top = 0.42
+anchor_right = 0.5
+anchor_bottom = 0.42
+offset_left = -250.0
+offset_top = -20.0
+offset_right = 250.0
+offset_bottom = 20.0
+grow_horizontal = 2
+grow_vertical = 2
+text = "Press SPACE to return to menu"
+horizontal_alignment = 1

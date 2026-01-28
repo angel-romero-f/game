@@ -8,6 +8,7 @@ var drag_offset: Vector2 = Vector2.ZERO
 var screen_bounds: Rect2
 var hovered_card: Node2D = null
 var card_original_scales: Dictionary = {}  # Store original scales for each card
+var card_spawn_positions: Dictionary = {}  # Store original spawn positions for each card
 var hover_scale: float = 1.15  # Scale factor when hovering (15% larger)
 var snapped_cards: Dictionary = {}  # Track which cards are snapped to slots (card -> slot)
 
@@ -48,7 +49,17 @@ func _setup_cards():
 		if child != self:  # Don't process ourselves
 			var card_script = child.get_script()
 			if card_script and card_script.resource_path == "res://scripts/Card.gd":
-				_connect_card(child)
+				register_card(child)
+
+func register_card(card: Node2D) -> void:
+	"""Public method to register a card with the CardManager.
+	Can be called by other systems (like Deck) when spawning cards dynamically."""
+	if not card:
+		return
+	# Record the card's spawn position the first time it is registered.
+	if not card_spawn_positions.has(card):
+		card_spawn_positions[card] = card.global_position
+	_connect_card(card)
 
 func _connect_card(card: Node2D):
 	# Store original scale
@@ -147,12 +158,22 @@ func _end_drag():
 		
 		# Check if card should snap to a nearby slot
 		var nearest_slot = _find_nearest_slot(card_pos)
+		var did_snap := false
 		if nearest_slot:
 			_snap_card_to_slot(card, nearest_slot)
+			did_snap = true
 		else:
 			# Unsnap if card was previously snapped but moved away
 			if snapped_cards.has(card):
 				_unsnap_card(card)
+		
+		# If the card did not end up in a slot, return it to its original spawn position.
+		if not did_snap and card_spawn_positions.has(card):
+			var spawn_pos: Vector2 = card_spawn_positions[card]
+			var tween := create_tween()
+			tween.set_ease(Tween.EASE_OUT)
+			tween.set_trans(Tween.TRANS_CUBIC)
+			tween.tween_property(card, "global_position", spawn_pos, 0.25)
 		
 		card_drag_ended.emit(card)
 		dragged_card = null
