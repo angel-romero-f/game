@@ -15,6 +15,69 @@ var is_multiplayer: bool = false
 const MAX_LIVES: int = 3
 var current_lives: int = MAX_LIVES
 
+## ========== PHASE SYSTEM ==========
+## Game alternates between Resource Collection and Battle phases
+enum GamePhase { RESOURCE_PHASE, BATTLE_PHASE }
+
+signal game_phase_changed(new_phase: GamePhase)
+signal minigame_completed_signal  # Emitted when a minigame is won
+
+var current_game_phase: GamePhase = GamePhase.RESOURCE_PHASE
+var minigames_completed_this_phase: int = 0
+const MAX_MINIGAMES_PER_PHASE: int = 2
+
+## Flag to show phase transition overlay when returning to GameIntro
+var show_phase_transition: bool = false
+var phase_transition_text: String = ""
+
+func enter_resource_phase() -> void:
+	current_game_phase = GamePhase.RESOURCE_PHASE
+	minigames_completed_this_phase = 0
+	phase_transition_text = "Collect Your Resources"
+	show_phase_transition = true
+	print("[Phase] Entering RESOURCE_PHASE")
+	game_phase_changed.emit(current_game_phase)
+
+func enter_battle_phase() -> void:
+	current_game_phase = GamePhase.BATTLE_PHASE
+	phase_transition_text = "Choose Your Battles"
+	show_phase_transition = true
+	print("[Phase] Entering BATTLE_PHASE")
+	game_phase_changed.emit(current_game_phase)
+
+func on_minigame_completed() -> void:
+	## Called when player wins a minigame
+	minigames_completed_this_phase += 1
+	print("[Phase] Minigame completed. Count: ", minigames_completed_this_phase, "/", MAX_MINIGAMES_PER_PHASE)
+	minigame_completed_signal.emit()
+	
+	# Check if we should auto-transition to battle phase
+	if minigames_completed_this_phase >= MAX_MINIGAMES_PER_PHASE:
+		print("[Phase] Max minigames reached, transitioning to battle phase")
+		enter_battle_phase()
+
+func on_battle_completed() -> void:
+	## Called when battle ends (win, lose, or tie)
+	print("[Phase] Battle completed, returning to resource phase")
+	enter_resource_phase()
+
+func skip_to_battle_phase() -> void:
+	## Called when player chooses to skip remaining minigames
+	print("[Phase] Player skipping to battle phase")
+	enter_battle_phase()
+
+func can_play_minigame() -> bool:
+	## Returns true if player can still play minigames this phase
+	return current_game_phase == GamePhase.RESOURCE_PHASE and minigames_completed_this_phase < MAX_MINIGAMES_PER_PHASE
+
+func reset_phase_state() -> void:
+	## Reset phase state for a new game
+	current_game_phase = GamePhase.RESOURCE_PHASE
+	minigames_completed_this_phase = 0
+	show_phase_transition = false
+	phase_transition_text = ""
+## ========== END PHASE SYSTEM ==========
+
 func reset_lives() -> void:
 	current_lives = MAX_LIVES
 
@@ -102,6 +165,7 @@ func setup_single_player_game() -> void:
 	game_players.clear()
 	turn_order.clear()
 	reset_lives()
+	reset_phase_state()
 	
 	# Add the local player
 	var local_player := {
@@ -139,6 +203,7 @@ func setup_multiplayer_game() -> void:
 	game_players.clear()
 	turn_order.clear()
 	reset_lives()
+	reset_phase_state()
 	
 	# Build player list from Net.player_names and Net.player_races
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1

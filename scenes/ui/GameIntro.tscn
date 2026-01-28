@@ -297,6 +297,78 @@ theme_override_fonts/font = ExtResource("3_iwbf0")
 theme_override_font_sizes/font_size = 26
 text = "Start Battle"
 
+[node name="SkipToBattleButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -130.0
+offset_right = 110.0
+offset_bottom = -90.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
+text = "Skip to Battle Phase"
+
+[node name="MinigamesCounterLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -100.0
+offset_top = -160.0
+offset_right = 100.0
+offset_bottom = -135.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 20
+text = "Minigames: 0/2"
+horizontal_alignment = 1
+
+[node name="PhaseOverlay" type="ColorRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.05, 0.1, 0.9)
+
+[node name="PhaseLabel" type="Label" parent="PhaseOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -50.0
+offset_right = 300.0
+offset_bottom = 50.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 64
+text = "Collect Your Resources"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="SettingsButton" type="Button" parent="."]
 visible = false
 layout_mode = 1

@@ -47,15 +47,20 @@ func handle_continue():
 		return
 	
 	if player_won:
-		# Won - return to map
+		# Won - report completion and return to map
+		App.on_minigame_completed()
 		_return_to_map()
 	elif App.get_lives() <= 0:
-		# Final death - reset lives and return to map
+		# Final death - reset lives, count as played, and return to map
 		App.reset_lives()
+		App.on_minigame_completed()
 		_return_to_map()
 	else:
 		# Still have lives - restart minigame
 		get_tree().reload_current_scene()
 
 func _return_to_map():
+	# Ensure main music is playing when returning to map
+	# (Battle music only plays in the actual battle scene, not on the map)
+	App.play_main_music()
 	App.go("res://scenes/ui/GameIntro.tscn")

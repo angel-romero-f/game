@@ -21,9 +21,13 @@ var order_corner_container: VBoxContainer
 var minigame_button: Button
 var bridge_minigame_button: Button
 var battle_button: Button
+var skip_to_battle_button: Button
 var rolling_label: Label
 var settings_button: Button
 var settings_panel: Panel
+var phase_overlay: ColorRect
+var phase_label: Label
+var minigames_counter_label: Label
 
 var is_paused: bool = false
 
@@ -56,9 +60,13 @@ func _ready() -> void:
 	minigame_button = $MinigameButton
 	bridge_minigame_button = $BridgeMinigameButton
 	battle_button = $BattleButton
+	skip_to_battle_button = $SkipToBattleButton
 	settings_button = $SettingsButton
 	settings_panel = $SettingsPanel
 	player_roll_container = $PlayerRollContainer
+	phase_overlay = $PhaseOverlay
+	phase_label = $PhaseOverlay/PhaseLabel
+	minigames_counter_label = $MinigamesCounterLabel
 	
 	# Initial state
 	map_overlay.modulate.a = 0.6  # Gray out map
@@ -70,9 +78,12 @@ func _ready() -> void:
 	minigame_button.visible = false
 	bridge_minigame_button.visible = false
 	battle_button.visible = false
+	skip_to_battle_button.visible = false
 	settings_button.visible = false
 	settings_panel.visible = false
 	player_roll_container.visible = false
+	phase_overlay.visible = false
+	minigames_counter_label.visible = false
 	
 	# Setup showcase with local player
 	_setup_showcase()
@@ -81,6 +92,7 @@ func _ready() -> void:
 	minigame_button.pressed.connect(_on_minigame_pressed)
 	bridge_minigame_button.pressed.connect(_on_bridge_minigame_pressed)
 	battle_button.pressed.connect(_on_battle_button_pressed)
+	skip_to_battle_button.pressed.connect(_on_skip_to_battle_pressed)
 	
 	# Connect settings
 	if settings_button:
@@ -479,23 +491,32 @@ func _show_corner_order() -> void:
 	map_tween.tween_property(map_overlay, "modulate:a", 0.0, 0.8)
 	map_tween.tween_property(corner_parent, "modulate:a", 1.0, 0.5)
 	
-	# Show minigame buttons, battle button, and settings
 	await map_tween.finished
-	minigame_button.visible = true
-	minigame_button.modulate.a = 0.0
-	bridge_minigame_button.visible = true
-	bridge_minigame_button.modulate.a = 0.0
-	battle_button.visible = true
-	battle_button.modulate.a = 0.0
-	settings_button.visible = true
-	settings_button.modulate.a = 0.0
 	
+	# Apply phase-aware UI visibility
+	_apply_phase_ui()
+	
+	# Animate buttons fading in
 	var btn_tween := create_tween()
 	btn_tween.set_parallel(true)
-	btn_tween.tween_property(minigame_button, "modulate:a", 1.0, 0.3)
-	btn_tween.tween_property(bridge_minigame_button, "modulate:a", 1.0, 0.3)
-	btn_tween.tween_property(battle_button, "modulate:a", 1.0, 0.3)
+	if minigame_button.visible:
+		minigame_button.modulate.a = 0.0
+		btn_tween.tween_property(minigame_button, "modulate:a", 1.0, 0.3)
+	if bridge_minigame_button.visible:
+		bridge_minigame_button.modulate.a = 0.0
+		btn_tween.tween_property(bridge_minigame_button, "modulate:a", 1.0, 0.3)
+	if battle_button.visible:
+		battle_button.modulate.a = 0.0
+		btn_tween.tween_property(battle_button, "modulate:a", 1.0, 0.3)
+	if skip_to_battle_button.visible:
+		skip_to_battle_button.modulate.a = 0.0
+		btn_tween.tween_property(skip_to_battle_button, "modulate:a", 1.0, 0.3)
+	settings_button.visible = true
+	settings_button.modulate.a = 0.0
 	btn_tween.tween_property(settings_button, "modulate:a", 1.0, 0.3)
+	if minigames_counter_label.visible:
+		minigames_counter_label.modulate.a = 0.0
+		btn_tween.tween_property(minigames_counter_label, "modulate:a", 1.0, 0.3)
 	
 	current_phase = Phase.GAME_READY
 
@@ -529,11 +550,14 @@ func _skip_to_game_ready() -> void:
 		var item := _create_order_item(player, i + 1, false)
 		order_corner_container.add_child(item)
 	
-	# Show UI elements
-	minigame_button.visible = true
-	bridge_minigame_button.visible = true
-	battle_button.visible = true
-	settings_button.visible = true
+	# Check if we need to show phase transition overlay
+	if App.show_phase_transition:
+		App.show_phase_transition = false
+		_show_phase_transition_overlay()
+	else:
+		# Just apply phase-aware UI immediately with animation
+		_apply_phase_ui()
+		_animate_phase_buttons()
 	
 	current_phase = Phase.GAME_READY
 
@@ -623,3 +647,86 @@ func _db_to_linear(db: float) -> float:
 	if db <= -80:
 		return 0
 	return pow(10, db / 20)
+
+## ========== PHASE SYSTEM UI ==========
+
+func _apply_phase_ui() -> void:
+	## Shows/hides buttons based on current game phase
+	match App.current_game_phase:
+		App.GamePhase.RESOURCE_PHASE:
+			# Show minigame buttons, skip button, hide battle button
+			minigame_button.visible = true
+			bridge_minigame_button.visible = true
+			skip_to_battle_button.visible = true
+			battle_button.visible = false
+			minigames_counter_label.visible = true
+			_update_minigames_counter()
+		App.GamePhase.BATTLE_PHASE:
+			# Hide minigame buttons, show battle button
+			minigame_button.visible = false
+			bridge_minigame_button.visible = false
+			skip_to_battle_button.visible = false
+			battle_button.visible = true
+			minigames_counter_label.visible = false
+	
+	# Settings is always visible when game is ready
+	settings_button.visible = true
+
+func _show_phase_transition_overlay() -> void:
+	## Shows a brief overlay announcing the current phase
+	if not phase_overlay or not phase_label:
+		_apply_phase_ui()
+		return
+	
+	phase_label.text = App.phase_transition_text
+	phase_overlay.visible = true
+	phase_overlay.modulate.a = 0.0
+	
+	# Fade in
+	var tween := create_tween()
+	tween.tween_property(phase_overlay, "modulate:a", 1.0, 0.4)
+	tween.tween_interval(1.5)  # Hold for 1.5 seconds
+	tween.tween_property(phase_overlay, "modulate:a", 0.0, 0.4)
+	tween.tween_callback(_on_phase_transition_finished)
+
+func _on_phase_transition_finished() -> void:
+	phase_overlay.visible = false
+	_apply_phase_ui()
+	_animate_phase_buttons()
+
+func _animate_phase_buttons() -> void:
+	## Fade in visible buttons with animation
+	var btn_tween := create_tween()
+	btn_tween.set_parallel(true)
+	
+	if minigame_button.visible:
+		minigame_button.modulate.a = 0.0
+		btn_tween.tween_property(minigame_button, "modulate:a", 1.0, 0.3)
+	if bridge_minigame_button.visible:
+		bridge_minigame_button.modulate.a = 0.0
+		btn_tween.tween_property(bridge_minigame_button, "modulate:a", 1.0, 0.3)
+	if battle_button.visible:
+		battle_button.modulate.a = 0.0
+		btn_tween.tween_property(battle_button, "modulate:a", 1.0, 0.3)
+	if skip_to_battle_button.visible:
+		skip_to_battle_button.modulate.a = 0.0
+		btn_tween.tween_property(skip_to_battle_button, "modulate:a", 1.0, 0.3)
+	if minigames_counter_label.visible:
+		minigames_counter_label.modulate.a = 0.0
+		btn_tween.tween_property(minigames_counter_label, "modulate:a", 1.0, 0.3)
+	
+	# Settings always visible
+	settings_button.modulate.a = 0.0
+	btn_tween.tween_property(settings_button, "modulate:a", 1.0, 0.3)
+
+func _update_minigames_counter() -> void:
+	## Updates the minigames counter label
+	if minigames_counter_label:
+		var remaining := App.MAX_MINIGAMES_PER_PHASE - App.minigames_completed_this_phase
+		minigames_counter_label.text = "Minigames: %d/%d" % [App.minigames_completed_this_phase, App.MAX_MINIGAMES_PER_PHASE]
+
+func _on_skip_to_battle_pressed() -> void:
+	## Handle skip to battle button press
+	App.skip_to_battle_phase()
+	App.go("res://scenes/ui/GameIntro.tscn")
+## ========== END PHASE SYSTEM UI ==========

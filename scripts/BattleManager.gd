@@ -308,5 +308,6 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key := event as InputEventKey
 		if key.pressed and key.keycode == KEY_SPACE:
 			App.switch_to_main_music()
+			App.on_battle_completed()  # Triggers transition back to resource phase
 			App.go(MAIN_MENU_PATH)
 

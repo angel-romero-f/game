@@ -35,17 +35,23 @@ func _apply_selected_race_visual() -> void:
 		race = "Elf"
 
 	var texture_paths: Array[String] = []
+	var extra_multiplier: float = 1.0
+	
 	match race:
 		"Fairy":
 			texture_paths = [
 				"res://pictures/fairy_girl_1/fg1_south.png",
 				"res://pictures/fairy_girl_1/fg1_south-east.png",
 			]
+			# Fairy source sprites are much smaller; we normalize to Elf size below.
+			extra_multiplier = 1.05
 		"Orc":
 			texture_paths = [
 				"res://pictures/orc_boy_1/ob1_south.png",
 				"res://pictures/orc_boy_1/south-east.png",
 			]
+			# Orc source sprites are much smaller; we normalize to Elf size below.
+			extra_multiplier = 1.05
 		"Infernal":
 			texture_paths = [
 				"res://pictures/infernal_boy_1/ib1_south.png",
@@ -58,12 +64,28 @@ func _apply_selected_race_visual() -> void:
 				"res://pictures/elf_girl_1/eg1_east.png",
 			]
 
+	# Load chosen texture
+	var chosen_tex: Texture2D = null
 	for p in texture_paths:
 		if FileAccess.file_exists(p):
 			var tex := load(p) as Texture2D
 			if tex:
-				visual.texture = tex
-				return
+				chosen_tex = tex
+				break
+	if chosen_tex == null:
+		return
+	visual.texture = chosen_tex
+
+	# Normalize on-screen size by texture height so all races look comparable.
+	# Base scale was tuned for the Elf sprite at 0.15.
+	var base_scale := 0.15
+	var ref_tex := load("res://pictures/elf_girl_1/eg1_south.png") as Texture2D
+	var ref_h := float(ref_tex.get_size().y) if ref_tex else float(chosen_tex.get_size().y)
+	var cur_h := float(chosen_tex.get_size().y)
+	var normalize := (ref_h / cur_h) if cur_h > 0.0 else 1.0
+	normalize = clamp(normalize, 0.5, 8.0)
+
+	visual.scale = Vector2(base_scale, base_scale) * normalize * extra_multiplier
 
 func _physics_process(delta):
 	if game_over:
