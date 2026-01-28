@@ -2,6 +2,13 @@ extends Control
 
 const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
 
+const D20_SPRITESHEET_PATH := "res://pictures/d20_roll_sprite.png"
+const D20_FRAME_SIZE := Vector2i(450, 450)
+const D20_COLS := 5
+const D20_ROWS := 11
+const D20_FPS := 24.0
+const UI_FONT := preload("res://fonts/m5x7.ttf")
+
 enum Phase { SHOWCASE, ROLLING, SHOW_PLAYER_ROLL, SHOW_ORDER, GAME_READY }
 var current_phase: Phase = Phase.SHOWCASE
 
@@ -13,6 +20,7 @@ var showcase_race_image: TextureRect
 var showcase_name_label: Label
 var d20_container: CenterContainer
 var d20_sprite: Panel
+var d20_anim: TextureRect
 var roll_result_label: Label
 var player_roll_container: CenterContainer
 var order_center_container: CenterContainer
@@ -39,6 +47,11 @@ var current_rolling_player_idx: int = 0
 var roll_display_value: int = 1
 var roll_tick_timer: float = 0.0
 
+# D20 spritesheet animation state
+var _d20_frames: Array[Texture2D] = []
+var _d20_frame_idx: int = 0
+var _d20_frame_timer: float = 0.0
+
 # Order display
 var order_items_center: Array = []  # Array of Control nodes in center display
 var order_items_corner: Array = []  # Array of Control nodes in corner display
@@ -52,6 +65,7 @@ func _ready() -> void:
 	showcase_name_label = $ShowcaseContainer/VBoxContainer/NameLabel
 	d20_container = $D20Container
 	d20_sprite = $D20Container/VBoxContainer/D20Sprite
+	d20_anim = $D20Container/VBoxContainer/D20Sprite/D20Anim
 	roll_result_label = $D20Container/VBoxContainer/RollResultLabel
 	rolling_label = $D20Container/VBoxContainer/RollingLabel
 	order_center_container = $OrderCenterContainer
@@ -84,6 +98,8 @@ func _ready() -> void:
 	player_roll_container.visible = false
 	phase_overlay.visible = false
 	minigames_counter_label.visible = false
+	
+	_load_d20_spritesheet_frames()
 	
 	# Setup showcase with local player
 	_setup_showcase()
@@ -163,6 +179,7 @@ func _start_rolling_phase() -> void:
 func _begin_rolling_sequence() -> void:
 	current_phase = Phase.ROLLING
 	current_rolling_player_idx = 0
+	_start_d20_anim()
 	
 	# In multiplayer, host generates all rolls and syncs to clients
 	if App.is_multiplayer:
@@ -201,6 +218,7 @@ func _display_multiplayer_rolls() -> void:
 		roll_animation_timer = 0.0
 		roll_tick_timer = 0.0
 		var anim_duration := 0.8  # Shorter animation for multiplayer
+		_start_d20_anim()
 		
 		rolling_label.text = player_name + " rolling..."
 		rolling_label.visible = true
@@ -211,6 +229,7 @@ func _display_multiplayer_rolls() -> void:
 			var delta := get_process_delta_time()
 			roll_animation_timer += delta
 			roll_tick_timer += delta
+			_advance_d20_anim(delta)
 			
 			if roll_tick_timer >= 0.06:
 				roll_tick_timer = 0.0
@@ -237,6 +256,7 @@ func _roll_for_player(idx: int) -> void:
 	rolling_label.text = player.get("name", "Player") + " rolling..."
 	rolling_label.visible = true
 	roll_result_label.visible = false
+	_start_d20_anim()
 	
 	roll_animation_timer = 0.0
 	roll_tick_timer = 0.0
@@ -245,6 +265,7 @@ func _roll_for_player(idx: int) -> void:
 func _process_rolling(delta: float) -> void:
 	roll_animation_timer += delta
 	roll_tick_timer += delta
+	_advance_d20_anim(delta)
 	
 	# Animate the displayed number
 	if roll_tick_timer >= 0.08:
@@ -417,6 +438,7 @@ func _create_order_item(player: Dictionary, order_position: int, is_center: bool
 	# Position number
 	var pos_label := Label.new()
 	pos_label.text = str(order_position) + "."
+	pos_label.add_theme_font_override("font", UI_FONT)
 	pos_label.add_theme_font_size_override("font_size", 24 if is_center else 16)
 	pos_label.add_theme_color_override("font_color", Color.WHITE)
 	pos_label.custom_minimum_size.x = 30 if is_center else 20
@@ -436,6 +458,7 @@ func _create_order_item(player: Dictionary, order_position: int, is_center: bool
 	# Player name
 	var name_label := Label.new()
 	name_label.text = player.get("name", "Player")
+	name_label.add_theme_font_override("font", UI_FONT)
 	name_label.add_theme_font_size_override("font_size", 22 if is_center else 14)
 	name_label.add_theme_color_override("font_color", App.get_race_color(player.get("race", "Elf")))
 	container.add_child(name_label)
@@ -444,6 +467,7 @@ func _create_order_item(player: Dictionary, order_position: int, is_center: bool
 	if is_center:
 		var roll_label := Label.new()
 		roll_label.text = "(" + str(player.get("roll", 0)) + ")"
+		roll_label.add_theme_font_override("font", UI_FONT)
 		roll_label.add_theme_font_size_override("font_size", 18)
 		roll_label.add_theme_color_override("font_color", Color(0.7, 0.7, 0.7))
 		container.add_child(roll_label)
@@ -452,6 +476,7 @@ func _create_order_item(player: Dictionary, order_position: int, is_center: bool
 	if player.get("is_local", false):
 		var you_label := Label.new()
 		you_label.text = " (You)" if is_center else "*"
+		you_label.add_theme_font_override("font", UI_FONT)
 		you_label.add_theme_font_size_override("font_size", 18 if is_center else 12)
 		you_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
 		container.add_child(you_label)
@@ -730,3 +755,68 @@ func _on_skip_to_battle_pressed() -> void:
 	App.skip_to_battle_phase()
 	App.go("res://scenes/ui/GameIntro.tscn")
 ## ========== END PHASE SYSTEM UI ==========
+
+func _load_d20_spritesheet_frames() -> void:
+	_d20_frames.clear()
+	# NOTE: This project currently doesn't have an import file for the spritesheet,
+	# so ResourceLoader.load() may fail. Load the PNG directly via Image instead.
+	var img := Image.new()
+	var err := img.load(D20_SPRITESHEET_PATH)
+	if err != OK:
+		push_warning("Could not load d20 spritesheet: ", D20_SPRITESHEET_PATH, " (err=", err, ")")
+		return
+	var atlas: Texture2D = ImageTexture.create_from_image(img)
+	
+	for y in range(D20_ROWS):
+		for x in range(D20_COLS):
+			var rect := Rect2i(x * D20_FRAME_SIZE.x, y * D20_FRAME_SIZE.y, D20_FRAME_SIZE.x, D20_FRAME_SIZE.y)
+			# Some spritesheets have unused/blank cells at the end; skip those so the animation never flashes empty frames.
+			if not _d20_frame_has_content(img, rect):
+				continue
+			var frame := AtlasTexture.new()
+			frame.atlas = atlas
+			frame.region = rect
+			_d20_frames.append(frame)
+	
+	if d20_anim and not _d20_frames.is_empty():
+		d20_anim.texture = _d20_frames[0]
+
+func _d20_frame_has_content(img: Image, rect: Rect2i) -> bool:
+	# Fast heuristic: sample pixels; if everything is near-black, treat as empty.
+	# (Our spritesheet background is black; the die has brighter pixels.)
+	var step := 16
+	var x0 := rect.position.x
+	var y0 := rect.position.y
+	var x1 := rect.position.x + rect.size.x
+	var y1 := rect.position.y + rect.size.y
+	
+	for y in range(y0, y1, step):
+		for x in range(x0, x1, step):
+			var c := img.get_pixel(x, y)
+			if (c.r + c.g + c.b) > 0.06:
+				return true
+	return false
+
+func _start_d20_anim() -> void:
+	if d20_anim == null or _d20_frames.is_empty():
+		return
+	
+	var label := d20_sprite.get_node_or_null("D20Label")
+	if label is CanvasItem:
+		label.visible = false
+	
+	# Start at the first frame to feel like a real roll animation.
+	_d20_frame_idx = 0
+	_d20_frame_timer = 0.0
+	d20_anim.texture = _d20_frames[_d20_frame_idx]
+
+func _advance_d20_anim(delta: float) -> void:
+	if d20_anim == null or _d20_frames.is_empty():
+		return
+	
+	_d20_frame_timer += delta
+	var frame_time := 1.0 / D20_FPS
+	while _d20_frame_timer >= frame_time:
+		_d20_frame_timer -= frame_time
+		_d20_frame_idx = (_d20_frame_idx + 1) % _d20_frames.size()
+		d20_anim.texture = _d20_frames[_d20_frame_idx]

@@ -5,18 +5,18 @@
 [ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="3_iwbf0"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_D20"]
-bg_color = Color(0.9, 0.15, 0.15, 1)
-border_width_left = 6
-border_width_top = 6
-border_width_right = 6
-border_width_bottom = 6
-border_color = Color(0.2, 0.2, 0.2, 1)
+bg_color = Color(0, 0, 0, 0)
+border_width_left = 0
+border_width_top = 0
+border_width_right = 0
+border_width_bottom = 0
+border_color = Color(0, 0, 0, 0)
 corner_radius_left_top = 16
 corner_radius_top_right = 16
 corner_radius_bottom_right = 16
 corner_radius_left_bottom = 16
 shadow_color = Color(0, 0, 0, 0.6)
-shadow_size = 12
+shadow_size = 0
 
 [node name="GameIntro" type="Control"]
 layout_mode = 3
@@ -112,6 +112,16 @@ custom_minimum_size = Vector2(160, 160)
 layout_mode = 2
 size_flags_horizontal = 4
 theme_override_styles/panel = SubResource("StyleBoxFlat_D20")
+
+[node name="D20Anim" type="TextureRect" parent="D20Container/VBoxContainer/D20Sprite"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
 
 [node name="D20Label" type="Label" parent="D20Container/VBoxContainer/D20Sprite"]
 layout_mode = 1
