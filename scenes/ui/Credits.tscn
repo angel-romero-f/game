@@ -64,7 +64,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 48
+theme_override_font_sizes/font_size = 72
 text = "Credits"
 horizontal_alignment = 1
 
@@ -76,23 +76,23 @@ theme_override_constants/separation = 6
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 22
-text = "Alicia Garza: character design, map design"
+theme_override_font_sizes/font_size = 36
+text = "Alicia Garza: character design, map design, region design"
 horizontal_alignment = 1
 
 [node name="Entry2" type="Label" parent="Card/Margin/VBoxContainer/CreditsList"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 22
-text = "Angel Romero: MCP, game design, networking"
+theme_override_font_sizes/font_size = 36
+text = "Angel Romero: card design, minigame design, MCP, networking"
 horizontal_alignment = 1
 
 [node name="Entry3" type="Label" parent="Card/Margin/VBoxContainer/CreditsList"]
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 36
 text = "Oyinkansola Sobakin-Ashebu: networking, music, UI"
 horizontal_alignment = 1
 
@@ -100,8 +100,8 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 22
-text = "Noah Villa: background art, card design, character design, card game design"
+theme_override_font_sizes/font_size = 36
+text = "Noah Villa: background art, card design, card game design, character design"
 horizontal_alignment = 1
 
 [node name="Spacer" type="Control" parent="Card/Margin/VBoxContainer"]
@@ -111,5 +111,5 @@ layout_mode = 2
 [node name="BackButton" type="Button" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 30
 text = "Back to Menu"

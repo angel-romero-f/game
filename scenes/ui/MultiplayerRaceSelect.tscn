@@ -85,7 +85,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_constants/outline_size = 3
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 56
+theme_override_font_sizes/font_size = 72
 text = "Select Race"
 horizontal_alignment = 1
 
@@ -94,7 +94,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 26
+theme_override_font_sizes/font_size = 36
 text = "One race per player."
 horizontal_alignment = 1
 
@@ -147,7 +147,7 @@ stretch_mode = 5
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 36
 text = "Elf"
 horizontal_alignment = 1
 
@@ -198,14 +198,14 @@ stretch_mode = 5
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 36
 text = "Orc"
 horizontal_alignment = 1
 
 [node name="FairyCard" type="PanelContainer" parent="MainContainer/CardsMargin/CardsContainer"]
+clip_contents = true
 custom_minimum_size = Vector2(170, 255)
 layout_mode = 2
-clip_contents = true
 theme_override_styles/panel = SubResource("StyleBoxFlat_Fairy")
 
 [node name="FairyButton" type="Button" parent="MainContainer/CardsMargin/CardsContainer/FairyCard"]
@@ -233,10 +233,10 @@ size_flags_vertical = 3
 mouse_filter = 2
 
 [node name="FairyImage" type="TextureRect" parent="MainContainer/CardsMargin/CardsContainer/FairyCard/Content/CenterContainer"]
+visible = false
 custom_minimum_size = Vector2(145, 145)
 layout_mode = 2
 mouse_filter = 2
-visible = false
 texture = ExtResource("6_fairy")
 expand_mode = 1
 stretch_mode = 5
@@ -245,7 +245,7 @@ stretch_mode = 5
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 36
 text = "Fairy"
 horizontal_alignment = 1
 
@@ -296,7 +296,7 @@ stretch_mode = 5
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 32
+theme_override_font_sizes/font_size = 36
 text = "Infernal"
 horizontal_alignment = 1
 
@@ -319,13 +319,14 @@ layout_mode = 2
 layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 28
+theme_override_font_sizes/font_size = 30
 text = "Selected:"
 horizontal_alignment = 1
 
 [node name="PlayersList" type="ItemList" parent="MainContainer/BottomSection/Margin/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_font_sizes/font_size = 18
 
 [node name="ButtonContainer" type="HBoxContainer" parent="MainContainer/BottomSection/Margin/VBoxContainer"]
 layout_mode = 2
@@ -336,12 +337,12 @@ alignment = 1
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 30
 text = "Leave"
 
 [node name="StartButton" type="Button" parent="MainContainer/BottomSection/Margin/VBoxContainer/ButtonContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_fonts/font = ExtResource("7_iwbf0")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 30
 text = "Start Game"

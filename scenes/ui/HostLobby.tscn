@@ -63,36 +63,37 @@ layout_mode = 2
 theme_override_colors/font_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 48
+theme_override_font_sizes/font_size = 72
 text = "Host Lobby"
 horizontal_alignment = 1
 
 [node name="NameLabel" type="Label" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 30
 text = "Name: "
 horizontal_alignment = 1
 
 [node name="CodeLabel" type="Label" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 36
 text = "Host code: ..."
 horizontal_alignment = 1
 
 [node name="PlayersList" type="ItemList" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 size_flags_vertical = 3
+theme_override_font_sizes/font_size = 24
 
 [node name="StartButton" type="Button" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 30
 text = "Continue"
 
 [node name="BackButton" type="Button" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 24
+theme_override_font_sizes/font_size = 30
 text = "Back"
