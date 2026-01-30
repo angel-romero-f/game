@@ -78,6 +78,65 @@ func reset_phase_state() -> void:
 	phase_transition_text = ""
 ## ========== END PHASE SYSTEM ==========
 
+## ========== PLAYER HAND SYSTEM ==========
+## Available cards - each entry is {sprite_frames_path, frame_index}
+## Race-specific card pools
+const ELF_CARDS: Array = [
+	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 3},
+]
+
+const INFERNAL_CARDS: Array = [
+	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 3},
+]
+
+## Mixed pool for races without specific cards (Orc, Fairy)
+const MIXED_CARD_POOL: Array = [
+	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 3},
+]
+
+## Player's current hand - array of card data dictionaries
+var player_hand: Array = []
+
+func initialize_player_hand(hand_size: int = 3) -> void:
+	## Randomly selects cards from the appropriate pool based on selected race
+	player_hand.clear()
+	
+	# Choose card pool based on race
+	var card_pool: Array
+	match selected_race:
+		"Elf":
+			card_pool = ELF_CARDS.duplicate()
+			print("[Hand] Using Elf card pool")
+		"Infernal":
+			card_pool = INFERNAL_CARDS.duplicate()
+			print("[Hand] Using Infernal card pool")
+		_:
+			card_pool = MIXED_CARD_POOL.duplicate()
+			print("[Hand] Using mixed card pool for ", selected_race)
+	
+	card_pool.shuffle()
+	for i in range(mini(hand_size, card_pool.size())):
+		player_hand.append(card_pool[i].duplicate())
+	print("[Hand] Initialized player hand with ", player_hand.size(), " cards")
+
+func reset_player_hand() -> void:
+	## Clears the player's hand
+	player_hand.clear()
+## ========== END PLAYER HAND SYSTEM ==========
+
 func reset_lives() -> void:
 	current_lives = MAX_LIVES
 
@@ -166,6 +225,7 @@ func setup_single_player_game() -> void:
 	turn_order.clear()
 	reset_lives()
 	reset_phase_state()
+	initialize_player_hand()
 	
 	# Add the local player
 	var local_player := {
@@ -204,6 +264,7 @@ func setup_multiplayer_game() -> void:
 	turn_order.clear()
 	reset_lives()
 	reset_phase_state()
+	initialize_player_hand()
 	
 	# Build player list from Net.player_names and Net.player_races
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
