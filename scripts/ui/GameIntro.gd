@@ -37,6 +37,12 @@ var phase_overlay: ColorRect
 var phase_label: Label
 var minigames_counter_label: Label
 
+# Hand display nodes
+var card_icon_button: Button
+var hand_display_panel: PanelContainer
+var hand_container: HBoxContainer
+var is_hand_visible: bool = false
+
 var is_paused: bool = false
 
 # Animation timers
@@ -82,6 +88,11 @@ func _ready() -> void:
 	phase_label = $PhaseOverlay/PhaseLabel
 	minigames_counter_label = $MinigamesCounterLabel
 	
+	# Hand display nodes
+	card_icon_button = $CardIconButton
+	hand_display_panel = $HandDisplayPanel
+	hand_container = $HandDisplayPanel/MarginContainer/VBoxContainer/HandContainer
+	
 	# Initial state
 	map_overlay.modulate.a = 0.6  # Gray out map
 	showcase_container.visible = true
@@ -98,6 +109,15 @@ func _ready() -> void:
 	player_roll_container.visible = false
 	phase_overlay.visible = false
 	minigames_counter_label.visible = false
+	card_icon_button.visible = false
+	hand_display_panel.visible = false
+	
+	# Setup card icon button texture (use cardback)
+	_setup_card_icon_button()
+	
+	# Connect card icon button
+	if card_icon_button:
+		card_icon_button.pressed.connect(_on_card_icon_pressed)
 	
 	_load_d20_spritesheet_frames()
 	
@@ -542,6 +562,9 @@ func _show_corner_order() -> void:
 	if minigames_counter_label.visible:
 		minigames_counter_label.modulate.a = 0.0
 		btn_tween.tween_property(minigames_counter_label, "modulate:a", 1.0, 0.3)
+	if card_icon_button.visible:
+		card_icon_button.modulate.a = 0.0
+		btn_tween.tween_property(card_icon_button, "modulate:a", 1.0, 0.3)
 	
 	current_phase = Phase.GAME_READY
 
@@ -696,6 +719,10 @@ func _apply_phase_ui() -> void:
 	
 	# Settings is always visible when game is ready
 	settings_button.visible = true
+	
+	# Card icon button is always visible when game is ready (if player has cards)
+	if App.player_hand.size() > 0:
+		card_icon_button.visible = true
 
 func _show_phase_transition_overlay() -> void:
 	## Shows a brief overlay announcing the current phase
@@ -739,6 +766,9 @@ func _animate_phase_buttons() -> void:
 	if minigames_counter_label.visible:
 		minigames_counter_label.modulate.a = 0.0
 		btn_tween.tween_property(minigames_counter_label, "modulate:a", 1.0, 0.3)
+	if card_icon_button.visible:
+		card_icon_button.modulate.a = 0.0
+		btn_tween.tween_property(card_icon_button, "modulate:a", 1.0, 0.3)
 	
 	# Settings always visible
 	settings_button.modulate.a = 0.0
@@ -755,6 +785,76 @@ func _on_skip_to_battle_pressed() -> void:
 	App.skip_to_battle_phase()
 	App.go("res://scenes/ui/GameIntro.tscn")
 ## ========== END PHASE SYSTEM UI ==========
+
+## ========== PLAYER HAND DISPLAY ==========
+
+func _setup_card_icon_button() -> void:
+	## Sets up the card icon button with a card back texture
+	if not card_icon_button:
+		return
+	
+	var card_icon := card_icon_button.get_node_or_null("CardIcon")
+	if card_icon and card_icon is TextureRect:
+		# Load cardback sprite frames and get the first frame
+		var cardback_frames: SpriteFrames = load("res://assets/cardback.pxo")
+		if cardback_frames and cardback_frames.has_animation("default"):
+			var frame_count := cardback_frames.get_frame_count("default")
+			if frame_count > 0:
+				card_icon.texture = cardback_frames.get_frame_texture("default", 0)
+
+func _on_card_icon_pressed() -> void:
+	## Toggles the hand display panel visibility
+	is_hand_visible = !is_hand_visible
+	
+	if is_hand_visible:
+		_populate_hand_display()
+		hand_display_panel.visible = true
+		hand_display_panel.modulate.a = 0.0
+		var tween := create_tween()
+		tween.tween_property(hand_display_panel, "modulate:a", 1.0, 0.2)
+	else:
+		var tween := create_tween()
+		tween.tween_property(hand_display_panel, "modulate:a", 0.0, 0.15)
+		tween.tween_callback(func(): hand_display_panel.visible = false)
+
+func _populate_hand_display() -> void:
+	## Populates the hand container with card images from App.player_hand
+	if not hand_container:
+		return
+	
+	# Clear existing cards
+	for child in hand_container.get_children():
+		child.queue_free()
+	
+	# Create card visuals from App.player_hand
+	for card_data in App.player_hand:
+		var card_visual := TextureRect.new()
+		card_visual.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+		card_visual.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		card_visual.custom_minimum_size = Vector2(100, 150)
+		
+		# Load the sprite frames and get the correct frame
+		var sprite_frames_path: String = card_data.get("sprite_frames", "")
+		var frame_index: int = card_data.get("frame_index", 0)
+		
+		if not sprite_frames_path.is_empty():
+			var sprite_frames: SpriteFrames = load(sprite_frames_path)
+			if sprite_frames and sprite_frames.has_animation("default"):
+				var frame_count := sprite_frames.get_frame_count("default")
+				if frame_count > frame_index:
+					card_visual.texture = sprite_frames.get_frame_texture("default", frame_index)
+		
+		hand_container.add_child(card_visual)
+
+func _show_card_icon_button() -> void:
+	## Shows the card icon button with a fade-in animation
+	if card_icon_button and App.player_hand.size() > 0:
+		card_icon_button.visible = true
+		card_icon_button.modulate.a = 0.0
+		var tween := create_tween()
+		tween.tween_property(card_icon_button, "modulate:a", 1.0, 0.3)
+
+## ========== END PLAYER HAND DISPLAY ==========
 
 func _load_d20_spritesheet_frames() -> void:
 	_d20_frames.clear()
