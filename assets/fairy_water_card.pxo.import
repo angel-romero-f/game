@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://bjf7bb7psietj"
+path="res://.godot/imported/fairy_water_card.pxo-777686d7f0ee05e49d095929e92b7cf7.res"
+
+[deps]
+
+source_file="res://assets/fairy_water_card.pxo"
+dest_files=["res://.godot/imported/fairy_water_card.pxo-777686d7f0ee05e49d095929e92b7cf7.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
