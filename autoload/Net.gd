@@ -312,3 +312,116 @@ func request_roll_generation() -> void:
 func request_rolls_from_host() -> void:
 	if multiplayer.is_server():
 		host_generate_and_sync_rolls()
+
+## ========== CARD BATTLE MULTIPLAYER ==========
+## Server-authoritative state for the card battle scene.
+## peer_id -> { slot_index (0-2) -> { "path": String, "frame": int } }
+var battle_placed_cards: Dictionary = {}
+## peer_id -> true when that player has pressed Start Battle
+var battle_ready_peers: Dictionary = {}
+## Emitted when any player's card placement changes (for remote display)
+signal battle_cards_updated
+## Emitted when server broadcasts that all players are ready and battle should start
+signal battle_start_requested
+## Emitted when a player leaves the battle (peer_id)
+signal battle_player_left(peer_id: int)
+
+## Clear battle state when leaving battle scene
+func clear_battle_state() -> void:
+	battle_placed_cards.clear()
+	battle_ready_peers.clear()
+
+## Request to place a card (client -> server). Server validates and broadcasts.
+func request_place_battle_card(slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
+	if multiplayer.is_server():
+		_server_place_battle_card(multiplayer.get_unique_id(), slot_index, sprite_frames_path, frame_index)
+	else:
+		place_battle_card.rpc_id(1, slot_index, sprite_frames_path, frame_index)
+
+## Request to remove a card from a slot
+func request_remove_battle_card(slot_index: int) -> void:
+	if multiplayer.is_server():
+		_server_remove_battle_card(multiplayer.get_unique_id(), slot_index)
+	else:
+		remove_battle_card.rpc_id(1, slot_index)
+
+@rpc("any_peer", "reliable")
+func place_battle_card(slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_place_battle_card(id, slot_index, sprite_frames_path, frame_index)
+
+func _server_place_battle_card(peer_id: int, slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
+	if slot_index < 0 or slot_index > 2:
+		return
+	if not battle_placed_cards.has(peer_id):
+		battle_placed_cards[peer_id] = {}
+	battle_placed_cards[peer_id][slot_index] = {"path": sprite_frames_path, "frame": frame_index}
+	sync_battle_cards.rpc(battle_placed_cards)
+
+@rpc("any_peer", "reliable")
+func remove_battle_card(slot_index: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_remove_battle_card(id, slot_index)
+
+func _server_remove_battle_card(peer_id: int, slot_index: int) -> void:
+	if battle_placed_cards.has(peer_id) and battle_placed_cards[peer_id].has(slot_index):
+		battle_placed_cards[peer_id].erase(slot_index)
+		sync_battle_cards.rpc(battle_placed_cards)
+
+@rpc("authority", "call_local", "reliable")
+func sync_battle_cards(cards: Dictionary) -> void:
+	battle_placed_cards = cards.duplicate(true)
+	battle_cards_updated.emit()
+
+## Request to mark self as ready for battle (Start Battle pressed)
+func request_battle_ready() -> void:
+	if multiplayer.is_server():
+		_server_set_battle_ready(multiplayer.get_unique_id())
+	else:
+		set_battle_ready.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func set_battle_ready() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_set_battle_ready(id)
+
+func _server_set_battle_ready(peer_id: int) -> void:
+	battle_ready_peers[peer_id] = true
+	# Check if all players in the game have pressed ready
+	var all_peers: Array = []
+	all_peers.append(multiplayer.get_unique_id())
+	for pid in multiplayer.get_peers():
+		all_peers.append(pid)
+	var all_ready := true
+	for pid in all_peers:
+		if not battle_ready_peers.get(pid, false):
+			all_ready = false
+			break
+	if all_ready:
+		start_battle.rpc()
+
+@rpc("authority", "call_local", "reliable")
+func start_battle() -> void:
+	battle_start_requested.emit()
+
+## Notify server that local player is leaving the battle (for persistence)
+func notify_battle_left() -> void:
+	var my_id := multiplayer.get_unique_id()
+	battle_player_left.emit(my_id)
+	# Persist our cards to App for restoration when returning
+	if battle_placed_cards.has(my_id):
+		App.battle_placed_cards = battle_placed_cards[my_id].duplicate(true)
+	else:
+		App.battle_placed_cards = {}

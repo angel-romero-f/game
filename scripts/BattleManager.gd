@@ -3,11 +3,12 @@ extends Node
 ## BattleManager
 ## Orchestrates: opponent backs on entry, start-battle gating, flip animation,
 ## attribute-based resolution, and returning to menu on SPACE.
+## In multiplayer: syncs card placement, waits for all players to press Start, flips when all ready.
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card.tscn")
 const MAIN_MENU_PATH := "res://scenes/ui/GameIntro.tscn"
 
-enum State { SETUP, WAITING_FOR_PLAYER, FLIPPING, RESOLVED }
+enum State { SETUP, WAITING_FOR_PLAYER, WAITING_FOR_ALL_READY, FLIPPING, RESOLVED }
 var state: State = State.SETUP
 
 ## Editor-provided attribute mapping + rules.
@@ -19,11 +20,14 @@ var state: State = State.SETUP
 
 ## Deck node that defines the opponent pool and the back image.
 @export var deck_o_name: StringName = &"DeckO"
+## Player deck (hidden when restoring cards).
+@export var deck_p_name: StringName = &"DeckP"
 
 ## UI node paths (created in scene).
 @export var start_button_path: NodePath = NodePath("BattleUI/UI/StartBattleButton")
 @export var result_label_path: NodePath = NodePath("BattleUI/UI/ResultLabel")
 @export var continue_label_path: NodePath = NodePath("BattleUI/UI/ContinueLabel")
+@export var leave_button_path: NodePath = NodePath("BattleUI/UI/LeaveButton")
 
 ## Flip animation settings.
 @export var flip_up_duration: float = 0.25
@@ -33,15 +37,29 @@ var state: State = State.SETUP
 var _player_slot_nodes: Array = []
 var _opponent_slot_nodes: Array = []
 var _deck_o: Node = null
+var _deck_p: Node = null
 
 var _start_button: Button
 var _result_label: Label
 var _continue_label: Label
+var _leave_button: Button
 
 var _opponent_cards_by_slot: Dictionary = {} # slot -> card
 
+var _is_multiplayer: bool = false
+
 func _ready() -> void:
+	_is_multiplayer = multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0
 	_cache_nodes()
+	if _is_multiplayer:
+		Net.clear_battle_state()
+		if Net.battle_cards_updated.is_connected(_on_battle_cards_updated):
+			Net.battle_cards_updated.disconnect(_on_battle_cards_updated)
+		Net.battle_cards_updated.connect(_on_battle_cards_updated)
+		if Net.battle_start_requested.is_connected(_on_battle_start_requested):
+			Net.battle_start_requested.disconnect(_on_battle_start_requested)
+		Net.battle_start_requested.connect(_on_battle_start_requested)
+	_restore_and_sync_placed_cards()
 	_setup_ui()
 	
 	# Wait a couple frames so CardManager has time to connect existing card input,
@@ -69,10 +87,126 @@ func _cache_nodes() -> void:
 		_opponent_slot_nodes.append(root.get_node_or_null(NodePath(String(slot_name))) if root else null)
 	
 	_deck_o = root.get_node_or_null(NodePath(String(deck_o_name))) if root else null
+	_deck_p = root.get_node_or_null(NodePath(String(deck_p_name))) if root else null
 	
 	_start_button = (root.get_node_or_null(start_button_path) if root else null) as Button
 	_result_label = (root.get_node_or_null(result_label_path) if root else null) as Label
 	_continue_label = (root.get_node_or_null(continue_label_path) if root else null) as Label
+	_leave_button = (root.get_node_or_null(leave_button_path) if root else null) as Button
+
+
+func _restore_and_sync_placed_cards() -> void:
+	## Restore from App.battle_placed_cards. In multiplayer, restore locally and sync to server.
+	if App.battle_placed_cards.is_empty():
+		return
+	_restore_cards_to_slots()
+	if _is_multiplayer:
+		for slot_idx in App.battle_placed_cards:
+			var data: Dictionary = App.battle_placed_cards[slot_idx]
+			var path: String = data.get("path", "")
+			var frame: int = int(data.get("frame", 0))
+			if not path.is_empty():
+				Net.request_place_battle_card(slot_idx, path, frame)
+
+
+func _restore_cards_to_slots() -> void:
+	## Spawn cards from App.battle_placed_cards and place them in player slots (single player).
+	var root := get_tree().current_scene
+	var card_manager := root.get_node_or_null("CardManager")
+	for slot_idx in App.battle_placed_cards:
+		if slot_idx < 0 or slot_idx >= _player_slot_nodes.size():
+			continue
+		var slot = _player_slot_nodes[slot_idx]
+		if not slot or not slot.has_method("force_snap_card"):
+			continue
+		var data: Dictionary = App.battle_placed_cards[slot_idx]
+		var path: String = data.get("path", "")
+		var frame: int = int(data.get("frame", 0))
+		if path.is_empty():
+			continue
+		var frames: SpriteFrames = load(path) as SpriteFrames
+		if not frames:
+			continue
+		var card := CARD_SCENE.instantiate()
+		root.add_child(card)
+		card.card_sprite_frames = frames
+		card.frame_index = frame
+		slot.force_snap_card(card)
+		if card_manager:
+			if card_manager.has_method("register_card"):
+				card_manager.register_card(card)
+			card_manager.snapped_cards[card] = slot
+	# Hide deck when we restored cards (player already drew)
+	if _deck_p:
+		_deck_p.visible = false
+		var area := _deck_p.get_node_or_null("Area2D")
+		if area:
+			area.input_pickable = false
+
+
+func _on_battle_cards_updated() -> void:
+	## Refresh opponent slots with face-down cards from remote player(s).
+	if state == State.WAITING_FOR_PLAYER or state == State.WAITING_FOR_ALL_READY:
+		_update_opponent_cards_from_net()
+
+
+func _on_battle_start_requested() -> void:
+	## All players pressed Start; begin flip and resolve.
+	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
+		return
+	if _start_button:
+		_start_button.visible = false
+	state = State.FLIPPING
+	await _flip_opponent_cards_from_pool()
+	_resolve_battle()
+	_show_result()
+	state = State.RESOLVED
+
+
+func _update_opponent_cards_from_net() -> void:
+	## Place/update face-down cards in opponent slots from Net.battle_placed_cards.
+	var my_id := multiplayer.get_unique_id()
+	var other_peer_id: int = -1
+	for pid in Net.battle_placed_cards:
+		if int(pid) != my_id:
+			other_peer_id = int(pid)
+			break
+	if other_peer_id < 0:
+		return
+	var other_cards: Dictionary = Net.battle_placed_cards.get(other_peer_id, {})
+	if not _deck_o:
+		return
+	var back_frames: SpriteFrames = _deck_o.get("deck_sprite_frames")
+	var back_frame_index: int = int(_deck_o.get("frame_index"))
+	for slot_idx in range(_opponent_slot_nodes.size()):
+		var slot = _opponent_slot_nodes[slot_idx]
+		if not slot:
+			continue
+		if other_cards.has(slot_idx):
+			var existing = _opponent_cards_by_slot.get(slot, null)
+			if existing and is_instance_valid(existing):
+				existing.card_sprite_frames = back_frames
+				existing.frame_index = back_frame_index
+				if slot.has_method("force_snap_card"):
+					slot.force_snap_card(existing)
+			else:
+				var card := CARD_SCENE.instantiate()
+				get_tree().current_scene.add_child(card)
+				var area := card.get_node_or_null("Card_Collision") as Area2D
+				if area:
+					area.input_pickable = false
+				card.card_sprite_frames = back_frames
+				card.frame_index = back_frame_index
+				if slot.has_method("force_snap_card"):
+					slot.force_snap_card(card)
+				_opponent_cards_by_slot[slot] = card
+		else:
+			var existing = _opponent_cards_by_slot.get(slot, null)
+			if existing and is_instance_valid(existing):
+				if slot.has_method("unsnap_card"):
+					slot.unsnap_card()
+				existing.queue_free()
+				_opponent_cards_by_slot.erase(slot)
 
 
 func _setup_ui() -> void:
@@ -85,21 +219,42 @@ func _setup_ui() -> void:
 		_result_label.visible = false
 	if _continue_label:
 		_continue_label.visible = false
+	
+	if _leave_button:
+		_leave_button.visible = true
+		if not _leave_button.pressed.is_connected(_on_leave_pressed):
+			_leave_button.pressed.connect(_on_leave_pressed)
 
 
 func _connect_player_slot_signals() -> void:
-	for slot in _player_slot_nodes:
-		if slot and slot.has_signal("card_snapped"):
-			if not slot.card_snapped.is_connected(_on_player_slot_changed):
-				slot.card_snapped.connect(_on_player_slot_changed)
-		if slot and slot.has_signal("card_unsnapped"):
-			if not slot.card_unsnapped.is_connected(_on_player_slot_changed):
-				slot.card_unsnapped.connect(_on_player_slot_changed)
+	for idx in range(_player_slot_nodes.size()):
+		var slot = _player_slot_nodes[idx]
+		if not slot:
+			continue
+		if slot.has_signal("card_snapped"):
+			if not slot.card_snapped.is_connected(_on_card_snapped_to_slot):
+				slot.card_snapped.connect(_on_card_snapped_to_slot.bind(idx))
+		if slot.has_signal("card_unsnapped"):
+			if not slot.card_unsnapped.is_connected(_on_card_unsnapped_from_slot):
+				slot.card_unsnapped.connect(_on_card_unsnapped_from_slot.bind(idx))
 
 
-func _on_player_slot_changed(_card: Node) -> void:
-	if state != State.WAITING_FOR_PLAYER:
+func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
+	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
 		return
+	if _is_multiplayer:
+		var frames: SpriteFrames = card.get("card_sprite_frames")
+		var fidx: int = int(card.get("frame_index"))
+		if frames and frames.resource_path:
+			Net.request_place_battle_card(slot_idx, frames.resource_path, fidx)
+	_update_start_button_visibility()
+
+
+func _on_card_unsnapped_from_slot(_card: Node, slot_idx: int) -> void:
+	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
+		return
+	if _is_multiplayer:
+		Net.request_remove_battle_card(slot_idx)
 	_update_start_button_visibility()
 
 
@@ -122,6 +277,10 @@ func _update_start_button_visibility() -> void:
 
 func _place_opponent_backs() -> void:
 	# Create a non-draggable card in each opponent slot, showing the deck back.
+	# In multiplayer, opponent cards are placed by _update_opponent_cards_from_net when sync arrives.
+	if _is_multiplayer:
+		_update_opponent_cards_from_net()
+		return
 	if not _deck_o:
 		push_warning("BattleManager: DeckO not found; cannot place opponent backs.")
 		return
@@ -169,6 +328,13 @@ func _on_start_battle_pressed() -> void:
 	if not _player_ready():
 		return
 	
+	if _is_multiplayer:
+		Net.request_battle_ready()
+		if _start_button:
+			_start_button.visible = false
+		state = State.WAITING_FOR_ALL_READY
+		return
+	
 	if _start_button:
 		_start_button.visible = false
 	
@@ -183,22 +349,42 @@ func _flip_opponent_cards_from_pool() -> void:
 	if not _deck_o:
 		return
 	
-	var pool: Array = _deck_o.get("card_sprite_pool")
-	var frame_indices: Array = _deck_o.get("card_frame_indices")
-	
-	if pool == null or pool.size() == 0:
-		push_warning("BattleManager: DeckO card_sprite_pool is empty; opponent will remain unknown.")
-		return
-	
-	# Pick a random card def for each opponent slot (SpriteFrames + frame index).
 	var chosen: Dictionary = {} # slot -> {frames, frame_index}
-	for slot in _opponent_slot_nodes:
-		var idx := randi() % pool.size()
-		var frames := pool[idx] as SpriteFrames
-		var fidx := 0
-		if frame_indices != null and frame_indices.size() > idx:
-			fidx = int(frame_indices[idx])
-		chosen[slot] = {"frames": frames, "frame_index": fidx}
+	
+	if _is_multiplayer:
+		var my_id := multiplayer.get_unique_id()
+		var other_peer_id: int = -1
+		for pid in Net.battle_placed_cards:
+			if int(pid) != my_id:
+				other_peer_id = int(pid)
+				break
+		if other_peer_id >= 0:
+			var other_cards: Dictionary = Net.battle_placed_cards.get(other_peer_id, {})
+			for slot_idx in range(_opponent_slot_nodes.size()):
+				var slot = _opponent_slot_nodes[slot_idx]
+				if not slot or not other_cards.has(slot_idx):
+					continue
+				var data: Dictionary = other_cards[slot_idx]
+				var path: String = data.get("path", "")
+				var fidx: int = int(data.get("frame", 0))
+				if not path.is_empty():
+					var frames: SpriteFrames = load(path) as SpriteFrames
+					if frames:
+						chosen[slot] = {"frames": frames, "frame_index": fidx}
+	
+	if chosen.is_empty():
+		var pool: Array = _deck_o.get("card_sprite_pool")
+		var frame_indices: Array = _deck_o.get("card_frame_indices")
+		if pool == null or pool.size() == 0:
+			push_warning("BattleManager: DeckO card_sprite_pool is empty; opponent will remain unknown.")
+			return
+		for slot in _opponent_slot_nodes:
+			var idx := randi() % pool.size()
+			var frames := pool[idx] as SpriteFrames
+			var fidx := 0
+			if frame_indices != null and frame_indices.size() > idx:
+				fidx = int(frame_indices[idx])
+			chosen[slot] = {"frames": frames, "frame_index": fidx}
 	
 	# Animate: backs go up offscreen, swap, then faces come down into slots.
 	var tween := create_tween()
@@ -301,13 +487,38 @@ func _show_result() -> void:
 		_continue_label.visible = true
 
 
+func _on_leave_pressed() -> void:
+	if _is_multiplayer:
+		Net.notify_battle_left()
+	else:
+		_persist_local_placed_cards()
+	Net.clear_battle_state()
+	App.switch_to_main_music()
+	if state == State.RESOLVED:
+		App.on_battle_completed()
+	App.go(MAIN_MENU_PATH)
+
+
+func _persist_local_placed_cards() -> void:
+	## Save local player's placed cards to App for restoration when returning (single player).
+	App.battle_placed_cards.clear()
+	for idx in range(_player_slot_nodes.size()):
+		var slot = _player_slot_nodes[idx]
+		if slot and slot.snapped_card:
+			var card = slot.snapped_card
+			var frames: SpriteFrames = card.get("card_sprite_frames")
+			var fidx: int = int(card.get("frame_index"))
+			if frames and frames.resource_path:
+				App.battle_placed_cards[idx] = {"path": frames.resource_path, "frame": fidx}
+
+
 func _unhandled_input(event: InputEvent) -> void:
 	if state != State.RESOLVED:
 		return
 	if event is InputEventKey:
 		var key := event as InputEventKey
 		if key.pressed and key.keycode == KEY_SPACE:
+			Net.clear_battle_state()
 			App.switch_to_main_music()
-			App.on_battle_completed()  # Triggers transition back to resource phase
+			App.on_battle_completed()
 			App.go(MAIN_MENU_PATH)
-

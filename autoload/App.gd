@@ -110,6 +110,10 @@ const MIXED_CARD_POOL: Array = [
 ## Player's current hand - array of card data dictionaries
 var player_hand: Array = []
 
+## Persisted card placements when leaving battle early.
+## slot_index (0-2) -> { "path": String, "frame": int }
+var battle_placed_cards: Dictionary = {}
+
 func initialize_player_hand(hand_size: int = 3) -> void:
 	## Randomly selects cards from the appropriate pool based on selected race
 	player_hand.clear()
