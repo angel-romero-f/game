@@ -114,6 +114,37 @@ var player_hand: Array = []
 ## slot_index (0-2) -> { "path": String, "frame": int }
 var battle_placed_cards: Dictionary = {}
 
+## ========== MAP TERRITORY OWNERSHIP ==========
+## territory_id -> {
+##   "owner_id": int,
+##   "owner_name": String,
+##   "owner_race": String,
+##   "cards": Array[Dictionary]  # cards committed to this territory
+## }
+var territories: Dictionary = {}
+
+func reset_territories() -> void:
+	territories.clear()
+
+func place_card_on_territory(territory_id: String, player: Dictionary, card_data: Dictionary) -> void:
+	if territory_id.is_empty():
+		return
+	var t: Dictionary = territories.get(territory_id, {})
+	t["owner_id"] = player.get("id", 0)
+	t["owner_name"] = player.get("name", "Player")
+	t["owner_race"] = player.get("race", "Elf")
+	if not t.has("cards"):
+		t["cards"] = []
+	var cards: Array = t["cards"]
+	cards.append(card_data.duplicate())
+	t["cards"] = cards
+	territories[territory_id] = t
+
+func get_territory(territory_id: String) -> Dictionary:
+	return territories.get(territory_id, {})
+
+## ========== END MAP TERRITORY OWNERSHIP ==========
+
 func initialize_player_hand(hand_size: int = 3) -> void:
 	## Randomly selects cards from the appropriate pool based on selected race
 	player_hand.clear()
@@ -229,6 +260,7 @@ func setup_single_player_game() -> void:
 	turn_order.clear()
 	reset_lives()
 	reset_phase_state()
+	reset_territories()
 	initialize_player_hand()
 	
 	# Add the local player
@@ -268,6 +300,7 @@ func setup_multiplayer_game() -> void:
 	turn_order.clear()
 	reset_lives()
 	reset_phase_state()
+	reset_territories()
 	initialize_player_hand()
 	
 	# Build player list from Net.player_names and Net.player_races

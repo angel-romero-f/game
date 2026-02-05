@@ -36,12 +36,15 @@ var settings_panel: Panel
 var phase_overlay: ColorRect
 var phase_label: Label
 var minigames_counter_label: Label
+var territory_nodes: Array = []
 
 # Hand display nodes
 var card_icon_button: Button
 var hand_display_panel: PanelContainer
 var hand_container: HBoxContainer
 var is_hand_visible: bool = false
+var hand_card_nodes: Array = []
+var selected_card_index: int = -1
 
 var is_paused: bool = false
 
@@ -66,6 +69,7 @@ func _ready() -> void:
 	# Get node references
 	map_bg = $MapBackground
 	map_overlay = $MapOverlay
+	map_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	showcase_container = $ShowcaseContainer
 	showcase_race_image = $ShowcaseContainer/VBoxContainer/RaceImageContainer/RaceImage
 	showcase_name_label = $ShowcaseContainer/VBoxContainer/NameLabel
@@ -124,6 +128,9 @@ func _ready() -> void:
 	# Setup showcase with local player
 	_setup_showcase()
 	
+	# Setup clickable map territories (if any are present in the scene)
+	_setup_map_territories()
+	
 	# Connect minigame buttons
 	minigame_button.pressed.connect(_on_minigame_pressed)
 	bridge_minigame_button.pressed.connect(_on_bridge_minigame_pressed)
@@ -163,6 +170,63 @@ func _setup_showcase() -> void:
 	
 	# Set name
 	showcase_name_label.text = local_player.get("name", "Player")
+
+
+func _setup_map_territories() -> void:
+	## Finds any MapTerritory nodes and wires them up with the current race color.
+	territory_nodes.clear()
+	var race_color := App.get_race_color(App.selected_race)
+	for node in get_tree().get_nodes_in_group("map_territory"):
+		territory_nodes.append(node)
+		if "set_glow_color" in node:
+			node.set_glow_color(race_color)
+		if node.has_signal("territory_clicked") and not node.territory_clicked.is_connected(_on_territory_clicked):
+			node.territory_clicked.connect(_on_territory_clicked)
+
+
+func _on_territory_clicked(territory_id: String) -> void:
+	## Handle clicks on map territories.
+	## If a card from the player's hand is selected, place it on this territory
+	## and claim the territory for the local player's race. Otherwise, fall back
+	## to the original click behaviour (starting minigames, etc.).
+	if selected_card_index >= 0 and selected_card_index < App.player_hand.size():
+		var local_player: Dictionary = {}
+		for p in App.game_players:
+			if p.get("is_local", false):
+				local_player = p
+				break
+		
+		if local_player.is_empty():
+			return
+		
+		var card_data: Dictionary = App.player_hand[selected_card_index]
+		
+		# Persist ownership in App
+		App.place_card_on_territory(territory_id, local_player, card_data)
+		
+		# Consume the card from the player's hand and refresh UI
+		App.player_hand.remove_at(selected_card_index)
+		_populate_hand_display()
+		
+		# Visually claim the territory (persistent glow in player race color)
+		for node in territory_nodes:
+			if "territory_id" in node and node.territory_id == territory_id and "claim_for" in node:
+				node.claim_for(local_player.get("race", "Elf"), local_player.get("id", 0))
+				break
+		
+		print("Placed card on territory '%s' for %s" % [territory_id, local_player.get("name", "Player")])
+		return
+	
+	# No card selected – keep old behaviour
+	match territory_id:
+		"river":
+			_on_minigame_pressed()
+		"bridge":
+			_on_bridge_minigame_pressed()
+		"castle":
+			_on_battle_button_pressed()
+		_:
+			print("Clicked territory: ", territory_id)
 
 func _process(delta: float) -> void:
 	match current_phase:
@@ -825,13 +889,17 @@ func _populate_hand_display() -> void:
 	# Clear existing cards
 	for child in hand_container.get_children():
 		child.queue_free()
+	hand_card_nodes.clear()
+	selected_card_index = -1
 	
 	# Create card visuals from App.player_hand
-	for card_data in App.player_hand:
+	for i in range(App.player_hand.size()):
+		var card_data = App.player_hand[i]
 		var card_visual := TextureRect.new()
 		card_visual.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
 		card_visual.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		card_visual.custom_minimum_size = Vector2(100, 150)
+		card_visual.mouse_filter = Control.MOUSE_FILTER_STOP
 		
 		# Load the sprite frames and get the correct frame
 		var sprite_frames_path: String = card_data.get("sprite_frames", "")
@@ -845,6 +913,24 @@ func _populate_hand_display() -> void:
 					card_visual.texture = sprite_frames.get_frame_texture("default", frame_index)
 		
 		hand_container.add_child(card_visual)
+		hand_card_nodes.append(card_visual)
+		card_visual.gui_input.connect(_on_hand_card_gui_input.bind(i))
+
+
+func _on_hand_card_gui_input(event: InputEvent, card_index: int) -> void:
+	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		_select_hand_card(card_index)
+
+
+func _select_hand_card(card_index: int) -> void:
+	selected_card_index = card_index
+	for i in range(hand_card_nodes.size()):
+		var node: Control = hand_card_nodes[i]
+		if node and node is TextureRect:
+			if i == selected_card_index:
+				node.modulate = Color(1.2, 1.2, 1.2, 1.0)
+			else:
+				node.modulate = Color(1, 1, 1, 1)
 
 func _show_card_icon_button() -> void:
 	## Shows the card icon button with a fade-in animation
