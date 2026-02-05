@@ -51,7 +51,13 @@ func on_minigame_completed() -> void:
 	print("[Phase] Minigame completed. Count: ", minigames_completed_this_phase, "/", MAX_MINIGAMES_PER_PHASE)
 	minigame_completed_signal.emit()
 	
-	# Check if we should auto-transition to battle phase
+	# In multiplayer, notify host of minigame completion (host controls phase)
+	if is_multiplayer and multiplayer.has_multiplayer_peer():
+		Net.request_increment_minigame()
+		# Don't auto-transition locally - host will broadcast phase change
+		return
+	
+	# Single player: check if we should auto-transition to battle phase
 	if minigames_completed_this_phase >= MAX_MINIGAMES_PER_PHASE:
 		print("[Phase] Max minigames reached, transitioning to battle phase")
 		enter_battle_phase()
@@ -59,11 +65,20 @@ func on_minigame_completed() -> void:
 func on_battle_completed() -> void:
 	## Called when battle ends (win, lose, or tie)
 	print("[Phase] Battle completed, returning to resource phase")
-	enter_resource_phase()
+	# In multiplayer, phase transitions are handled by host after battle_finished
+	if not is_multiplayer:
+		enter_resource_phase()
 
 func skip_to_battle_phase() -> void:
 	## Called when player chooses to skip remaining minigames
 	print("[Phase] Player skipping to battle phase")
+	
+	# In multiplayer, request host to mark us as done
+	if is_multiplayer and multiplayer.has_multiplayer_peer():
+		Net.request_skip_to_done()
+		return
+	
+	# Single player: transition immediately
 	enter_battle_phase()
 
 func can_play_minigame() -> bool:

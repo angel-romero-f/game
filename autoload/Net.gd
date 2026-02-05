@@ -11,9 +11,44 @@ signal player_names_updated
 signal player_races_updated
 signal player_rolls_updated
 
+# Phase sync signals
+signal phase_changed(phase_id: int)
+signal done_counts_updated(done_count: int, total: int)
+signal battle_decider_changed(peer_id: int)
+signal battle_choices_updated(snapshot: Dictionary)
+signal battle_started(p1_id: int, p2_id: int, side: String)
+signal battle_finished_broadcast()
+
 var player_names: Dictionary = {}
 var player_races: Dictionary = {} # peer_id -> race_name (String)
 var player_rolls: Dictionary = {} # peer_id -> roll value (int)
+
+# ========== PHASE SYNC STATE ==========
+# Current game phase: 0 = RESOURCE_PHASE, 1 = BATTLE_PHASE
+var current_phase: int = 0
+# Per-player done state in current phase: {peer_id: bool}
+var player_done_state: Dictionary = {}
+# Per-player minigame counts for resource phase: {peer_id: int}
+var player_minigame_counts: Dictionary = {}
+
+# ========== BATTLE PHASE STATE ==========
+# Current position in turn order for battle decisions
+var battle_decision_index: int = 0
+# Current decider's peer_id
+var battle_decider_peer_id: int = -1
+# Each player's battle choice: {peer_id: "LEFT"/"RIGHT"/"SKIP"/"UNDECIDED"}
+var battle_choices: Dictionary = {}
+# Queues for each battle option (max 2 each)
+var left_queue: Array = []
+var right_queue: Array = []
+# Whether a battle is currently in progress
+var battle_in_progress: bool = false
+# The 2 participants in the active battle
+var active_battle_participants: Array = []
+# Which side the active battle is for
+var active_battle_side: String = ""
+# Reports from participants that they finished the battle
+var battle_finished_reports: Dictionary = {} # {peer_id: bool}
 
 const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
 
@@ -425,3 +460,378 @@ func notify_battle_left() -> void:
 		App.battle_placed_cards = battle_placed_cards[my_id].duplicate(true)
 	else:
 		App.battle_placed_cards = {}
+
+# ========== PHASE SYNC SYSTEM ==========
+
+## Reset all phase-related state for a new game
+func reset_phase_sync_state() -> void:
+	current_phase = 0
+	player_done_state.clear()
+	player_minigame_counts.clear()
+	battle_decision_index = 0
+	battle_decider_peer_id = -1
+	battle_choices.clear()
+	left_queue.clear()
+	right_queue.clear()
+	battle_in_progress = false
+	active_battle_participants.clear()
+	active_battle_side = ""
+	battle_finished_reports.clear()
+
+## Get all connected peer IDs including host
+func _get_all_peer_ids() -> Array:
+	var peers: Array = []
+	peers.append(multiplayer.get_unique_id())
+	for pid in multiplayer.get_peers():
+		peers.append(pid)
+	return peers
+
+## Initialize done state for all players at phase start
+func _init_phase_done_state() -> void:
+	player_done_state.clear()
+	player_minigame_counts.clear()
+	for pid in _get_all_peer_ids():
+		player_done_state[pid] = false
+		player_minigame_counts[pid] = 0
+
+## Count how many players are done
+func _count_done_players() -> int:
+	var count := 0
+	for pid in player_done_state.keys():
+		if player_done_state.get(pid, false):
+			count += 1
+	return count
+
+## Check if all players are done and advance phase if so
+func _check_all_done_and_advance() -> void:
+	if not multiplayer.is_server():
+		return
+	var all_peers := _get_all_peer_ids()
+	var done_count := _count_done_players()
+	# Broadcast updated counts
+	rpc_sync_done_counts.rpc(done_count, all_peers.size())
+	
+	if done_count >= all_peers.size():
+		# All done - advance to next phase
+		if current_phase == 0:
+			_server_enter_battle_phase()
+
+## Client requests to increment their minigame count
+func request_increment_minigame() -> void:
+	if multiplayer.is_server():
+		_server_increment_minigame(multiplayer.get_unique_id())
+	else:
+		server_increment_minigame.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func server_increment_minigame() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_increment_minigame(id)
+
+func _server_increment_minigame(peer_id: int) -> void:
+	var count: int = player_minigame_counts.get(peer_id, 0) + 1
+	player_minigame_counts[peer_id] = count
+	print("[Net] Player ", peer_id, " minigame count: ", count)
+	
+	# Auto-mark done at 2 minigames
+	if count >= 2:
+		player_done_state[peer_id] = true
+		print("[Net] Player ", peer_id, " auto-marked done (2 minigames)")
+	
+	_check_all_done_and_advance()
+
+## Client requests to skip (mark done early)
+func request_skip_to_done() -> void:
+	if multiplayer.is_server():
+		_server_mark_done(multiplayer.get_unique_id())
+	else:
+		server_skip_to_done.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func server_skip_to_done() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_mark_done(id)
+
+func _server_mark_done(peer_id: int) -> void:
+	player_done_state[peer_id] = true
+	print("[Net] Player ", peer_id, " marked done (skip)")
+	_check_all_done_and_advance()
+
+## Authority broadcasts new phase
+@rpc("authority", "call_local", "reliable")
+func rpc_set_phase(phase_id: int) -> void:
+	current_phase = phase_id
+	phase_changed.emit(phase_id)
+
+## Authority broadcasts done counts
+@rpc("authority", "call_local", "reliable")
+func rpc_sync_done_counts(done: int, total: int) -> void:
+	done_counts_updated.emit(done, total)
+
+## Server enters battle phase
+func _server_enter_battle_phase() -> void:
+	if not multiplayer.is_server():
+		return
+	current_phase = 1
+	rpc_set_phase.rpc(1)
+	_init_battle_phase()
+
+## Initialize battle phase state
+func _init_battle_phase() -> void:
+	battle_decision_index = 0
+	battle_choices.clear()
+	left_queue.clear()
+	right_queue.clear()
+	battle_in_progress = false
+	active_battle_participants.clear()
+	active_battle_side = ""
+	battle_finished_reports.clear()
+	
+	# Initialize all players as UNDECIDED
+	for pid in _get_all_peer_ids():
+		battle_choices[pid] = "UNDECIDED"
+	
+	# Set first decider based on turn order
+	_advance_decider_to_next_eligible()
+
+## Advance to the next eligible decider (skip those who already chose or are in battle)
+func _advance_decider_to_next_eligible() -> void:
+	if not multiplayer.is_server():
+		return
+	
+	# If battle in progress, wait
+	if battle_in_progress:
+		return
+	
+	var turn_order := App.turn_order
+	if turn_order.is_empty():
+		return
+	
+	# Check if both queues are full - auto-skip remaining UNDECIDED
+	if left_queue.size() >= 2 and right_queue.size() >= 2:
+		for pid in battle_choices.keys():
+			if battle_choices[pid] == "UNDECIDED":
+				battle_choices[pid] = "SKIP"
+				print("[Net] Auto-skipped player ", pid, " (both queues full)")
+		_sync_battle_state()
+		_check_battle_phase_complete()
+		return
+	
+	# Find next eligible player
+	var found := false
+	var start_idx := battle_decision_index
+	
+	for i in range(turn_order.size()):
+		var idx := (start_idx + i) % turn_order.size()
+		var player = turn_order[idx]
+		var pid: int = player.get("id", -1)
+		
+		# Skip if already made a choice
+		if battle_choices.get(pid, "UNDECIDED") != "UNDECIDED":
+			continue
+		
+		# Skip if in active battle
+		if active_battle_participants.has(pid):
+			continue
+		
+		# Found eligible player
+		battle_decision_index = idx
+		battle_decider_peer_id = pid
+		found = true
+		break
+	
+	if found:
+		print("[Net] Battle decider set to: ", battle_decider_peer_id)
+		rpc_set_battle_decider.rpc(battle_decider_peer_id)
+		_sync_battle_state()
+	else:
+		# No eligible players - check if phase is complete
+		_check_battle_phase_complete()
+
+## Check if battle phase is complete (all decided and no battle in progress)
+func _check_battle_phase_complete() -> void:
+	if battle_in_progress:
+		return
+	
+	var all_decided := true
+	for pid in battle_choices.keys():
+		if battle_choices[pid] == "UNDECIDED":
+			all_decided = false
+			break
+	
+	if all_decided:
+		print("[Net] Battle phase complete, returning to resource phase")
+		# Reset for next round
+		current_phase = 0
+		_init_phase_done_state()
+		rpc_set_phase.rpc(0)
+
+## Authority broadcasts current decider
+@rpc("authority", "call_local", "reliable")
+func rpc_set_battle_decider(peer_id: int) -> void:
+	battle_decider_peer_id = peer_id
+	battle_decider_changed.emit(peer_id)
+
+## Client submits their battle choice
+func request_battle_choice(choice: String) -> void:
+	if multiplayer.is_server():
+		_server_process_battle_choice(multiplayer.get_unique_id(), choice)
+	else:
+		server_battle_choice.rpc_id(1, choice)
+
+@rpc("any_peer", "reliable")
+func server_battle_choice(choice: String) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_process_battle_choice(id, choice)
+
+func _server_process_battle_choice(peer_id: int, choice: String) -> void:
+	# Validate it's this player's turn
+	if peer_id != battle_decider_peer_id:
+		print("[Net] Rejected choice from ", peer_id, " (not their turn)")
+		return
+	
+	# Validate choice
+	if choice not in ["LEFT", "RIGHT", "SKIP"]:
+		print("[Net] Invalid choice: ", choice)
+		return
+	
+	# Check if queue is full
+	if choice == "LEFT" and left_queue.size() >= 2:
+		print("[Net] Left queue full, rejecting")
+		return
+	if choice == "RIGHT" and right_queue.size() >= 2:
+		print("[Net] Right queue full, rejecting")
+		return
+	
+	# Record choice
+	battle_choices[peer_id] = choice
+	print("[Net] Player ", peer_id, " chose: ", choice)
+	
+	# Add to queue if not skip
+	if choice == "LEFT":
+		left_queue.append(peer_id)
+	elif choice == "RIGHT":
+		right_queue.append(peer_id)
+	
+	_sync_battle_state()
+	
+	# Check if a battle should start (2 players in same queue)
+	if left_queue.size() == 2:
+		_start_paired_battle(left_queue[0], left_queue[1], "LEFT")
+	elif right_queue.size() == 2:
+		_start_paired_battle(right_queue[0], right_queue[1], "RIGHT")
+	else:
+		# Advance to next decider
+		battle_decision_index += 1
+		_advance_decider_to_next_eligible()
+
+## Sync battle state to all clients
+func _sync_battle_state() -> void:
+	var snapshot := {
+		"choices": battle_choices.duplicate(),
+		"left_queue": left_queue.duplicate(),
+		"right_queue": right_queue.duplicate(),
+		"battle_in_progress": battle_in_progress,
+		"active_participants": active_battle_participants.duplicate(),
+		"active_side": active_battle_side,
+	}
+	rpc_sync_battle_state.rpc(snapshot)
+
+@rpc("authority", "call_local", "reliable")
+func rpc_sync_battle_state(snapshot: Dictionary) -> void:
+	battle_choices = snapshot.get("choices", {}).duplicate()
+	left_queue = snapshot.get("left_queue", []).duplicate()
+	right_queue = snapshot.get("right_queue", []).duplicate()
+	battle_in_progress = snapshot.get("battle_in_progress", false)
+	active_battle_participants = snapshot.get("active_participants", []).duplicate()
+	active_battle_side = snapshot.get("active_side", "")
+	battle_choices_updated.emit(snapshot)
+
+## Start a paired battle between two players
+func _start_paired_battle(p1_id: int, p2_id: int, side: String) -> void:
+	if not multiplayer.is_server():
+		return
+	
+	print("[Net] Starting paired battle: ", p1_id, " vs ", p2_id, " on ", side)
+	battle_in_progress = true
+	active_battle_participants = [p1_id, p2_id]
+	active_battle_side = side
+	battle_finished_reports.clear()
+	
+	_sync_battle_state()
+	rpc_start_paired_battle.rpc(p1_id, p2_id, side)
+
+@rpc("authority", "call_local", "reliable")
+func rpc_start_paired_battle(p1_id: int, p2_id: int, side: String) -> void:
+	battle_started.emit(p1_id, p2_id, side)
+
+## Called by battle participants when they finish the battle
+func notify_battle_finished() -> void:
+	if multiplayer.is_server():
+		_server_battle_finished_report(multiplayer.get_unique_id())
+	else:
+		server_battle_finished.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func server_battle_finished() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_battle_finished_report(id)
+
+func _server_battle_finished_report(peer_id: int) -> void:
+	if not active_battle_participants.has(peer_id):
+		return
+	
+	battle_finished_reports[peer_id] = true
+	print("[Net] Battle finished report from: ", peer_id)
+	
+	# Check if BOTH participants reported
+	var both_done := true
+	for pid in active_battle_participants:
+		if not battle_finished_reports.get(pid, false):
+			both_done = false
+			break
+	
+	if both_done:
+		print("[Net] Both participants finished, resuming decisions")
+		var p1: int = int(active_battle_participants[0]) if active_battle_participants.size() > 0 else -1
+		var p2: int = int(active_battle_participants[1]) if active_battle_participants.size() > 1 else -1
+		var side: String = String(active_battle_side)
+
+		
+		# Clear the queue that was used
+		if side == "LEFT":
+			left_queue.clear()
+		elif side == "RIGHT":
+			right_queue.clear()
+		
+		# Reset battle state
+		battle_in_progress = false
+		active_battle_participants.clear()
+		active_battle_side = ""
+		battle_finished_reports.clear()
+		
+		_sync_battle_state()
+		rpc_battle_finished.rpc(p1, p2, side)
+		
+		# Resume decisions
+		_advance_decider_to_next_eligible()
+
+@rpc("authority", "call_local", "reliable")
+func rpc_battle_finished(p1_id: int, p2_id: int, side: String) -> void:
+	battle_finished_broadcast.emit()
