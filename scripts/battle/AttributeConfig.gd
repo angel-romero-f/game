@@ -2,12 +2,17 @@ extends Resource
 class_name AttributeConfig
 
 ## AttributeConfig
-## - Holds the editable mapping from (SpriteFrames, frame_index) -> attribute
+## - Derives card attributes from filename convention: {race}_{attribute}_cards.pxo
 ## - Holds the editable matchup rules (what beats what)
+##
+## Naming convention:
+##   elf_fire_cards.pxo  -> race: "elf",  attribute: "fire"
+##   infernal_water_cards.pxo -> race: "infernal", attribute: "water"
+##
+## All frames within a file share the same race and attribute.
 
-## List of mapping entries editable in the inspector.
-## Each entry should be a CardAttributeEntry resource.
-@export var entries: Array = []
+## Valid attributes for cards.
+const VALID_ATTRIBUTES: Array[String] = ["air", "water", "fire"]
 
 ## Rules: key beats value (e.g. "air" beats "water").
 @export var beats: Dictionary = {
@@ -16,19 +21,45 @@ class_name AttributeConfig
 	"fire": "air",
 }
 
-func get_attribute(sprite_frames: SpriteFrames, frame_index: int) -> String:
+
+## Returns the attribute parsed from the SpriteFrames filename.
+## Format expected: {race}_{attribute}_cards.pxo or {race}_{attribute}.pxo
+## The frame_index is ignored since all frames share the same attribute.
+func get_attribute(sprite_frames: SpriteFrames, _frame_index: int = 0) -> String:
 	if sprite_frames == null:
 		return "unknown"
 	
-	for e in entries:
-		if e == null:
-			continue
-		# Avoid relying on CardAttributeEntry being in global scope at parse time.
-		var esf: SpriteFrames = e.get("sprite_frames") if e is Object else null
-		var eidx: int = int(e.get("frame_index")) if e is Object else 0
-		var eattr: String = String(e.get("attribute")) if e is Object else "unknown"
-		if esf == sprite_frames and eidx == frame_index:
-			return eattr
+	var path := sprite_frames.resource_path
+	if path.is_empty():
+		return "unknown"
+	
+	var filename := path.get_file().get_basename()  # e.g., "elf_fire_cards"
+	var parts := filename.to_lower().split("_")
+	
+	# Format: {race}_{attribute}_cards or {race}_{attribute}
+	if parts.size() >= 2:
+		var attribute := parts[1]  # Second part is the attribute
+		if attribute in VALID_ATTRIBUTES:
+			return attribute
+	
+	return "unknown"
+
+
+## Returns the race parsed from the SpriteFrames filename.
+## Format expected: {race}_{attribute}_cards.pxo or {race}_{attribute}.pxo
+func get_race(sprite_frames: SpriteFrames) -> String:
+	if sprite_frames == null:
+		return "unknown"
+	
+	var path := sprite_frames.resource_path
+	if path.is_empty():
+		return "unknown"
+	
+	var filename := path.get_file().get_basename()  # e.g., "elf_fire_cards"
+	var parts := filename.to_lower().split("_")
+	
+	if parts.size() >= 1:
+		return parts[0]  # First part is the race
 	
 	return "unknown"
 
