@@ -173,6 +173,11 @@ func _ready() -> void:
 	# Connect Net signals for multiplayer phase/battle sync
 	if App.is_multiplayer:
 		_connect_net_signals()
+		
+	# After connecting Net signals:
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		# Force local App phase to match host-synced Net phase
+		_on_net_phase_changed(Net.current_phase)
 
 	# Check if we're returning from minigame (skip intro if turn_order already set)
 	if App.turn_order.size() > 0:
@@ -1023,8 +1028,10 @@ func _connect_net_signals() -> void:
 		Net.battle_finished_broadcast.connect(_on_battle_finished)
 
 func _on_net_phase_changed(phase_id: int) -> void:
-	## Handle phase change from host
 	print("[GameIntro] Phase changed to: ", phase_id)
+
+	var prev_phase := App.current_game_phase
+
 	if phase_id == 0:
 		App.current_game_phase = App.GamePhase.RESOURCE_PHASE
 		App.minigames_completed_this_phase = 0
@@ -1033,18 +1040,21 @@ func _on_net_phase_changed(phase_id: int) -> void:
 		App.current_game_phase = App.GamePhase.BATTLE_PHASE
 		App.phase_transition_text = "Choose Your Battles"
 
-	App.show_phase_transition = true
+	# Only show the overlay if the phase actually changed
+	App.show_phase_transition = (App.current_game_phase != prev_phase)
+
 	is_waiting_for_others = false
 	waiting_overlay.visible = false
 
-	# --- NECESSARY: if we were waiting, ensure controls are re-enabled on phase change ---
 	minigame_button.disabled = false
 	bridge_minigame_button.disabled = false
 	skip_to_battle_button.disabled = false
-	# -------------------------------------------------------------------------------
 
-	# Show phase transition and apply UI
-	_show_phase_transition_overlay()
+	if App.show_phase_transition:
+		_show_phase_transition_overlay()
+	else:
+		# No overlay; just apply UI immediately
+		_apply_phase_ui()
 
 func _on_done_counts_updated(done: int, total: int) -> void:
 	## Update waiting overlay with done counts
@@ -1053,6 +1063,13 @@ func _on_done_counts_updated(done: int, total: int) -> void:
 
 	if is_waiting_for_others and waiting_overlay.visible:
 		waiting_label.text = "Waiting for other players... (%d/%d done)" % [done, total]
+	
+	# ROBUSTNESS: Check if Net phase has advanced but App phase hasn't
+	var net_phase_as_enum := App.GamePhase.RESOURCE_PHASE if Net.current_phase == 0 else App.GamePhase.BATTLE_PHASE
+	if net_phase_as_enum != App.current_game_phase:
+		_on_net_phase_changed(Net.current_phase)
+		print("[GameIntro] Phase mismatch detected (Net: %d, App: %d). Forcing sync." % [Net.current_phase, App.current_game_phase])
+		_on_net_phase_changed(Net.current_phase)
 
 func _on_battle_decider_changed(peer_id: int) -> void:
 	## Update UI when battle decider changes
@@ -1082,7 +1099,8 @@ func _on_battle_finished() -> void:
 	print("[GameIntro] Battle finished, resuming")
 	waiting_overlay.visible = false
 	is_waiting_for_others = false
-	_update_battle_selection_ui()
+	# Use _apply_phase_ui to properly handle any phase transition that may have occurred
+	_apply_phase_ui()
 
 func _on_left_battle_pressed() -> void:
 	## Handle left battle button press
@@ -1230,9 +1248,20 @@ func _show_battle_in_progress_overlay() -> void:
 func _show_waiting_for_others_overlay() -> void:
 	## Show waiting overlay when player is done
 	is_waiting_for_others = true
-	waiting_label.text = "Waiting for other players... (%d/%d done)" % [local_done_count, local_total_count]
+	
+	# Compute done counts directly from Net state (not cached values which may be 0/0)
+	var done := 0
+	var total := Net.player_done_state.size()
+	for pid in Net.player_done_state.keys():
+		if Net.player_done_state.get(pid, false):
+			done += 1
+	if total == 0:
+		# Fallback: use game_players count if Net state not initialized
+		total = App.game_players.size()
+	
+	waiting_label.text = "Waiting for other players... (%d/%d done)" % [done, total]
 	waiting_overlay.visible = true
-
+	
 	# Disable minigame buttons
 	minigame_button.disabled = true
 	bridge_minigame_button.disabled = true

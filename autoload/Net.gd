@@ -274,17 +274,18 @@ func start_game() -> void:
 func host_init_resource_phase() -> void:
 	if not multiplayer.is_server():
 		return
-	
+
 	reset_phase_sync_state()
 	current_phase = 0
 	_init_phase_done_state()
-	
+
 	var all_peers := _get_all_peer_ids()
 	var total := all_peers.size()
 	print("[Net] Host init resource phase with ", total, " participants: ", all_peers)
-	
+
 	# Broadcast initial state to all clients
 	rpc_set_phase.rpc(0)
+	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate()) # <<< ADD THIS
 	rpc_sync_done_counts.rpc(0, total)
 
 ## Host generates rolls for all players and syncs to everyone
@@ -528,7 +529,9 @@ func _check_all_done_and_advance() -> void:
 		return
 	var all_peers := _get_all_peer_ids()
 	var done_count := _count_done_players()
-	# Broadcast updated counts
+	
+	# Broadcast updated done state dictionary AND counts to all clients
+	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
 	rpc_sync_done_counts.rpc(done_count, all_peers.size())
 	
 	if done_count >= all_peers.size():
@@ -599,6 +602,12 @@ func _server_mark_done(peer_id: int) -> void:
 func rpc_set_phase(phase_id: int) -> void:
 	current_phase = phase_id
 	phase_changed.emit(phase_id)
+
+## Authority broadcasts done state dictionaries to clients
+@rpc("authority", "call_local", "reliable")
+func rpc_sync_done_state(done_state: Dictionary, minigame_counts: Dictionary) -> void:
+	player_done_state = done_state.duplicate()
+	player_minigame_counts = minigame_counts.duplicate()
 
 ## Authority broadcasts done counts
 @rpc("authority", "call_local", "reliable")

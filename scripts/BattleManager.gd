@@ -520,6 +520,9 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key := event as InputEventKey
 		if key.pressed and key.keycode == KEY_SPACE:
+			if _is_multiplayer:
+				Net.notify_battle_finished() # <<< ADD THIS
+				Net.notify_battle_left()     # optional but consistent with Leave button
 			Net.clear_battle_state()
 			App.switch_to_main_music()
 			App.on_battle_completed()
