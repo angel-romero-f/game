@@ -413,28 +413,12 @@ func _flip_opponent_cards_from_pool() -> void:
 	if not _deck_o:
 		return
 	
-	var chosen: Dictionary = {} # slot -> {frames, frame_index}
-	
+	# In multiplayer, opponent cards come only from other players and must stay as card backs.
+	# Never reveal opponent card identities.
 	if _is_multiplayer:
-		var my_id := multiplayer.get_unique_id()
-		var other_peer_id: int = -1
-		for pid in Net.battle_placed_cards:
-			if int(pid) != my_id:
-				other_peer_id = int(pid)
-				break
-		if other_peer_id >= 0:
-			var other_cards: Dictionary = Net.battle_placed_cards.get(other_peer_id, {})
-			for slot_idx in range(_opponent_slot_nodes.size()):
-				var slot = _opponent_slot_nodes[slot_idx]
-				if not slot or not other_cards.has(slot_idx):
-					continue
-				var data: Dictionary = other_cards[slot_idx]
-				var path: String = data.get("path", "")
-				var fidx: int = int(data.get("frame", 0))
-				if not path.is_empty():
-					var frames: SpriteFrames = load(path) as SpriteFrames
-					if frames:
-						chosen[slot] = {"frames": frames, "frame_index": fidx}
+		return
+	
+	var chosen: Dictionary = {} # slot -> {frames, frame_index}
 	
 	if chosen.is_empty():
 		var pool: Array = _deck_o.get("card_sprite_pool")
