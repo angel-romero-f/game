@@ -754,15 +754,30 @@ func _apply_phase_ui() -> void:
 			minigames_counter_label.visible = true
 			_update_minigames_counter()
 
-			# --- NECESSARY: ensure buttons are re-enabled when returning to resource phase ---
-			minigame_button.disabled = false
-			bridge_minigame_button.disabled = false
-			skip_to_battle_button.disabled = false
-			# ------------------------------------------------------------------------------
-
-			# Check if player is already done (multiplayer)
-			if App.is_multiplayer and is_waiting_for_others:
+			# Check host-authoritative done state for multiplayer
+			var should_disable_minigames := false
+			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+				var my_id := multiplayer.get_unique_id()
+				# Check if host marked us as done
+				if Net.player_done_state.get(my_id, false):
+					should_disable_minigames = true
+				# Also check minigame count from host
+				var count: int = Net.player_minigame_counts.get(my_id, 0)
+				if count >= App.MAX_MINIGAMES_PER_PHASE:
+					should_disable_minigames = true
+			
+			if should_disable_minigames:
+				minigame_button.disabled = true
+				bridge_minigame_button.disabled = true
+				skip_to_battle_button.disabled = true
 				_show_waiting_for_others_overlay()
+			else:
+				# Re-enable buttons when returning to resource phase
+				minigame_button.disabled = false
+				bridge_minigame_button.disabled = false
+				skip_to_battle_button.disabled = false
+				waiting_overlay.visible = false
+				is_waiting_for_others = false
 
 		App.GamePhase.BATTLE_PHASE:
 			# Hide minigame buttons

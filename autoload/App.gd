@@ -83,6 +83,16 @@ func skip_to_battle_phase() -> void:
 
 func can_play_minigame() -> bool:
 	## Returns true if player can still play minigames this phase
+	# In multiplayer, check host-authoritative done state
+	if is_multiplayer and multiplayer.has_multiplayer_peer():
+		var my_id := multiplayer.get_unique_id()
+		# If host marked us as done, we cannot play
+		if Net.player_done_state.get(my_id, false):
+			return false
+		# Also check minigame count from host
+		var count: int = Net.player_minigame_counts.get(my_id, 0)
+		if count >= MAX_MINIGAMES_PER_PHASE:
+			return false
 	return current_game_phase == GamePhase.RESOURCE_PHASE and minigames_completed_this_phase < MAX_MINIGAMES_PER_PHASE
 
 func reset_phase_state() -> void:

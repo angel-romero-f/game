@@ -490,6 +490,8 @@ func _show_result() -> void:
 func _on_leave_pressed() -> void:
 	if _is_multiplayer:
 		Net.notify_battle_left()
+		# Also notify battle finished for paired battle tracking
+		Net.notify_battle_finished()
 	else:
 		_persist_local_placed_cards()
 	Net.clear_battle_state()

@@ -103,7 +103,7 @@ func join_game(code: String) -> void:
 	_connect_signals()
 	joined_game.emit()
 
-## Get the host's likely LAN IP address with port
+## Get the host's likely LAN IP address (IP only, no port)
 func get_host_code() -> String:
 	var addresses := IP.get_local_addresses()
 	
@@ -116,17 +116,17 @@ func get_host_code() -> String:
 				continue
 			# Check for private IP ranges
 			if address.begins_with("192.168.") or address.begins_with("10."):
-				return address + ":" + str(PORT)
+				return address
 			# Check for 172.16-31.x.x range
 			if address.begins_with("172."):
 				var parts := address.split(".")
 				if parts.size() >= 2:
 					var second_octet := parts[1].to_int()
 					if second_octet >= 16 and second_octet <= 31:
-						return address + ":" + str(PORT)
+						return address
 	
 	# Fallback to localhost
-	return "127.0.0.1:" + str(PORT)
+	return "127.0.0.1"
 
 func _connect_signals() -> void:
 	# Disconnect first to avoid duplicates
@@ -265,7 +265,27 @@ func start_race_select() -> void:
 @rpc("authority", "call_local", "reliable")
 func start_game() -> void:
 	App.setup_multiplayer_game()
+	# Host initializes phase state for all participants
+	if multiplayer.is_server():
+		host_init_resource_phase()
 	App.go("res://scenes/ui/GameIntro.tscn")
+
+## Host: Initialize resource phase for all participants (call at game start and when returning to resource)
+func host_init_resource_phase() -> void:
+	if not multiplayer.is_server():
+		return
+	
+	reset_phase_sync_state()
+	current_phase = 0
+	_init_phase_done_state()
+	
+	var all_peers := _get_all_peer_ids()
+	var total := all_peers.size()
+	print("[Net] Host init resource phase with ", total, " participants: ", all_peers)
+	
+	# Broadcast initial state to all clients
+	rpc_set_phase.rpc(0)
+	rpc_sync_done_counts.rpc(0, total)
 
 ## Host generates rolls for all players and syncs to everyone
 func host_generate_and_sync_rolls() -> void:
@@ -533,7 +553,16 @@ func server_increment_minigame() -> void:
 	_server_increment_minigame(id)
 
 func _server_increment_minigame(peer_id: int) -> void:
-	var count: int = player_minigame_counts.get(peer_id, 0) + 1
+	# REJECT if player is already done or count >= 2
+	if player_done_state.get(peer_id, false):
+		print("[Net] REJECTED minigame increment from ", peer_id, " (already done)")
+		return
+	var current_count: int = player_minigame_counts.get(peer_id, 0)
+	if current_count >= 2:
+		print("[Net] REJECTED minigame increment from ", peer_id, " (already at 2)")
+		return
+	
+	var count: int = current_count + 1
 	player_minigame_counts[peer_id] = count
 	print("[Net] Player ", peer_id, " minigame count: ", count)
 	
@@ -669,10 +698,8 @@ func _check_battle_phase_complete() -> void:
 	
 	if all_decided:
 		print("[Net] Battle phase complete, returning to resource phase")
-		# Reset for next round
-		current_phase = 0
-		_init_phase_done_state()
-		rpc_set_phase.rpc(0)
+		# Use host_init_resource_phase for consistent initialization
+		host_init_resource_phase()
 
 ## Authority broadcasts current decider
 @rpc("authority", "call_local", "reliable")
