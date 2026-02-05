@@ -20,7 +20,7 @@ func _ready() -> void:
 		status_label.text = ""
 	
 	if code_input:
-		code_input.placeholder_text = "Enter host code (e.g. 192.168.1.12:9999)"
+		code_input.placeholder_text = "Enter host code (e.g. 192.168.1.12)"
 	
 	if join_button:
 		join_button.pressed.connect(_on_join_pressed)

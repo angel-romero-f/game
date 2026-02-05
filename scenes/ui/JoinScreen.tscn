@@ -71,7 +71,7 @@ horizontal_alignment = 1
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
 theme_override_font_sizes/font_size = 30
-placeholder_text = "Enter host code (e.g. 192.168.1.12:9999)"
+placeholder_text = "Enter host code (e.g. 192.168.1.12)"
 alignment = 1
 
 [node name="JoinButton" type="Button" parent="Card/Margin/VBoxContainer"]

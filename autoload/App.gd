@@ -51,7 +51,13 @@ func on_minigame_completed() -> void:
 	print("[Phase] Minigame completed. Count: ", minigames_completed_this_phase, "/", MAX_MINIGAMES_PER_PHASE)
 	minigame_completed_signal.emit()
 	
-	# Check if we should auto-transition to battle phase
+	# In multiplayer, notify host of minigame completion (host controls phase)
+	if is_multiplayer and multiplayer.has_multiplayer_peer():
+		Net.request_increment_minigame()
+		# Don't auto-transition locally - host will broadcast phase change
+		return
+	
+	# Single player: check if we should auto-transition to battle phase
 	if minigames_completed_this_phase >= MAX_MINIGAMES_PER_PHASE:
 		print("[Phase] Max minigames reached, transitioning to battle phase")
 		enter_battle_phase()
@@ -59,15 +65,34 @@ func on_minigame_completed() -> void:
 func on_battle_completed() -> void:
 	## Called when battle ends (win, lose, or tie)
 	print("[Phase] Battle completed, returning to resource phase")
-	enter_resource_phase()
+	# In multiplayer, phase transitions are handled by host after battle_finished
+	if not is_multiplayer:
+		enter_resource_phase()
 
 func skip_to_battle_phase() -> void:
 	## Called when player chooses to skip remaining minigames
 	print("[Phase] Player skipping to battle phase")
+	
+	# In multiplayer, request host to mark us as done
+	if is_multiplayer and multiplayer.has_multiplayer_peer():
+		Net.request_skip_to_done()
+		return
+	
+	# Single player: transition immediately
 	enter_battle_phase()
 
 func can_play_minigame() -> bool:
 	## Returns true if player can still play minigames this phase
+	# In multiplayer, check host-authoritative done state
+	if is_multiplayer and multiplayer.has_multiplayer_peer():
+		var my_id := multiplayer.get_unique_id()
+		# If host marked us as done, we cannot play
+		if Net.player_done_state.get(my_id, false):
+			return false
+		# Also check minigame count from host
+		var count: int = Net.player_minigame_counts.get(my_id, 0)
+		if count >= MAX_MINIGAMES_PER_PHASE:
+			return false
 	return current_game_phase == GamePhase.RESOURCE_PHASE and minigames_completed_this_phase < MAX_MINIGAMES_PER_PHASE
 
 func reset_phase_state() -> void:
