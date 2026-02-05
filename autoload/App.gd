@@ -107,8 +107,12 @@ const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 3},
 ]
 
-## Player's current hand - array of card data dictionaries
+## Player's current hand - array of card data dictionaries (legacy, used for hand display)
 var player_hand: Array = []
+
+## Player's card collection - the cards they own. Format: [{ "path": String, "frame": int }, ...]
+## At game start: 4 random cards. After minigame win: +1 random card.
+var player_card_collection: Array = []
 
 ## Persisted card placements when leaving battle early.
 ## slot_index (0-2) -> { "path": String, "frame": int }
@@ -139,6 +143,52 @@ func initialize_player_hand(hand_size: int = 3) -> void:
 func reset_player_hand() -> void:
 	## Clears the player's hand
 	player_hand.clear()
+
+## Remove the cards in battle_placed_cards from player_card_collection (called when player loses a battle)
+func remove_placed_cards_from_collection() -> void:
+	for slot_idx in battle_placed_cards:
+		var card_data: Dictionary = battle_placed_cards[slot_idx]
+		var path: String = card_data.get("path", "")
+		var frame: int = int(card_data.get("frame", 0))
+		for i in range(player_card_collection.size() - 1, -1, -1):
+			var c: Dictionary = player_card_collection[i]
+			if c.get("path", "") == path and int(c.get("frame", 0)) == frame:
+				player_card_collection.remove_at(i)
+				break
+	print("[Cards] Removed ", battle_placed_cards.size(), " placed cards from collection (battle lost)")
+
+## Initialize player's card collection with 4 random cards at game start
+func initialize_player_card_collection() -> void:
+	player_card_collection.clear()
+	var card_pool: Array
+	match selected_race:
+		"Elf":
+			card_pool = ELF_CARDS.duplicate()
+		"Infernal":
+			card_pool = INFERNAL_CARDS.duplicate()
+		_:
+			card_pool = MIXED_CARD_POOL.duplicate()
+	card_pool.shuffle()
+	for i in range(mini(4, card_pool.size())):
+		var c: Dictionary = card_pool[i].duplicate()
+		player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
+	print("[Cards] Initialized collection with ", player_card_collection.size(), " cards")
+
+## Add a random card when player wins a minigame
+func add_card_from_minigame_win() -> void:
+	var card_pool: Array
+	match selected_race:
+		"Elf":
+			card_pool = ELF_CARDS.duplicate()
+		"Infernal":
+			card_pool = INFERNAL_CARDS.duplicate()
+		_:
+			card_pool = MIXED_CARD_POOL.duplicate()
+	if card_pool.is_empty():
+		return
+	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
+	player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
+	print("[Cards] Added card from minigame win. Collection size: ", player_card_collection.size())
 ## ========== END PLAYER HAND SYSTEM ==========
 
 func reset_lives() -> void:
@@ -230,6 +280,7 @@ func setup_single_player_game() -> void:
 	reset_lives()
 	reset_phase_state()
 	initialize_player_hand()
+	initialize_player_card_collection()
 	
 	# Add the local player
 	var local_player := {
@@ -269,6 +320,7 @@ func setup_multiplayer_game() -> void:
 	reset_lives()
 	reset_phase_state()
 	initialize_player_hand()
+	initialize_player_card_collection()
 	
 	# Build player list from Net.player_names and Net.player_races
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1

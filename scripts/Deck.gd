@@ -14,6 +14,9 @@ extends Node2D
 ## Whether clicking the deck should spawn cards.
 @export var spawn_on_click: bool = true
 
+## Whether to use player's card collection instead of card_sprite_pool
+@export var use_player_collection: bool = false
+
 ## Scene to use when spawning cards (defaults to the main Card scene).
 @export var card_scene: PackedScene = preload("res://scenes/card.tscn")
 
@@ -37,6 +40,10 @@ extends Node2D
 
 var _has_spawned: bool = false
 
+func reset_spawned_flag() -> void:
+	## Reset the spawned flag so deck can be used again (when cards are removed from slots)
+	_has_spawned = false
+
 @onready var deck_img: Sprite2D = $DeckImg
 @onready var deck_area: Area2D = $Area2D
 
@@ -49,6 +56,13 @@ func _ready() -> void:
 		deck_area.input_pickable = true
 		if not deck_area.input_event.is_connected(_on_deck_input_event):
 			deck_area.input_event.connect(_on_deck_input_event)
+	
+	# Check if deck should be visible based on available cards
+	if use_player_collection:
+		if has_available_cards():
+			_show_and_enable()
+		else:
+			_hide_and_disable()
 
 
 func _update_deck_texture() -> void:
@@ -68,25 +82,65 @@ func _update_deck_texture() -> void:
 
 
 func _on_deck_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -> void:
-	if not spawn_on_click or _has_spawned:
+	if not spawn_on_click:
+		return
+	
+	# For player collection decks, allow multiple spawns as long as cards are available
+	# For pool-based decks, only allow one spawn
+	if not use_player_collection and _has_spawned:
+		return
+	
+	# Check if there are available cards to spawn
+	if not has_available_cards():
 		return
 	
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
 		if mouse_event.button_index == MOUSE_BUTTON_LEFT and mouse_event.pressed:
 			_spawn_cards()
-			_hide_and_disable()
+			# Only hide if no more cards available
+			if not has_available_cards():
+				_hide_and_disable()
 
+
+func has_available_cards() -> bool:
+	## Returns true if there are cards available to spawn (public method)
+	if use_player_collection:
+		# Check if player has any cards not already placed
+		var placed_paths: Array = []
+		for slot_idx in App.battle_placed_cards:
+			var data: Dictionary = App.battle_placed_cards[slot_idx]
+			var path: String = data.get("path", "")
+			var frame: int = int(data.get("frame", 0))
+			placed_paths.append({"path": path, "frame": frame})
+		
+		for c in App.player_card_collection:
+			var is_placed := false
+			for placed in placed_paths:
+				if c.get("path", "") == placed.get("path", "") and int(c.get("frame", 0)) == placed.get("frame", 0):
+					is_placed = true
+					break
+			if not is_placed:
+				return true
+		return false
+	else:
+		# For pool-based decks, check if pool has cards
+		return card_sprite_pool.size() > 0
 
 func _spawn_cards() -> void:
-	if _has_spawned:
-		return
-	
-	if cards_to_spawn <= 0:
-		return
-	
 	if not card_scene:
 		return
+	
+	# For pool-based decks, only spawn once
+	if not use_player_collection and _has_spawned:
+		return
+	
+	# Check if there are available cards
+	if not has_available_cards():
+		return
+	
+	# Hide deck when spawning cards (hand will be visible)
+	_hide_and_disable()
 	
 	var root := get_tree().current_scene
 	if not root:
@@ -96,8 +150,43 @@ func _spawn_cards() -> void:
 	if not viewport:
 		return
 	
+	# Get available cards (from collection or pool)
+	var available_cards: Array = []
+	
+	if use_player_collection:
+		# Use player's card collection, excluding cards already placed in battle
+		var placed_paths: Array = []
+		for slot_idx in App.battle_placed_cards:
+			var data: Dictionary = App.battle_placed_cards[slot_idx]
+			var path: String = data.get("path", "")
+			var frame: int = int(data.get("frame", 0))
+			placed_paths.append({"path": path, "frame": frame})
+		
+		for c in App.player_card_collection:
+			var is_placed := false
+			for placed in placed_paths:
+				if c.get("path", "") == placed.get("path", "") and int(c.get("frame", 0)) == placed.get("frame", 0):
+					is_placed = true
+					break
+			if not is_placed:
+				available_cards.append(c)
+	else:
+		# Use card_sprite_pool (original behavior)
+		if card_sprite_pool.size() > 0:
+			for i in range(card_sprite_pool.size()):
+				var frames := card_sprite_pool[i] as SpriteFrames
+				if frames:
+					var frame_idx := 0
+					if card_frame_indices.size() > i:
+						frame_idx = card_frame_indices[i]
+					available_cards.append({"frames": frames, "frame": frame_idx})
+	
+	if available_cards.is_empty():
+		return
+	
 	var viewport_size := viewport.get_visible_rect().size
-	var n := cards_to_spawn
+	var n := available_cards.size() if use_player_collection else cards_to_spawn
+	n = min(n, available_cards.size())  # Don't spawn more than available
 	var y := viewport_size.y * card_row_height
 	
 	for i in range(n):
@@ -119,31 +208,44 @@ func _spawn_cards() -> void:
 		if card_manager and card_manager.has_method("register_card"):
 			card_manager.register_card(card)
 		
-		# Assign a random SpriteFrames from the pool if available.
-		if card_sprite_pool.size() > 0:
-			var idx := randi() % card_sprite_pool.size()
-			var frames := card_sprite_pool[idx] as SpriteFrames
-			
+		# Assign SpriteFrames from available cards
+		var card_data = available_cards[i]
+		if use_player_collection:
+			# Load from path
+			var path: String = card_data.get("path", "")
+			var frame: int = int(card_data.get("frame", 0))
+			if not path.is_empty():
+				var frames: SpriteFrames = load(path) as SpriteFrames
+				if frames:
+					card.card_sprite_frames = frames
+					card.frame_index = frame
+		else:
+			# Use frames directly from pool
+			var frames: SpriteFrames = card_data.get("frames")
 			if frames:
-				# Get the frame index - use the corresponding entry if available, otherwise default to 0
-				var frame_idx := 0
-				if card_frame_indices.size() > idx:
-					frame_idx = card_frame_indices[idx]
-				
-				# Card.gd exposes @export var card_sprite_frames: SpriteFrames
-				# Set the property directly - the setter will handle updating the texture
 				card.card_sprite_frames = frames
-				# Also set the frame_index on the card
-				card.frame_index = frame_idx
+				card.frame_index = int(card_data.get("frame", 0))
 	
-	_has_spawned = true
+	# Mark as spawned (for pool-based decks, this prevents re-spawning)
+	# For player collection decks, this flag can be reset when cards are removed
+	if not use_player_collection:
+		_has_spawned = true
 
 
 func _hide_and_disable() -> void:
-	# Make the deck invisible and non-interactive after use.
+	# Make the deck invisible and non-interactive when no cards available.
 	visible = false
 	
 	if deck_area:
 		deck_area.input_pickable = false
 		deck_area.monitorable = false
 		deck_area.monitoring = false
+
+func _show_and_enable() -> void:
+	# Make the deck visible and interactive when cards are available.
+	visible = true
+	
+	if deck_area:
+		deck_area.input_pickable = true
+		deck_area.monitorable = true
+		deck_area.monitoring = true

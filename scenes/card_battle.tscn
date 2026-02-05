@@ -44,6 +44,7 @@ deck_sprite_frames = ExtResource("3_uesyd")
 card_sprite_pool = Array[SpriteFrames]([ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("3_elfcards"), ExtResource("8_x2u0b"), ExtResource("8_x2u0b")])
 card_frame_indices = Array[int]([0, 1, 2, 3, 3, 1])
 card_row_height = 0.9
+use_player_collection = true
 
 [node name="DeckO" parent="." instance=ExtResource("5_sp37g")]
 position = Vector2(35, 50)

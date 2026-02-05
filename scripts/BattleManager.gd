@@ -52,25 +52,35 @@ func _ready() -> void:
 	_is_multiplayer = multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0
 	_cache_nodes()
 	if _is_multiplayer:
-		Net.clear_battle_state()
+		# Only clear battle state if starting fresh (no persisted cards)
+		if App.battle_placed_cards.is_empty():
+			Net.clear_battle_state()
 		if Net.battle_cards_updated.is_connected(_on_battle_cards_updated):
 			Net.battle_cards_updated.disconnect(_on_battle_cards_updated)
 		Net.battle_cards_updated.connect(_on_battle_cards_updated)
 		if Net.battle_start_requested.is_connected(_on_battle_start_requested):
 			Net.battle_start_requested.disconnect(_on_battle_start_requested)
 		Net.battle_start_requested.connect(_on_battle_start_requested)
-	_restore_and_sync_placed_cards()
 	_setup_ui()
 	
-	# Wait a couple frames so CardManager has time to connect existing card input,
-	# and so our opponent cards don't get accidentally registered as draggable.
+	# Wait a couple frames so CardManager has time to initialize
 	await get_tree().process_frame
+	await get_tree().process_frame
+	
+	# Restore cards after CardManager is ready
+	_restore_and_sync_placed_cards()
+	
+	# Wait another frame for cards to be properly registered
 	await get_tree().process_frame
 	
 	_place_opponent_backs()
 	_connect_player_slot_signals()
 	_update_start_button_visibility()
 	state = State.WAITING_FOR_PLAYER
+	
+	# Update deck visibility and respace hand cards after everything is set up
+	call_deferred("_update_deck_visibility")
+	call_deferred("_respace_hand_cards")
 
 
 func _cache_nodes() -> void:
@@ -110,7 +120,7 @@ func _restore_and_sync_placed_cards() -> void:
 
 
 func _restore_cards_to_slots() -> void:
-	## Spawn cards from App.battle_placed_cards and place them in player slots (single player).
+	## Spawn cards from App.battle_placed_cards and place them in player slots.
 	var root := get_tree().current_scene
 	var card_manager := root.get_node_or_null("CardManager")
 	for slot_idx in App.battle_placed_cards:
@@ -128,20 +138,45 @@ func _restore_cards_to_slots() -> void:
 		if not frames:
 			continue
 		var card := CARD_SCENE.instantiate()
+		if not card:
+			continue
+		
+		# Add card to scene first
 		root.add_child(card)
+		
+		# Set card properties
 		card.card_sprite_frames = frames
 		card.frame_index = frame
-		slot.force_snap_card(card)
+		card.visible = true
+		
+		# Register with CardManager BEFORE snapping (so it's set up for dragging)
+		# This ensures input events are connected and card is draggable
 		if card_manager:
 			if card_manager.has_method("register_card"):
 				card_manager.register_card(card)
+			# Ensure card is in card_spawn_positions for tracking
+			if not card_manager.card_spawn_positions.has(card):
+				card_manager.card_spawn_positions[card] = slot.global_position
+		
+		# Now snap to slot
+		slot.force_snap_card(card)
+		
+		if card_manager:
 			card_manager.snapped_cards[card] = slot
-	# Hide deck when we restored cards (player already drew)
-	if _deck_p:
-		_deck_p.visible = false
-		var area := _deck_p.get_node_or_null("Area2D")
+			# Set spawn position to slot position (in case card is unsnapped later)
+			if card_manager.has_method("set_card_spawn_position"):
+				card_manager.set_card_spawn_position(card, slot.global_position)
+		
+		# Ensure the card's Area2D remains input_pickable even when snapped
+		var area := card.get_node_or_null("Card_Collision") as Area2D
 		if area:
-			area.input_pickable = false
+			area.input_pickable = true
+	
+	# Update deck visibility and respace hand cards after restoration
+	# Wait a frame to ensure cards are properly registered
+	await get_tree().process_frame
+	call_deferred("_update_deck_visibility")
+	call_deferred("_respace_hand_cards")
 
 
 func _on_battle_cards_updated() -> void:
@@ -242,19 +277,48 @@ func _connect_player_slot_signals() -> void:
 func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
 	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
 		return
-	if _is_multiplayer:
-		var frames: SpriteFrames = card.get("card_sprite_frames")
-		var fidx: int = int(card.get("frame_index"))
-		if frames and frames.resource_path:
+	
+	# Get card data
+	var frames: SpriteFrames = card.card_sprite_frames
+	var fidx: int = card.frame_index
+	
+	if frames and frames.resource_path:
+		# Persist locally
+		App.battle_placed_cards[slot_idx] = {"path": frames.resource_path, "frame": fidx}
+		
+		# Sync in multiplayer
+		if _is_multiplayer:
 			Net.request_place_battle_card(slot_idx, frames.resource_path, fidx)
+		else:
+			_persist_local_placed_cards()
+		
+		# Respace hand cards (which will also update deck visibility)
+		call_deferred("_respace_hand_cards")
+	
 	_update_start_button_visibility()
 
 
-func _on_card_unsnapped_from_slot(_card: Node, slot_idx: int) -> void:
+func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
 	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
 		return
+	
+	# Remove from persistence
+	App.battle_placed_cards.erase(slot_idx)
+	
+	# Sync in multiplayer
 	if _is_multiplayer:
 		Net.request_remove_battle_card(slot_idx)
+	else:
+		_persist_local_placed_cards()
+	
+		# Respace hand cards (which will also update deck visibility)
+		call_deferred("_respace_hand_cards")
+	
+	# Reset deck spawned flag so it can be used again
+	if _deck_p and _deck_p.use_player_collection:
+		if _deck_p.has_method("reset_spawned_flag"):
+			_deck_p.reset_spawned_flag()
+	
 	_update_start_button_visibility()
 
 
@@ -487,12 +551,60 @@ func _show_result() -> void:
 		_continue_label.visible = true
 
 
+func _get_battle_result() -> String:
+	## Returns "win", "lose", or "tie" based on battle resolution
+	if _result_label and _result_label.text:
+		var text := _result_label.text.to_lower()
+		if "win" in text:
+			return "win"
+		elif "lose" in text:
+			return "lose"
+	return "tie"
+
+func _clear_player_slots() -> void:
+	## Clear all player slots: remove cards, reset slot state
+	var root := get_tree().current_scene
+	var card_manager := root.get_node_or_null("CardManager")
+	
+	for slot in _player_slot_nodes:
+		if not slot:
+			continue
+		if slot.has_card and slot.snapped_card:
+			var card = slot.snapped_card
+			# Remove from CardManager's snapped_cards tracking
+			if card_manager:
+				if card_manager.snapped_cards.has(card):
+					card_manager.snapped_cards.erase(card)
+			# Reset slot state
+			if slot.has_method("unsnap_card"):
+				slot.unsnap_card()
+			# Remove card node
+			if card and is_instance_valid(card):
+				card.queue_free()
+
 func _on_leave_pressed() -> void:
 	if _is_multiplayer:
 		Net.notify_battle_left()
+	
+	# Handle card persistence based on battle state
+	if state == State.RESOLVED:
+		# Battle is resolved
+		var player_wins := _get_battle_result() == "win"
+		if not player_wins:
+			# Loser: clear placed cards from collection and slots
+			_clear_player_slots()
+			App.remove_placed_cards_from_collection()
+			App.battle_placed_cards.clear()
+		else:
+			# Winner/tie: persist cards in slots
+			_persist_local_placed_cards()
+		# Clear battle state when leaving resolved battle
+		Net.clear_battle_state()
 	else:
+		# Leaving unresolved battle: persist cards for restoration
 		_persist_local_placed_cards()
-	Net.clear_battle_state()
+		# Don't clear battle state - keep it for when player returns
+	
 	App.switch_to_main_music()
 	if state == State.RESOLVED:
 		App.on_battle_completed()
@@ -512,12 +624,110 @@ func _persist_local_placed_cards() -> void:
 				App.battle_placed_cards[idx] = {"path": frames.resource_path, "frame": fidx}
 
 
+func _update_deck_visibility() -> void:
+	## Update deck visibility: show only if no cards in hand (hand not visible)
+	if not _deck_p or not _deck_p.use_player_collection:
+		return
+	
+	# Check if there are any cards in hand (not snapped to slots)
+	var root := get_tree().current_scene
+	var card_manager := root.get_node_or_null("CardManager")
+	var has_hand_cards := false
+	
+	if card_manager:
+		# Check if there are any cards with spawn positions that aren't snapped
+		for card in card_manager.card_spawn_positions:
+			if is_instance_valid(card) and not card_manager.snapped_cards.has(card):
+				has_hand_cards = true
+				break
+	
+	# Show deck only if no hand cards AND there are available cards to spawn
+	if not has_hand_cards:
+		if _deck_p.has_method("has_available_cards") and _deck_p.has_available_cards():
+			if _deck_p.has_method("_show_and_enable"):
+				_deck_p._show_and_enable()
+		else:
+			if _deck_p.has_method("_hide_and_disable"):
+				_deck_p._hide_and_disable()
+	else:
+		# Hand is visible, hide deck
+		if _deck_p.has_method("_hide_and_disable"):
+			_deck_p._hide_and_disable()
+
+func _respace_hand_cards() -> void:
+	## Re-space all cards in the hand evenly whenever hand size changes.
+	var root := get_tree().current_scene
+	if not root:
+		return
+	var card_manager := root.get_node_or_null("CardManager")
+	if not card_manager:
+		return
+	
+	# Get all cards currently in hand (have spawn positions but not snapped)
+	var hand_cards: Array = []
+	for card in card_manager.card_spawn_positions:
+		if not card_manager.snapped_cards.has(card):
+			if is_instance_valid(card):
+				hand_cards.append(card)
+	
+	# Update deck visibility based on hand state
+	_update_deck_visibility()
+	
+	if hand_cards.is_empty():
+		return
+	
+	# Calculate evenly spaced positions (same formula as Deck)
+	var viewport := get_viewport()
+	if not viewport:
+		return
+	var viewport_size := viewport.get_visible_rect().size
+	var y := viewport_size.y * 0.9  # Use same height as Deck
+	var n := hand_cards.size()
+	
+	# Update spawn positions and tween cards to new positions
+	for i in range(n):
+		var card = hand_cards[i]
+		if not is_instance_valid(card):
+			continue
+		if not is_instance_of(card, Node2D):
+			continue
+		if not card.is_inside_tree():
+			continue
+		
+		var t := float(i + 1) / float(n + 1)
+		var x := viewport_size.x * t
+		var new_pos := Vector2(x, y)
+		
+		# Update spawn position
+		if card_manager.has_method("set_card_spawn_position"):
+			card_manager.set_card_spawn_position(card, new_pos)
+		
+		# Tween card to new position (only if not being dragged)
+		if card_manager.dragged_card == card:
+			continue
+		
+		# Create tween
+		var tween := create_tween()
+		if tween:
+			tween.set_ease(Tween.EASE_OUT)
+			tween.set_trans(Tween.TRANS_CUBIC)
+			tween.tween_property(card, "global_position", new_pos, 0.25)
+
 func _unhandled_input(event: InputEvent) -> void:
 	if state != State.RESOLVED:
 		return
 	if event is InputEventKey:
 		var key := event as InputEventKey
 		if key.pressed and key.keycode == KEY_SPACE:
+			# Handle battle outcome
+			var player_wins := _get_battle_result() == "win"
+			if not player_wins:
+				# Loser: clear placed cards from collection
+				App.remove_placed_cards_from_collection()
+				_clear_player_slots()
+				App.battle_placed_cards.clear()
+			# Winner/tie: cards persist in App.battle_placed_cards
+			
 			Net.clear_battle_state()
 			App.switch_to_main_music()
 			App.on_battle_completed()

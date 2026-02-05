@@ -51,7 +51,8 @@ func handle_continue():
 		return
 	
 	if player_won:
-		# Won - report completion and return to map
+		# Won - award card, report completion and return to map
+		App.add_card_from_minigame_win()
 		App.on_minigame_completed()
 		_return_to_map()
 	elif App.get_lives() <= 0:

@@ -61,6 +61,11 @@ func register_card(card: Node2D) -> void:
 		card_spawn_positions[card] = card.global_position
 	_connect_card(card)
 
+func set_card_spawn_position(card: Node2D, pos: Vector2) -> void:
+	"""Update a card's spawn position (used when returning cards to hand)."""
+	if card:
+		card_spawn_positions[card] = pos
+
 func _connect_card(card: Node2D):
 	# Store original scale
 	if not card_original_scales.has(card):
