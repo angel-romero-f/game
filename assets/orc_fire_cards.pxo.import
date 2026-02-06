@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://40jiyymlo02u"
+path="res://.godot/imported/orc_fire_cards.pxo-ae23d1268e07766a15c947fe58026d49.res"
+
+[deps]
+
+source_file="res://assets/orc_fire_cards.pxo"
+dest_files=["res://.godot/imported/orc_fire_cards.pxo-ae23d1268e07766a15c947fe58026d49.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

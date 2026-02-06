@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://cmh52kovqc65t"
+path="res://.godot/imported/elf_water_cards.pxo-85951cd3c8d69c6a3ea74f193d523925.res"
+
+[deps]
+
+source_file="res://assets/elf_water_cards.pxo"
+dest_files=["res://.godot/imported/elf_water_cards.pxo-85951cd3c8d69c6a3ea74f193d523925.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

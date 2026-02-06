@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dk1f5elnefwbd"
+path="res://.godot/imported/fairy_fire_cards.pxo-2073b068229ebf53c2d6f28f18efadd8.res"
+
+[deps]
+
+source_file="res://assets/fairy_fire_cards.pxo"
+dest_files=["res://.godot/imported/fairy_fire_cards.pxo-2073b068229ebf53c2d6f28f18efadd8.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

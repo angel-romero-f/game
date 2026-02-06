@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://bir6kgun6tkmj"
+path="res://.godot/imported/orc_water_cards.pxo-973c10baa1355db0f81d1c55f3aa1a30.res"
+
+[deps]
+
+source_file="res://assets/orc_water_cards.pxo"
+dest_files=["res://.godot/imported/orc_water_cards.pxo-973c10baa1355db0f81d1c55f3aa1a30.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

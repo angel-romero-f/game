@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://k56x3ypt0g5u"
+path="res://.godot/imported/fairy_air_cards.pxo-2556278f2f80d01949ada10df29528ec.res"
+
+[deps]
+
+source_file="res://assets/fairy_air_cards.pxo"
+dest_files=["res://.godot/imported/fairy_air_cards.pxo-2556278f2f80d01949ada10df29528ec.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

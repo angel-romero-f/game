@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://bxn4lvvuf3wth"
+path="res://.godot/imported/orc_air_cards.pxo-532d2009e2b1448d85036daf80ce5ec6.res"
+
+[deps]
+
+source_file="res://assets/orc_air_cards.pxo"
+dest_files=["res://.godot/imported/orc_air_cards.pxo-532d2009e2b1448d85036daf80ce5ec6.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

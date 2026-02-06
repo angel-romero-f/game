@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://drdwkam4xxnhg"
+path="res://.godot/imported/elf_air_cards.pxo-1cbd9ce648070098b3a6c8a3ef19dc10.res"
+
+[deps]
+
+source_file="res://assets/elf_air_cards.pxo"
+dest_files=["res://.godot/imported/elf_air_cards.pxo-1cbd9ce648070098b3a6c8a3ef19dc10.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://bstf37106774n"
+path="res://.godot/imported/infernal_air_cards.pxo-443c690a4ce84742856be2c454e95f22.res"
+
+[deps]
+
+source_file="res://assets/infernal_air_cards.pxo"
+dest_files=["res://.godot/imported/infernal_air_cards.pxo-443c690a4ce84742856be2c454e95f22.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
