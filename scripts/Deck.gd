@@ -108,8 +108,11 @@ func has_available_cards() -> bool:
 	if use_player_collection:
 		# Check if player has any cards not already placed
 		var placed_paths: Array = []
-		for slot_idx in App.battle_placed_cards:
-			var data: Dictionary = App.battle_placed_cards[slot_idx]
+		var placed_slots: Dictionary = {}
+		if BattleStateManager:
+			placed_slots = BattleStateManager.get_local_slots()
+		for slot_idx in placed_slots:
+			var data: Dictionary = placed_slots[slot_idx]
 			var path: String = data.get("path", "")
 			var frame: int = int(data.get("frame", 0))
 			placed_paths.append({"path": path, "frame": frame})
@@ -146,6 +149,11 @@ func _spawn_cards() -> void:
 	if not root:
 		return
 	
+	# Add cards to HandCardsContainer so they render above the UI
+	var hand_container := root.get_node_or_null("HandCardsLayer/HandCardsContainer")
+	if not hand_container:
+		hand_container = root
+	
 	var viewport := get_viewport()
 	if not viewport:
 		return
@@ -156,8 +164,11 @@ func _spawn_cards() -> void:
 	if use_player_collection:
 		# Use player's card collection, excluding cards already placed in battle
 		var placed_paths: Array = []
-		for slot_idx in App.battle_placed_cards:
-			var data: Dictionary = App.battle_placed_cards[slot_idx]
+		var placed_slots: Dictionary = {}
+		if BattleStateManager:
+			placed_slots = BattleStateManager.get_local_slots()
+		for slot_idx in placed_slots:
+			var data: Dictionary = placed_slots[slot_idx]
 			var path: String = data.get("path", "")
 			var frame: int = int(data.get("frame", 0))
 			placed_paths.append({"path": path, "frame": frame})
@@ -198,8 +209,8 @@ func _spawn_cards() -> void:
 		var t := float(i + 1) / float(n + 1)  # (1/(n+1), 2/(n+1), ..., n/(n+1))
 		var x := viewport_size.x * t
 		
-		# Add card to the root (same as CardBattle) so CardManager can manage it.
-		root.add_child(card)
+		# Add card to HandCardsContainer so it renders above the UI
+		hand_container.add_child(card)
 		if card is Node2D:
 			card.global_position = Vector2(x, y)
 		
@@ -211,11 +222,11 @@ func _spawn_cards() -> void:
 		# Assign SpriteFrames from available cards
 		var card_data = available_cards[i]
 		if use_player_collection:
-			# Load from path
+			# Load from path - use ResourceLoader for imported .pxo assets
 			var path: String = card_data.get("path", "")
 			var frame: int = int(card_data.get("frame", 0))
 			if not path.is_empty():
-				var frames: SpriteFrames = load(path) as SpriteFrames
+				var frames: SpriteFrames = ResourceLoader.load(path, "SpriteFrames", ResourceLoader.CACHE_MODE_REUSE) as SpriteFrames
 				if frames:
 					card.card_sprite_frames = frames
 					card.frame_index = frame

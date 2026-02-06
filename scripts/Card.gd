@@ -21,20 +21,28 @@ extends Node2D
 		if value != null:
 			_card_texture_backing = null
 		_update_texture()
+		# Deferred fallback in case card_image wasn't ready (e.g., when set immediately after add_child)
+		call_deferred("_update_texture")
 	get:
 		return _card_sprite_frames_backing
 
 ## The frame index to use from the sprite frames (if using .pxo file)
+var _frame_index_backing: int = 0
 @export var frame_index: int = 0:
 	set(value):
-		frame_index = value
+		_frame_index_backing = value
 		_update_texture()
+	get:
+		return _frame_index_backing
 
 ## The animation name to use from the sprite frames (if using .pxo file)
+var _animation_name_backing: String = "default"
 @export var animation_name: String = "default":
 	set(value):
-		animation_name = value
+		_animation_name_backing = value
 		_update_texture()
+	get:
+		return _animation_name_backing
 
 ## [READ ONLY] The current size of the card image (read-only, for editor reference)
 @export var card_size: Vector2:

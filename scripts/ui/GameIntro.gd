@@ -619,6 +619,9 @@ func _on_bridge_minigame_pressed() -> void:
 	App.go("res://scenes/BridgeGame.tscn")
 
 func _on_battle_button_pressed() -> void:
+	# Single-player quick battle entry (using a default territory id for now).
+	if BattleStateManager:
+		BattleStateManager.set_current_territory("default")
 	App.go("res://scenes/card_battle.tscn")
 
 func _skip_to_game_ready() -> void:
@@ -1088,6 +1091,10 @@ func _on_battle_started(p1_id: int, p2_id: int, side: String) -> void:
 	if my_id == p1_id or my_id == p2_id:
 		# We're a participant - go to battle
 		print("[GameIntro] Entering battle as participant")
+		if BattleStateManager:
+			# For now, use a simple territory id; can be wired to map/side later.
+			var territory_id := "%s_%s_battle" % [str(p1_id), str(p2_id)]
+			BattleStateManager.set_current_territory(territory_id)
 		App.go("res://scenes/card_battle.tscn")
 	else:
 		# We're a spectator - show waiting overlay
@@ -1109,6 +1116,8 @@ func _on_left_battle_pressed() -> void:
 		Net.request_battle_choice("LEFT")
 	else:
 		# Single player - go directly to battle
+		if BattleStateManager:
+			BattleStateManager.set_current_territory("default")
 		App.go("res://scenes/card_battle.tscn")
 
 func _on_right_battle_pressed() -> void:

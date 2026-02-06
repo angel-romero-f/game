@@ -107,29 +107,29 @@ func reset_phase_state() -> void:
 ## Available cards - each entry is {sprite_frames_path, frame_index}
 ## Race-specific card pools
 const ELF_CARDS: Array = [
-	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 0},
-	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 1},
-	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 2},
-	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
 ]
 
 const INFERNAL_CARDS: Array = [
-	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 0},
-	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 1},
-	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 2},
-	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
 ]
 
 ## Mixed pool for races without specific cards (Orc, Fairy)
 const MIXED_CARD_POOL: Array = [
-	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 0},
-	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 1},
-	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 2},
-	{"sprite_frames": "res://assets/Elf_cards.pxo", "frame_index": 3},
-	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 0},
-	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 1},
-	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 2},
-	{"sprite_frames": "res://assets/infernal_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
 ]
 
 ## Player's current hand - array of card data dictionaries (legacy, used for hand display)
@@ -139,8 +139,9 @@ var player_hand: Array = []
 ## At game start: 4 random cards. After minigame win: +1 random card.
 var player_card_collection: Array = []
 
-## Persisted card placements when leaving battle early.
+## Legacy: persisted card placements when leaving battle early (single active battle).
 ## slot_index (0-2) -> { "path": String, "frame": int }
+## New code should prefer BattleStateManager for per-territory state.
 var battle_placed_cards: Dictionary = {}
 
 func initialize_player_hand(hand_size: int = 3) -> void:
@@ -169,18 +170,27 @@ func reset_player_hand() -> void:
 	## Clears the player's hand
 	player_hand.clear()
 
-## Remove the cards in battle_placed_cards from player_card_collection (called when player loses a battle)
-func remove_placed_cards_from_collection() -> void:
-	for slot_idx in battle_placed_cards:
-		var card_data: Dictionary = battle_placed_cards[slot_idx]
+## Remove cards described by a placed-slots dictionary from the player's collection.
+## placed_slots: slot_index -> { "path": String, "frame": int }
+func remove_placed_cards_from_collection_for_slots(placed_slots: Dictionary) -> void:
+	var removed := 0
+	for slot_idx in placed_slots:
+		var card_data: Dictionary = placed_slots[slot_idx]
 		var path: String = card_data.get("path", "")
 		var frame: int = int(card_data.get("frame", 0))
 		for i in range(player_card_collection.size() - 1, -1, -1):
 			var c: Dictionary = player_card_collection[i]
 			if c.get("path", "") == path and int(c.get("frame", 0)) == frame:
 				player_card_collection.remove_at(i)
+				removed += 1
 				break
-	print("[Cards] Removed ", battle_placed_cards.size(), " placed cards from collection (battle lost)")
+	if removed > 0:
+		print("[Cards] Removed ", removed, " placed cards from collection (battle lost)")
+
+
+## Backwards-compatible helper using legacy battle_placed_cards.
+func remove_placed_cards_from_collection() -> void:
+	remove_placed_cards_from_collection_for_slots(battle_placed_cards)
 
 ## Initialize player's card collection with 4 random cards at game start
 func initialize_player_card_collection() -> void:

@@ -19,6 +19,7 @@ config/icon="res://icon.svg"
 
 App="*res://autoload/App.gd"
 Net="*res://autoload/Net.gd"
+BattleStateManager="*res://autoload/BattleStateManager.gd"
 
 [display]
 

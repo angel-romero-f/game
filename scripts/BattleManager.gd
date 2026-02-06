@@ -28,6 +28,10 @@ var state: State = State.SETUP
 @export var result_label_path: NodePath = NodePath("BattleUI/UI/ResultLabel")
 @export var continue_label_path: NodePath = NodePath("BattleUI/UI/ContinueLabel")
 @export var leave_button_path: NodePath = NodePath("BattleUI/UI/LeaveButton")
+@export var debug_add_card_button_path: NodePath = NodePath("BattleUI/UI/DebugAddCardButton")
+
+## Temporary debug: show button to add a random card to hand. Toggle in editor.
+@export var show_debug_add_card_button: bool = false
 
 ## Flip animation settings.
 @export var flip_up_duration: float = 0.25
@@ -43,6 +47,7 @@ var _start_button: Button
 var _result_label: Label
 var _continue_label: Label
 var _leave_button: Button
+var _debug_add_card_button: Button
 
 var _opponent_cards_by_slot: Dictionary = {} # slot -> card
 
@@ -57,7 +62,10 @@ func _ready() -> void:
 	_cache_nodes()
 	if _is_multiplayer:
 		# Only clear battle state if starting fresh (no persisted cards)
-		if App.battle_placed_cards.is_empty():
+		var has_local_slots := false
+		if BattleStateManager:
+			has_local_slots = not BattleStateManager.get_local_slots().is_empty()
+		if not has_local_slots:
 			Net.clear_battle_state()
 		if Net.battle_cards_updated.is_connected(_on_battle_cards_updated):
 			Net.battle_cards_updated.disconnect(_on_battle_cards_updated)
@@ -107,33 +115,42 @@ func _cache_nodes() -> void:
 	_result_label = (root.get_node_or_null(result_label_path) if root else null) as Label
 	_continue_label = (root.get_node_or_null(continue_label_path) if root else null) as Label
 	_leave_button = (root.get_node_or_null(leave_button_path) if root else null) as Button
+	_debug_add_card_button = (root.get_node_or_null(debug_add_card_button_path) if root else null) as Button
 
 
 func _restore_and_sync_placed_cards() -> void:
-	## Restore from App.battle_placed_cards. In multiplayer, restore locally and sync to server.
-	if App.battle_placed_cards.is_empty():
+	## Restore from BattleStateManager. In multiplayer, restore locally and sync to server.
+	var placed: Dictionary = {}
+	if BattleStateManager:
+		placed = BattleStateManager.get_local_slots()
+	if placed.is_empty():
 		return
-	_restore_cards_to_slots()
+	_restore_cards_to_slots(placed)
 	if _is_multiplayer:
-		for slot_idx in App.battle_placed_cards:
-			var data: Dictionary = App.battle_placed_cards[slot_idx]
+		for slot_idx in placed:
+			var data: Dictionary = placed[slot_idx]
 			var path: String = data.get("path", "")
 			var frame: int = int(data.get("frame", 0))
 			if not path.is_empty():
 				Net.request_place_battle_card(slot_idx, path, frame)
 
 
-func _restore_cards_to_slots() -> void:
-	## Spawn cards from App.battle_placed_cards and place them in player slots.
-	var root := get_tree().current_scene
+func _restore_cards_to_slots(placed: Dictionary) -> void:
+	## Spawn cards from a placed-slots dictionary and place them in player slots.
+	var root := get_parent()
+	if not root:
+		root = get_tree().current_scene
+	var hand_container := root.get_node_or_null("HandCardsLayer/HandCardsContainer")
+	if not hand_container:
+		hand_container = root
 	var card_manager := root.get_node_or_null("CardManager")
-	for slot_idx in App.battle_placed_cards:
+	for slot_idx in placed:
 		if slot_idx < 0 or slot_idx >= _player_slot_nodes.size():
 			continue
 		var slot = _player_slot_nodes[slot_idx]
 		if not slot or not slot.has_method("force_snap_card"):
 			continue
-		var data: Dictionary = App.battle_placed_cards[slot_idx]
+		var data: Dictionary = placed[slot_idx]
 		var path: String = data.get("path", "")
 		var frame: int = int(data.get("frame", 0))
 		if path.is_empty():
@@ -145,8 +162,8 @@ func _restore_cards_to_slots() -> void:
 		if not card:
 			continue
 
-		# Add card to scene first
-		root.add_child(card)
+		# Add card to HandCardsContainer so it renders above the UI
+		hand_container.add_child(card)
 
 		# Set card properties
 		card.card_sprite_frames = frames
@@ -264,6 +281,11 @@ func _setup_ui() -> void:
 		if not _leave_button.pressed.is_connected(_on_leave_pressed):
 			_leave_button.pressed.connect(_on_leave_pressed)
 
+	if _debug_add_card_button:
+		_debug_add_card_button.visible = show_debug_add_card_button
+		if show_debug_add_card_button and not _debug_add_card_button.pressed.is_connected(_on_debug_add_card_pressed):
+			_debug_add_card_button.pressed.connect(_on_debug_add_card_pressed)
+
 
 func _connect_player_slot_signals() -> void:
 	for idx in range(_player_slot_nodes.size()):
@@ -287,8 +309,9 @@ func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
 	var fidx: int = card.frame_index
 
 	if frames and frames.resource_path:
-		# Persist locally
-		App.battle_placed_cards[slot_idx] = {"path": frames.resource_path, "frame": fidx}
+		# Persist locally via BattleStateManager
+		if BattleStateManager:
+			BattleStateManager.set_local_slot(slot_idx, frames.resource_path, fidx)
 
 		# Sync in multiplayer
 		if _is_multiplayer:
@@ -307,7 +330,8 @@ func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
 		return
 
 	# Remove from persistence
-	App.battle_placed_cards.erase(slot_idx)
+	if BattleStateManager:
+		BattleStateManager.set_local_slot(slot_idx, "", 0)
 
 	# Sync in multiplayer
 	if _is_multiplayer:
@@ -417,17 +441,38 @@ func _flip_opponent_cards_from_pool() -> void:
 	if not _deck_o:
 		return
 
-	# In multiplayer, opponent cards come only from other players and must stay as card backs.
-	# Never reveal opponent card identities.
-	if _is_multiplayer:
-		return
-
 	var chosen: Dictionary = {} # slot -> {frames, frame_index}
 
+	if _is_multiplayer:
+		# Reveal actual opponent cards based on Net.battle_placed_cards.
+		var my_id := multiplayer.get_unique_id()
+		var other_peer_id: int = -1
+		for pid in Net.battle_placed_cards:
+			if int(pid) != my_id:
+				other_peer_id = int(pid)
+				break
+		if other_peer_id >= 0:
+			var other_cards: Dictionary = Net.battle_placed_cards.get(other_peer_id, {})
+			for slot_idx in range(_opponent_slot_nodes.size()):
+				var slot = _opponent_slot_nodes[slot_idx]
+				if not slot or not other_cards.has(slot_idx):
+					continue
+				var data: Dictionary = other_cards[slot_idx]
+				var path: String = data.get("path", "")
+				var fidx: int = int(data.get("frame", 0))
+				if not path.is_empty():
+					var frames: SpriteFrames = load(path) as SpriteFrames
+					if frames:
+						chosen[slot] = {"frames": frames, "frame_index": fidx}
+
+	# Single-player (and multiplayer fallback if no data) uses the DeckO pool.
 	if chosen.is_empty():
 		var pool: Array = _deck_o.get("card_sprite_pool")
 		var frame_indices: Array = _deck_o.get("card_frame_indices")
 		if pool == null or pool.size() == 0:
+			# In multiplayer with no other_cards, keep backs and do nothing.
+			if _is_multiplayer:
+				return
 			push_warning("BattleManager: DeckO card_sprite_pool is empty; opponent will remain unknown.")
 			return
 		for slot in _opponent_slot_nodes:
@@ -583,12 +628,18 @@ func _on_leave_pressed() -> void:
 	# Handle card persistence based on battle state
 	if state == State.RESOLVED:
 		# Battle is resolved
-		var player_wins := _get_battle_result() == "win"
+		var result := _get_battle_result()
+		var player_wins := result == "win"
+		# Record outcome in BattleStateManager (from local perspective)
+		if BattleStateManager:
+			BattleStateManager.record_battle_result(result, player_wins)
 		if not player_wins:
 			# Loser: clear placed cards from collection and slots
 			_clear_player_slots()
-			App.remove_placed_cards_from_collection()
-			App.battle_placed_cards.clear()
+			if BattleStateManager:
+				var placed := BattleStateManager.get_local_slots()
+				App.remove_placed_cards_from_collection_for_slots(placed)
+				BattleStateManager.clear_local_slots()
 		else:
 			# Winner/tie: persist cards in slots
 			_persist_local_placed_cards()
@@ -605,9 +656,51 @@ func _on_leave_pressed() -> void:
 	App.go(MAIN_MENU_PATH)
 
 
+func _on_debug_add_card_pressed() -> void:
+	## Temporary debug: add a random card to hand and spawn it.
+	if not _debug_add_card_button or not show_debug_add_card_button:
+		return
+	App.add_card_from_minigame_win()
+	if App.player_card_collection.is_empty():
+		return
+	var card_data: Dictionary = App.player_card_collection[App.player_card_collection.size() - 1]
+	var card_path: String = card_data.get("path", "")
+	var frame: int = int(card_data.get("frame", 0))
+	if card_path.is_empty():
+		return
+	var frames: SpriteFrames = ResourceLoader.load(card_path, "SpriteFrames", ResourceLoader.CACHE_MODE_REUSE) as SpriteFrames
+	if not frames:
+		return
+	var root := get_parent()
+	if not root:
+		root = get_tree().current_scene
+	var hand_container := root.get_node_or_null("HandCardsLayer/HandCardsContainer")
+	if not hand_container:
+		hand_container = root
+	var card_manager := root.get_node_or_null("CardManager")
+	if not card_manager:
+		return
+	var card := CARD_SCENE.instantiate()
+	if not card:
+		return
+	hand_container.add_child(card)
+	card.card_sprite_frames = frames
+	card.frame_index = frame
+	if card_manager.has_method("register_card"):
+		card_manager.register_card(card)
+	# Position will be set by _respace_hand_cards - use a temporary position
+	var viewport := get_viewport()
+	if viewport:
+		var viewport_size := viewport.get_visible_rect().size
+		card.global_position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.9)
+	call_deferred("_respace_hand_cards")
+
+
 func _persist_local_placed_cards() -> void:
-	## Save local player's placed cards to App for restoration when returning (single player).
-	App.battle_placed_cards.clear()
+	## Refresh BattleStateManager's local_slots from the current player slot cards.
+	if not BattleStateManager:
+		return
+	BattleStateManager.clear_local_slots()
 	for idx in range(_player_slot_nodes.size()):
 		var slot = _player_slot_nodes[idx]
 		if slot and slot.snapped_card:
@@ -615,7 +708,7 @@ func _persist_local_placed_cards() -> void:
 			var frames: SpriteFrames = card.get("card_sprite_frames")
 			var fidx: int = int(card.get("frame_index"))
 			if frames and frames.resource_path:
-				App.battle_placed_cards[idx] = {"path": frames.resource_path, "frame": fidx}
+				BattleStateManager.set_local_slot(idx, frames.resource_path, fidx)
 
 
 func _update_deck_visibility() -> void:
@@ -716,12 +809,17 @@ func _unhandled_input(event: InputEvent) -> void:
 		var key := event as InputEventKey
 		if key.pressed and key.keycode == KEY_SPACE:
 			# Handle battle outcome
-			var player_wins := _get_battle_result() == "win"
+			var result := _get_battle_result()
+			var player_wins := result == "win"
+			if BattleStateManager:
+				BattleStateManager.record_battle_result(result, player_wins)
 			if not player_wins:
 				# Loser: clear placed cards from collection
-				App.remove_placed_cards_from_collection()
+				if BattleStateManager:
+					var placed := BattleStateManager.get_local_slots()
+					App.remove_placed_cards_from_collection_for_slots(placed)
+					BattleStateManager.clear_local_slots()
 				_clear_player_slots()
-				App.battle_placed_cards.clear()
 			# Winner/tie: cards persist in App.battle_placed_cards
 
 			# Added (minimal): report finished in multiplayer for paired battle tracking.

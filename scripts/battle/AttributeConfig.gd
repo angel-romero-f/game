@@ -82,4 +82,3 @@ func compare(a: String, b: String) -> String:
 		return "opponent"
 	
 	return "tie"
-

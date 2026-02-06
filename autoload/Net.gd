@@ -476,11 +476,18 @@ func start_battle() -> void:
 func notify_battle_left() -> void:
 	var my_id := multiplayer.get_unique_id()
 	battle_player_left.emit(my_id)
-	# Persist our cards to App for restoration when returning
-	if battle_placed_cards.has(my_id):
-		App.battle_placed_cards = battle_placed_cards[my_id].duplicate(true)
-	else:
-		App.battle_placed_cards = {}
+	# Persist our cards to BattleStateManager for restoration when returning
+	if BattleStateManager:
+		var territory_id := BattleStateManager.current_territory_id
+		BattleStateManager.clear_local_slots(territory_id)
+		if battle_placed_cards.has(my_id):
+			var placed: Dictionary = battle_placed_cards[my_id]
+			for slot_idx in placed:
+				var data: Dictionary = placed[slot_idx]
+				var path: String = data.get("path", "")
+				var frame: int = int(data.get("frame", 0))
+				if not path.is_empty():
+					BattleStateManager.set_local_slot(int(slot_idx), path, frame, territory_id)
 
 # ========== PHASE SYNC SYSTEM ==========
 
