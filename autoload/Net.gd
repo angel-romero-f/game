@@ -432,6 +432,27 @@ func _server_remove_battle_card(peer_id: int, slot_index: int) -> void:
 		battle_placed_cards[peer_id].erase(slot_index)
 		sync_battle_cards.rpc(battle_placed_cards)
 
+## Request to clear all of my placed cards (e.g. when I lose a battle). Server clears and broadcasts.
+func request_clear_my_battle_cards() -> void:
+	if multiplayer.is_server():
+		_server_clear_battle_cards_for_peer(multiplayer.get_unique_id())
+	else:
+		clear_my_battle_cards.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func clear_my_battle_cards() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_clear_battle_cards_for_peer(id)
+
+func _server_clear_battle_cards_for_peer(peer_id: int) -> void:
+	if battle_placed_cards.has(peer_id):
+		battle_placed_cards.erase(peer_id)
+		sync_battle_cards.rpc(battle_placed_cards)
+
 @rpc("authority", "call_local", "reliable")
 func sync_battle_cards(cards: Dictionary) -> void:
 	battle_placed_cards = cards.duplicate(true)

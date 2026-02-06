@@ -201,8 +201,8 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 
 
 func _on_battle_cards_updated() -> void:
-	## Refresh opponent slots with face-down cards from remote player(s).
-	if state == State.WAITING_FOR_PLAYER or state == State.WAITING_FOR_ALL_READY:
+	## Refresh opponent slots from remote player(s). Also refresh in RESOLVED so loser's cards clear when synced.
+	if state in [State.WAITING_FOR_PLAYER, State.WAITING_FOR_ALL_READY, State.RESOLVED]:
 		_update_opponent_cards_from_net()
 
 
@@ -216,7 +216,18 @@ func _on_battle_start_requested() -> void:
 	await _flip_opponent_cards_from_pool()
 	_resolve_battle()
 	_show_result()
+	_report_battle_resolved()
 	state = State.RESOLVED
+
+
+func _report_battle_resolved() -> void:
+	## Report result to BattleStateManager and sync loser's card clearance to Net (multiplayer).
+	var result := _get_battle_result()
+	var local_won := result == "win"
+	if BattleStateManager:
+		BattleStateManager.record_battle_result(result, local_won)
+	if _is_multiplayer and result == "lose":
+		Net.request_clear_my_battle_cards()
 
 
 func _update_opponent_cards_from_net() -> void:
@@ -301,7 +312,8 @@ func _connect_player_slot_signals() -> void:
 
 
 func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
-	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
+	# Allow snap in WAITING states and RESOLVED (winner can rearrange cards after battle)
+	if state not in [State.WAITING_FOR_PLAYER, State.WAITING_FOR_ALL_READY, State.RESOLVED]:
 		return
 
 	# Get card data
@@ -326,7 +338,8 @@ func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
 
 
 func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
-	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
+	# Allow unsnap in WAITING states and RESOLVED (winner can return cards to hand)
+	if state not in [State.WAITING_FOR_PLAYER, State.WAITING_FOR_ALL_READY, State.RESOLVED]:
 		return
 
 	# Remove from persistence
@@ -434,6 +447,7 @@ func _on_start_battle_pressed() -> void:
 	await _flip_opponent_cards_from_pool()
 	_resolve_battle()
 	_show_result()
+	_report_battle_resolved()
 	state = State.RESOLVED
 
 
