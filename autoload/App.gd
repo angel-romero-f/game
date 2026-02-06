@@ -245,6 +245,7 @@ func go(path: String) -> void:
 	get_tree().change_scene_to_file(path)
 	call_deferred("_hook_buttons_on_current_scene")
 
+@warning_ignore("shadowed_variable_base_class")
 func set_player_name(name: String) -> void:
 	player_name = name.strip_edges()
 
