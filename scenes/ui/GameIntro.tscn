@@ -260,15 +260,15 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -210.0
+offset_left = -230.0
 offset_top = -80.0
-offset_right = -10.0
+offset_right = -80.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 24
-text = "River Minigame"
+theme_override_font_sizes/font_size = 22
+text = "River"
 
 [node name="BridgeMinigameButton" type="Button" parent="."]
 visible = false
@@ -278,15 +278,51 @@ anchor_left = 0.5
 anchor_top = 1.0
 anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = 10.0
+offset_left = -70.0
 offset_top = -80.0
-offset_right = 210.0
+offset_right = 70.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 24
-text = "Bridge Minigame"
+theme_override_font_sizes/font_size = 22
+text = "Bridge"
+
+[node name="IceFishingButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 80.0
+offset_top = -80.0
+offset_right = 230.0
+offset_bottom = -30.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 22
+text = "Ice Fishing"
+
+[node name="PlayMinigamesButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -70.0
+offset_top = -130.0
+offset_right = 70.0
+offset_bottom = -90.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 20
+text = "Random"
 
 [node name="BattleButton" type="Button" parent="."]
 visible = false

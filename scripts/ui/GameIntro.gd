@@ -28,6 +28,8 @@ var order_list_center: VBoxContainer
 var order_corner_container: VBoxContainer
 var minigame_button: Button
 var bridge_minigame_button: Button
+var ice_fishing_button: Button
+var play_minigames_button: Button
 var battle_button: Button
 var skip_to_battle_button: Button
 var rolling_label: Label
@@ -93,6 +95,8 @@ func _ready() -> void:
 	order_corner_container = $OrderCornerContainer/VBoxContainer
 	minigame_button = $MinigameButton
 	bridge_minigame_button = $BridgeMinigameButton
+	ice_fishing_button = $IceFishingButton
+	play_minigames_button = $PlayMinigamesButton
 	battle_button = $BattleButton
 	skip_to_battle_button = $SkipToBattleButton
 	settings_button = $SettingsButton
@@ -125,6 +129,8 @@ func _ready() -> void:
 	order_corner_container.get_parent().visible = false
 	minigame_button.visible = false
 	bridge_minigame_button.visible = false
+	ice_fishing_button.visible = false
+	play_minigames_button.visible = false
 	battle_button.visible = false
 	skip_to_battle_button.visible = false
 	settings_button.visible = false
@@ -158,6 +164,8 @@ func _ready() -> void:
 	# Connect minigame buttons
 	minigame_button.pressed.connect(_on_minigame_pressed)
 	bridge_minigame_button.pressed.connect(_on_bridge_minigame_pressed)
+	ice_fishing_button.pressed.connect(_on_ice_fishing_pressed)
+	play_minigames_button.pressed.connect(_on_play_minigames_pressed)
 	battle_button.pressed.connect(_on_left_battle_pressed)
 	skip_to_battle_button.pressed.connect(_on_skip_to_battle_pressed)
 
@@ -588,12 +596,9 @@ func _show_corner_order() -> void:
 	# Animate buttons fading in
 	var btn_tween := create_tween()
 	btn_tween.set_parallel(true)
-	if minigame_button.visible:
-		minigame_button.modulate.a = 0.0
-		btn_tween.tween_property(minigame_button, "modulate:a", 1.0, 0.3)
-	if bridge_minigame_button.visible:
-		bridge_minigame_button.modulate.a = 0.0
-		btn_tween.tween_property(bridge_minigame_button, "modulate:a", 1.0, 0.3)
+	if play_minigames_button.visible:
+		play_minigames_button.modulate.a = 0.0
+		btn_tween.tween_property(play_minigames_button, "modulate:a", 1.0, 0.3)
 	if battle_button.visible:
 		battle_button.modulate.a = 0.0
 		btn_tween.tween_property(battle_button, "modulate:a", 1.0, 0.3)
@@ -617,6 +622,30 @@ func _on_minigame_pressed() -> void:
 
 func _on_bridge_minigame_pressed() -> void:
 	App.go("res://scenes/BridgeGame.tscn")
+
+func _on_ice_fishing_pressed() -> void:
+	App.go("res://scenes/IceFishingGame.tscn")
+
+func _on_play_minigames_pressed() -> void:
+	## Mock button: 50/50 chance of giving a card or not
+	var got_card := randi() % 2 == 0
+	
+	play_minigames_button.disabled = true
+	
+	if got_card:
+		# Add a card to the player's collection
+		App.add_card_from_minigame_win()
+		play_minigames_button.text = "You got a card!"
+		# Show/update the card icon button
+		if card_icon_button:
+			card_icon_button.visible = true
+	else:
+		play_minigames_button.text = "No card this time..."
+	
+	# Reset button after a short delay
+	await get_tree().create_timer(1.5).timeout
+	play_minigames_button.text = "Play Minigames"
+	play_minigames_button.disabled = false
 
 func _on_battle_button_pressed() -> void:
 	# Single-player quick battle entry (using a default territory id for now).
@@ -749,9 +778,11 @@ func _apply_phase_ui() -> void:
 	## Shows/hides buttons based on current game phase
 	match App.current_game_phase:
 		App.GamePhase.RESOURCE_PHASE:
-			# Show minigame buttons, skip button, hide battle button
+			# Show all minigame buttons in a row
 			minigame_button.visible = true
 			bridge_minigame_button.visible = true
+			ice_fishing_button.visible = true
+			play_minigames_button.visible = false  # Hide mock button
 			skip_to_battle_button.visible = true
 			battle_button.visible = false
 			battle_button_right.visible = false
@@ -777,20 +808,26 @@ func _apply_phase_ui() -> void:
 			if should_disable_minigames:
 				minigame_button.disabled = true
 				bridge_minigame_button.disabled = true
+				ice_fishing_button.disabled = true
+				play_minigames_button.disabled = true
 				skip_to_battle_button.disabled = true
 				_show_waiting_for_others_overlay()
 			else:
 				# Re-enable buttons when returning to resource phase
 				minigame_button.disabled = false
 				bridge_minigame_button.disabled = false
+				ice_fishing_button.disabled = false
+				play_minigames_button.disabled = false
 				skip_to_battle_button.disabled = false
 				waiting_overlay.visible = false
 				is_waiting_for_others = false
 
 		App.GamePhase.BATTLE_PHASE:
-			# Hide minigame buttons
+			# Hide all minigame buttons
 			minigame_button.visible = false
 			bridge_minigame_button.visible = false
+			ice_fishing_button.visible = false
+			play_minigames_button.visible = false
 			skip_to_battle_button.visible = false
 			minigames_counter_label.visible = false
 
@@ -805,7 +842,7 @@ func _apply_phase_ui() -> void:
 	settings_button.visible = true
 
 	# Card icon button is always visible when game is ready (if player has cards)
-	if App.player_hand.size() > 0:
+	if App.player_card_collection.size() > 0:
 		card_icon_button.visible = true
 
 func _show_phase_transition_overlay() -> void:
@@ -841,6 +878,12 @@ func _animate_phase_buttons() -> void:
 	if bridge_minigame_button.visible:
 		bridge_minigame_button.modulate.a = 0.0
 		btn_tween.tween_property(bridge_minigame_button, "modulate:a", 1.0, 0.3)
+	if ice_fishing_button.visible:
+		ice_fishing_button.modulate.a = 0.0
+		btn_tween.tween_property(ice_fishing_button, "modulate:a", 1.0, 0.3)
+	if play_minigames_button.visible:
+		play_minigames_button.modulate.a = 0.0
+		btn_tween.tween_property(play_minigames_button, "modulate:a", 1.0, 0.3)
 	if battle_button.visible:
 		battle_button.modulate.a = 0.0
 		btn_tween.tween_property(battle_button, "modulate:a", 1.0, 0.3)
@@ -910,7 +953,7 @@ func _on_card_icon_pressed() -> void:
 		tween.tween_callback(func(): hand_display_panel.visible = false)
 
 func _populate_hand_display() -> void:
-	## Populates the hand container with card images from App.player_hand
+	## Populates the hand container with card images from App.player_card_collection
 	if not hand_container:
 		return
 
@@ -918,16 +961,17 @@ func _populate_hand_display() -> void:
 	for child in hand_container.get_children():
 		child.queue_free()
 
-	# Create card visuals from App.player_hand
-	for card_data in App.player_hand:
+	# Create card visuals from App.player_card_collection
+	for card_data in App.player_card_collection:
 		var card_visual := TextureRect.new()
 		card_visual.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
 		card_visual.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		card_visual.custom_minimum_size = Vector2(100, 150)
+		card_visual.custom_minimum_size = Vector2(80, 120)
 
 		# Load the sprite frames and get the correct frame
-		var sprite_frames_path: String = card_data.get("sprite_frames", "")
-		var frame_index: int = card_data.get("frame_index", 0)
+		# player_card_collection uses "path" and "frame" keys
+		var sprite_frames_path: String = card_data.get("path", "")
+		var frame_index: int = int(card_data.get("frame", 0))
 
 		if not sprite_frames_path.is_empty():
 			var sprite_frames: SpriteFrames = load(sprite_frames_path)
@@ -940,7 +984,7 @@ func _populate_hand_display() -> void:
 
 func _show_card_icon_button() -> void:
 	## Shows the card icon button with a fade-in animation
-	if card_icon_button and App.player_hand.size() > 0:
+	if card_icon_button and App.player_card_collection.size() > 0:
 		card_icon_button.visible = true
 		card_icon_button.modulate.a = 0.0
 		var tween := create_tween()
@@ -1051,6 +1095,8 @@ func _on_net_phase_changed(phase_id: int) -> void:
 
 	minigame_button.disabled = false
 	bridge_minigame_button.disabled = false
+	ice_fishing_button.disabled = false
+	play_minigames_button.disabled = false
 	skip_to_battle_button.disabled = false
 
 	if App.show_phase_transition:
@@ -1274,6 +1320,8 @@ func _show_waiting_for_others_overlay() -> void:
 	# Disable minigame buttons
 	minigame_button.disabled = true
 	bridge_minigame_button.disabled = true
+	ice_fishing_button.disabled = true
+	play_minigames_button.disabled = true
 	skip_to_battle_button.disabled = true
 
 # ========== END MULTIPLAYER BATTLE SELECTION SYSTEM ==========
