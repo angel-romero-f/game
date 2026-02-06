@@ -33,8 +33,15 @@ func _ready() -> void:
 	
 	if code_label:
 		var host_code := Net.get_host_code()
-		code_label.text = "Host code: " + host_code
-		print("[HostLobby] Host code displayed: %s" % host_code)
+		# Check if IPv6 (contains colons)
+		if ":" in host_code:
+			code_label.text = "Host code:\n" + host_code
+			print("[HostLobby] IPv6 host code displayed: %s" % host_code)
+			print("[HostLobby] NOTE: This is an IPv6 address (common on university WiFi)")
+			print("[HostLobby] Players should copy this EXACT address to join")
+		else:
+			code_label.text = "Host code: " + host_code
+			print("[HostLobby] IPv4 host code displayed: %s" % host_code)
 		print("[HostLobby] Players on other devices should connect to this IP")
 		print("[HostLobby] Make sure both devices are on the same network (WiFi/LAN)")
 	
