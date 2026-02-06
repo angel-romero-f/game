@@ -3,7 +3,15 @@ extends Node
 const PORT := 9999
 const MAX_CLIENTS := 4
 
+# Debug flag - set to true to enable verbose networking logs
+const DEBUG_NETWORKING := true
+
 var peer: ENetMultiplayerPeer
+
+func _debug_log(message: String) -> void:
+	if DEBUG_NETWORKING:
+		var timestamp := Time.get_time_string_from_system()
+		print("[Net %s] %s" % [timestamp, message])
 
 signal joined_game
 signal left_game
@@ -52,25 +60,83 @@ var battle_finished_reports: Dictionary = {} # {peer_id: bool}
 
 const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
 
+func _ready() -> void:
+	_debug_log("=== Net autoload initialized ===")
+	_debug_log("Default port: %d" % PORT)
+	_debug_log("Max clients: %d" % MAX_CLIENTS)
+	_debug_log("Available network interfaces:")
+	for addr in IP.get_local_addresses():
+		_debug_log("  - %s" % addr)
+
+## Call this to print current network status (useful for debugging)
+func print_network_status() -> void:
+	_debug_log("=== NETWORK STATUS ===")
+	if multiplayer.multiplayer_peer == null:
+		_debug_log("State: NOT CONNECTED (no peer)")
+	else:
+		var status := multiplayer.multiplayer_peer.get_connection_status()
+		var status_str := "UNKNOWN"
+		match status:
+			MultiplayerPeer.CONNECTION_DISCONNECTED:
+				status_str = "DISCONNECTED"
+			MultiplayerPeer.CONNECTION_CONNECTING:
+				status_str = "CONNECTING..."
+			MultiplayerPeer.CONNECTION_CONNECTED:
+				status_str = "CONNECTED"
+		_debug_log("Connection status: %s" % status_str)
+		_debug_log("Is server: %s" % str(multiplayer.is_server()))
+		_debug_log("My unique ID: %d" % multiplayer.get_unique_id())
+		_debug_log("Connected peers: %s" % str(multiplayer.get_peers()))
+		_debug_log("Player names: %s" % str(player_names))
+		_debug_log("Player races: %s" % str(player_races))
+	_debug_log("======================")
+
 ## Host a game server
 func host_game() -> void:
+	_debug_log("=== HOST_GAME CALLED ===")
+	
 	# Clean up any existing connection first (silent cleanup)
 	if multiplayer.multiplayer_peer:
+		_debug_log("Cleaning up existing peer connection")
 		_cleanup_connection()
 	
 	peer = ENetMultiplayerPeer.new()
+	
+	# IMPORTANT: Explicitly bind to all interfaces (0.0.0.0) for LAN access
+	# This ensures the server listens on all network interfaces, not just localhost
+	peer.set_bind_ip("*")
+	_debug_log("Set bind IP to '*' (all interfaces)")
+	
 	var err := peer.create_server(PORT, MAX_CLIENTS)
 	if err != OK:
 		push_error("create_server failed: %s" % err)
+		_debug_log("ERROR: create_server failed with error code: %s" % err)
 		return
+	
 	multiplayer.multiplayer_peer = peer
 	_connect_signals()
+	
+	# Log all available network interfaces for debugging
+	_debug_log("Server created successfully on port %d" % PORT)
+	_debug_log("Max clients: %d" % MAX_CLIENTS)
+	_debug_log("Host unique ID: %d" % multiplayer.get_unique_id())
+	_debug_log("Available IP addresses on this machine:")
+	var addresses := IP.get_local_addresses()
+	for addr in addresses:
+		_debug_log("  - %s" % addr)
+	_debug_log("Host code (LAN IP): %s" % get_host_code())
+	_debug_log("=== SERVER READY ===")
+	
 	joined_game.emit()
 
 ## Join a game using code string like "192.168.1.12" or "192.168.1.12:9999"
 func join_game(code: String) -> void:
+	_debug_log("=== JOIN_GAME CALLED ===")
+	_debug_log("Raw code input: '%s'" % code)
+	
 	# Clean up any existing connection first (silent cleanup)
 	if multiplayer.multiplayer_peer:
+		_debug_log("Cleaning up existing peer connection")
 		_cleanup_connection()
 	
 	var ip := ""
@@ -90,22 +156,93 @@ func join_game(code: String) -> void:
 	else:
 		ip = code
 	
+	_debug_log("Parsed IP: '%s', Port: %d" % [ip, port])
+	
 	if ip.is_empty():
 		push_error("Invalid host code: empty IP")
+		_debug_log("ERROR: Empty IP address!")
 		return
 	
+	# Check if trying to connect to localhost vs LAN
+	if ip == "127.0.0.1" or ip == "localhost":
+		_debug_log("WARNING: Connecting to localhost - this will only work on the same machine!")
+	
 	peer = ENetMultiplayerPeer.new()
+	
+	_debug_log("Attempting to connect to %s:%d..." % [ip, port])
 	var err := peer.create_client(ip, port)
 	if err != OK:
 		push_error("create_client failed: %s" % err)
+		_debug_log("ERROR: create_client failed with error code: %s" % err)
+		_debug_log("Common causes:")
+		_debug_log("  - Host not running or not reachable")
+		_debug_log("  - Firewall blocking port %d" % port)
+		_debug_log("  - Wrong IP address")
 		return
+	
 	multiplayer.multiplayer_peer = peer
 	_connect_signals()
+	
+	_debug_log("Client peer created, waiting for connection...")
+	_debug_log("Local addresses on this machine:")
+	var addresses := IP.get_local_addresses()
+	for addr in addresses:
+		_debug_log("  - %s" % addr)
+	
+	# Monitor connection state
+	_start_connection_monitor()
+	
 	joined_game.emit()
+
+## Monitor connection state changes for debugging
+var _connection_monitor_active := false
+
+func _start_connection_monitor() -> void:
+	if _connection_monitor_active:
+		return
+	_connection_monitor_active = true
+	_debug_log("Starting connection state monitor...")
+	
+	# Connect to connection signals for better debugging
+	if not multiplayer.connected_to_server.is_connected(_on_connected_to_server):
+		multiplayer.connected_to_server.connect(_on_connected_to_server)
+	if not multiplayer.connection_failed.is_connected(_on_connection_failed):
+		multiplayer.connection_failed.connect(_on_connection_failed)
+	if not multiplayer.server_disconnected.is_connected(_on_server_disconnected):
+		multiplayer.server_disconnected.connect(_on_server_disconnected)
+
+func _stop_connection_monitor() -> void:
+	_connection_monitor_active = false
+	if multiplayer.connected_to_server.is_connected(_on_connected_to_server):
+		multiplayer.connected_to_server.disconnect(_on_connected_to_server)
+	if multiplayer.connection_failed.is_connected(_on_connection_failed):
+		multiplayer.connection_failed.disconnect(_on_connection_failed)
+	if multiplayer.server_disconnected.is_connected(_on_server_disconnected):
+		multiplayer.server_disconnected.disconnect(_on_server_disconnected)
+
+func _on_connected_to_server() -> void:
+	_debug_log("=== CONNECTED TO SERVER SUCCESSFULLY ===")
+	_debug_log("My unique ID: %d" % multiplayer.get_unique_id())
+
+func _on_connection_failed() -> void:
+	_debug_log("=== CONNECTION FAILED ===")
+	_debug_log("Could not connect to the server!")
+	_debug_log("Troubleshooting:")
+	_debug_log("  1. Is the host running and on the same network?")
+	_debug_log("  2. Is port %d open on the host's firewall?" % PORT)
+	_debug_log("  3. Is the IP address correct?")
+	_debug_log("  4. Try pinging the host IP from terminal")
+
+func _on_server_disconnected() -> void:
+	_debug_log("=== DISCONNECTED FROM SERVER ===")
+	_debug_log("Lost connection to the host")
 
 ## Get the host's likely LAN IP address (IP only, no port)
 func get_host_code() -> String:
 	var addresses := IP.get_local_addresses()
+	
+	_debug_log("get_host_code() - Scanning for LAN IP...")
+	_debug_log("All addresses found: %s" % str(addresses))
 	
 	# Try to find a non-localhost IPv4 address
 	# Private IP ranges: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
@@ -113,9 +250,11 @@ func get_host_code() -> String:
 		if typeof(address) == TYPE_STRING:
 			# Skip IPv6 and localhost
 			if ":" in address or address == "127.0.0.1" or address.begins_with("127."):
+				_debug_log("  Skipping %s (IPv6 or localhost)" % address)
 				continue
 			# Check for private IP ranges
 			if address.begins_with("192.168.") or address.begins_with("10."):
+				_debug_log("  SELECTED: %s (private LAN IP)" % address)
 				return address
 			# Check for 172.16-31.x.x range
 			if address.begins_with("172."):
@@ -123,9 +262,12 @@ func get_host_code() -> String:
 				if parts.size() >= 2:
 					var second_octet := parts[1].to_int()
 					if second_octet >= 16 and second_octet <= 31:
+						_debug_log("  SELECTED: %s (172.x private range)" % address)
 						return address
 	
 	# Fallback to localhost
+	_debug_log("  WARNING: No LAN IP found! Falling back to 127.0.0.1")
+	_debug_log("  This means networking will ONLY work on the same machine!")
 	return "127.0.0.1"
 
 func _connect_signals() -> void:
@@ -142,13 +284,22 @@ func _disconnect_signals() -> void:
 		multiplayer.peer_disconnected.disconnect(_on_peer_disconnected)
 
 func _on_peer_connected(id: int) -> void:
+	_debug_log("=== PEER CONNECTED: %d ===" % id)
+	_debug_log("Total peers now: %d" % (multiplayer.get_peers().size() + 1))
+	_debug_log("Is server: %s" % str(multiplayer.is_server()))
+	
 	# Only server handles spawns
 	if multiplayer.is_server():
+		_debug_log("Server spawning player for peer %d" % id)
 		get_tree().call_group("game", "server_spawn_player", id)
 
 func _on_peer_disconnected(id: int) -> void:
+	_debug_log("=== PEER DISCONNECTED: %d ===" % id)
+	_debug_log("Total peers remaining: %d" % multiplayer.get_peers().size())
+	
 	# Only server handles despawns
 	if multiplayer.is_server():
+		_debug_log("Server despawning player for peer %d" % id)
 		get_tree().call_group("game", "server_despawn_player", id)
 		if player_names.has(id):
 			player_names.erase(id)
@@ -159,7 +310,9 @@ func _on_peer_disconnected(id: int) -> void:
 
 ## Internal cleanup (doesn't emit left_game signal)
 func _cleanup_connection() -> void:
+	_debug_log("Cleaning up connection...")
 	_disconnect_signals()
+	_stop_connection_monitor()
 	if multiplayer.multiplayer_peer:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = null
@@ -167,6 +320,7 @@ func _cleanup_connection() -> void:
 	player_names.clear()
 	player_races.clear()
 	player_rolls.clear()
+	_debug_log("Connection cleanup complete")
 
 ## Disconnect from multiplayer session
 func disconnect_from_game() -> void:

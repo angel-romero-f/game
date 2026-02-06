@@ -32,7 +32,11 @@ func _ready() -> void:
 	Net.submit_player_name(App.player_name)
 	
 	if code_label:
-		code_label.text = "Host code: " + Net.get_host_code()
+		var host_code := Net.get_host_code()
+		code_label.text = "Host code: " + host_code
+		print("[HostLobby] Host code displayed: %s" % host_code)
+		print("[HostLobby] Players on other devices should connect to this IP")
+		print("[HostLobby] Make sure both devices are on the same network (WiFi/LAN)")
 	
 	# Connect to multiplayer signals to update player list
 	if multiplayer.peer_connected.is_connected(_on_peer_connected):
