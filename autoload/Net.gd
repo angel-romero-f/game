@@ -538,10 +538,12 @@ func host_init_card_command_phase() -> void:
 	print("[Net] Host init Card Command phase with ", total, " participants. First turn: ", current_turn_peer_id)
 
 	# Broadcast initial state to all clients
-	rpc_set_phase.rpc(0)
+	# IMPORTANT: Sync turn and done state BEFORE phase change, because phase_changed
+	# signal triggers UI update which reads current_turn_peer_id
 	rpc_set_current_turn.rpc(current_turn_peer_id)
 	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
 	rpc_sync_done_counts.rpc(0, total)
+	rpc_set_phase.rpc(0)  # Must be last - triggers UI update
 
 ## Host: Initialize Card Collection phase (after all players finish their turns)
 func host_init_card_collection_phase() -> void:
@@ -555,9 +557,10 @@ func host_init_card_collection_phase() -> void:
 	var total := all_peers.size()
 	print("[Net] Host init Card Collection phase with ", total, " participants")
 	
-	rpc_set_phase.rpc(2)
+	# Sync done state BEFORE phase change (phase_changed triggers UI update)
 	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
 	rpc_sync_done_counts.rpc(0, total)
+	rpc_set_phase.rpc(2)  # Must be last - triggers UI update
 
 ## Authority broadcasts current turn player
 @rpc("authority", "call_local", "reliable")
@@ -971,8 +974,10 @@ func _server_enter_claim_conquer_phase() -> void:
 	if not multiplayer.is_server():
 		return
 	current_phase = 1  # CLAIM_CONQUER
-	rpc_set_phase.rpc(1)
+	# Initialize battle state BEFORE phase change (phase_changed triggers UI update)
 	_init_battle_phase()
+	# Phase change must be LAST - triggers UI update that reads battle decider
+	rpc_set_phase.rpc(1)
 
 ## Initialize battle phase state
 func _init_battle_phase() -> void:
