@@ -63,6 +63,9 @@ var is_waiting_for_others: bool = false
 var local_done_count: int = 0
 var local_total_count: int = 0
 
+# Phase overlay animation state - blocks UI updates during transition
+var is_phase_overlay_animating: bool = false
+
 var is_paused: bool = false
 
 # Animation timers
@@ -806,7 +809,10 @@ func _set_overlay_state(state: OverlayState, text: String = "") -> void:
 func _apply_phase_ui() -> void:
 	## Shows/hides buttons based on current game phase
 	## Only applies when intro sequence is complete (Phase.GAME_READY)
+	## and phase overlay animation is not in progress
 	if current_phase != Phase.GAME_READY:
+		return
+	if is_phase_overlay_animating:
 		return
 	
 	match App.current_game_phase:
@@ -940,6 +946,9 @@ func _show_phase_transition_overlay() -> void:
 	phase_label.text = App.phase_transition_text
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
+	
+	# Block all UI updates while overlay is animating
+	is_phase_overlay_animating = true
 
 	# Fade in
 	var tween := create_tween()
@@ -950,6 +959,8 @@ func _show_phase_transition_overlay() -> void:
 
 func _on_phase_transition_finished() -> void:
 	phase_overlay.visible = false
+	# Allow UI updates now that overlay is done
+	is_phase_overlay_animating = false
 	_apply_phase_ui()
 	_animate_phase_buttons()
 
@@ -1002,11 +1013,15 @@ func _on_skip_to_battle_pressed() -> void:
 			skip_to_battle_button.visible = false
 			
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+				# Capture current phase before RPC (RPC may trigger phase change)
+				var prev_phase := App.current_game_phase
 				# Use turn-based advancement (not done counting)
 				Net.request_end_card_command_turn()
-				# Show waiting overlay - next player will get their turn or phase advances
-				_set_overlay_state(OverlayState.WAITING, "Waiting for other players...")
-				is_waiting_for_others = true
+				# Only show waiting overlay if phase didn't change (more turns to go)
+				# If phase changed, the RPC handler already showed the phase overlay
+				if App.current_game_phase == prev_phase:
+					_set_overlay_state(OverlayState.WAITING, "Waiting for other players...")
+					is_waiting_for_others = true
 			else:
 				# Single player: move to Claim & Conquer
 				App.enter_claim_conquer_phase()
@@ -1014,11 +1029,16 @@ func _on_skip_to_battle_pressed() -> void:
 		
 		App.GamePhase.CARD_COLLECTION:
 			# In Card Collection phase, this is "Skip to Next Round"
-			App.skip_to_done()
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-				_set_overlay_state(OverlayState.WAITING, "Waiting for other players...")
-				is_waiting_for_others = true
+				# Capture current phase before RPC (RPC may trigger phase change)
+				var prev_phase := App.current_game_phase
+				App.skip_to_done()
+				# Only show waiting overlay if phase didn't change (more players to go)
+				if App.current_game_phase == prev_phase:
+					_set_overlay_state(OverlayState.WAITING, "Waiting for other players...")
+					is_waiting_for_others = true
 			else:
+				App.skip_to_done()
 				# Single player: loop back to Card Command
 				App.enter_card_command_phase()
 				_show_phase_transition_overlay()
@@ -1229,7 +1249,8 @@ func _on_turn_changed(peer_id: int) -> void:
 	## Update UI when turn changes
 	print("[GameIntro] Turn changed to: ", peer_id)
 	# Reapply phase UI to update whose turn it is
-	if current_phase == Phase.GAME_READY:
+	# But skip if phase overlay is animating
+	if current_phase == Phase.GAME_READY and not is_phase_overlay_animating:
 		_apply_phase_ui()
 
 func _on_done_counts_updated(done: int, total: int) -> void:
@@ -1254,15 +1275,21 @@ func _on_done_counts_updated(done: int, total: int) -> void:
 func _on_battle_decider_changed(peer_id: int) -> void:
 	## Update UI when battle decider changes
 	print("[GameIntro] Battle decider changed to: ", peer_id)
-	_update_battle_selection_ui()
+	# Skip if phase overlay is animating
+	if not is_phase_overlay_animating:
+		_update_battle_selection_ui()
 
 func _on_battle_choices_updated(snapshot: Dictionary) -> void:
 	## Update battle selection UI when choices change
 	print("[GameIntro] Battle choices updated: ", snapshot)
-	_update_battle_selection_ui()
+	# Skip if phase overlay is animating
+	if not is_phase_overlay_animating:
+		_update_battle_selection_ui()
 
 func _on_battle_started(p1_id: int, p2_id: int, side: String) -> void:
 	## Handle battle start - participants enter battle, others show waiting
+	if not multiplayer.has_multiplayer_peer():
+		return
 	var my_id := multiplayer.get_unique_id()
 
 	if my_id == p1_id or my_id == p2_id:
@@ -1331,6 +1358,8 @@ func _update_battle_selection_ui() -> void:
 		is_waiting_for_others = true
 		return
 
+	if not multiplayer.has_multiplayer_peer():
+		return
 	var my_id := multiplayer.get_unique_id()
 	var is_my_turn := (my_id == Net.battle_decider_peer_id)
 

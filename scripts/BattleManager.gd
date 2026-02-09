@@ -232,6 +232,8 @@ func _report_battle_resolved() -> void:
 
 func _update_opponent_cards_from_net() -> void:
 	## Place/update face-down cards in opponent slots from Net.battle_placed_cards.
+	if not multiplayer.has_multiplayer_peer():
+		return
 	var my_id := multiplayer.get_unique_id()
 	var other_peer_id: int = -1
 	for pid in Net.battle_placed_cards:
@@ -459,6 +461,8 @@ func _flip_opponent_cards_from_pool() -> void:
 
 	if _is_multiplayer:
 		# Reveal actual opponent cards based on Net.battle_placed_cards.
+		if not multiplayer.has_multiplayer_peer():
+			return
 		var my_id := multiplayer.get_unique_id()
 		var other_peer_id: int = -1
 		for pid in Net.battle_placed_cards:
