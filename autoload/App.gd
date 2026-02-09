@@ -149,6 +149,37 @@ var player_card_collection: Array = []
 ## New code should prefer BattleStateManager for per-territory state.
 var battle_placed_cards: Dictionary = {}
 
+## ========== MAP TERRITORY OWNERSHIP ==========
+## territory_id -> {
+##   "owner_id": int,
+##   "owner_name": String,
+##   "owner_race": String,
+##   "cards": Array[Dictionary]  # cards committed to this territory
+## }
+var territories: Dictionary = {}
+
+func reset_territories() -> void:
+	territories.clear()
+
+func place_card_on_territory(territory_id: String, player: Dictionary, card_data: Dictionary) -> void:
+	if territory_id.is_empty():
+		return
+	var t: Dictionary = territories.get(territory_id, {})
+	t["owner_id"] = player.get("id", 0)
+	t["owner_name"] = player.get("name", "Player")
+	t["owner_race"] = player.get("race", "Elf")
+	if not t.has("cards"):
+		t["cards"] = []
+	var cards: Array = t["cards"]
+	cards.append(card_data.duplicate())
+	t["cards"] = cards
+	territories[territory_id] = t
+
+func get_territory(territory_id: String) -> Dictionary:
+	return territories.get(territory_id, {})
+
+## ========== END MAP TERRITORY OWNERSHIP ==========
+
 func initialize_player_hand(hand_size: int = 3) -> void:
 	## Randomly selects cards from the appropriate pool based on selected race
 	player_hand.clear()
@@ -304,6 +335,7 @@ func go(path: String) -> void:
 	get_tree().change_scene_to_file(path)
 	call_deferred("_hook_buttons_on_current_scene")
 
+@warning_ignore("shadowed_variable_base_class")
 func set_player_name(name: String) -> void:
 	player_name = name.strip_edges()
 
@@ -319,6 +351,7 @@ func setup_single_player_game() -> void:
 	turn_order.clear()
 	reset_lives()
 	reset_phase_state()
+	reset_territories()
 	initialize_player_hand()
 	initialize_player_card_collection()
 	# Use path built from parts so the autoload name is not parsed as an identifier
@@ -364,6 +397,7 @@ func setup_multiplayer_game() -> void:
 	turn_order.clear()
 	reset_lives()
 	reset_phase_state()
+	reset_territories()
 	initialize_player_hand()
 	initialize_player_card_collection()
 	
