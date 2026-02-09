@@ -200,6 +200,8 @@ const ELF_CARDS: Array = [
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 2},
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/elf_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 0},
 ]
 
 const INFERNAL_CARDS: Array = [
@@ -207,6 +209,8 @@ const INFERNAL_CARDS: Array = [
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/infernal_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_fire_cards.pxo", "frame_index": 0},
 ]
 
 const ORC_CARDS: Array = [
@@ -217,7 +221,7 @@ const ORC_CARDS: Array = [
 
 const FAIRY_CARDS: Array = [
 	{"sprite_frames": "res://assets/fairy_air_cards.pxo", "frame_index": 0},
-	{"sprite_frames": "res://assets/fairy_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_water_card.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
 ]
 
@@ -264,20 +268,14 @@ func initialize_player_hand(hand_size: int = 3) -> void:
 	match selected_race:
 		"Elf":
 			card_pool = ELF_CARDS.duplicate()
-			print("[Hand] Using Elf card pool")
 		"Infernal":
 			card_pool = INFERNAL_CARDS.duplicate()
-			print("[Hand] Using Infernal card pool")
 		"Fairy":
 			card_pool = FAIRY_CARDS.duplicate()
-			print("[Hand] Using Fairy card pool")
 		"Orc":
 			card_pool = ORC_CARDS.duplicate()
-			print("[Hand] Using Orc card pool")
 		_:
-			card_pool = MIXED_CARD_POOL.duplicate()
-			print("[Hand] Using mixed card pool for ", selected_race)
-	
+			card_pool = MIXED_CARD_POOL.duplicate()	
 	card_pool.shuffle()
 	for i in range(mini(hand_size, card_pool.size())):
 		player_hand.append(card_pool[i].duplicate())
@@ -318,6 +316,10 @@ func initialize_player_card_collection() -> void:
 			card_pool = ELF_CARDS.duplicate()
 		"Infernal":
 			card_pool = INFERNAL_CARDS.duplicate()
+		"Fairy":
+			card_pool = FAIRY_CARDS.duplicate()
+		"Orc":
+			card_pool = ORC_CARDS.duplicate()
 		_:
 			card_pool = MIXED_CARD_POOL.duplicate()
 	card_pool.shuffle()
@@ -329,13 +331,7 @@ func initialize_player_card_collection() -> void:
 ## Add a random card when player wins a minigame
 func add_card_from_minigame_win() -> void:
 	var card_pool: Array
-	match selected_race:
-		"Elf":
-			card_pool = ELF_CARDS.duplicate()
-		"Infernal":
-			card_pool = INFERNAL_CARDS.duplicate()
-		_:
-			card_pool = MIXED_CARD_POOL.duplicate()
+	card_pool = MIXED_CARD_POOL.duplicate()
 	if card_pool.is_empty():
 		return
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
