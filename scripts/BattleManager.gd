@@ -221,6 +221,8 @@ func _on_battle_start_requested() -> void:
 
 func _update_opponent_cards_from_net() -> void:
 	## Place/update face-down cards in opponent slots from Net.battle_placed_cards.
+	if not multiplayer.has_multiplayer_peer():
+		return
 	var my_id := multiplayer.get_unique_id()
 	var other_peer_id: int = -1
 	for pid in Net.battle_placed_cards:
@@ -445,6 +447,8 @@ func _flip_opponent_cards_from_pool() -> void:
 
 	if _is_multiplayer:
 		# Reveal actual opponent cards based on Net.battle_placed_cards.
+		if not multiplayer.has_multiplayer_peer():
+			return
 		var my_id := multiplayer.get_unique_id()
 		var other_peer_id: int = -1
 		for pid in Net.battle_placed_cards:
@@ -652,8 +656,11 @@ func _on_leave_pressed() -> void:
 
 	App.switch_to_main_music()
 	if state == State.RESOLVED:
+		# on_battle_completed handles scene transition (next battle or GameIntro)
 		App.on_battle_completed()
-	App.go(MAIN_MENU_PATH)
+	else:
+		# Unresolved - return to GameIntro directly
+		App.go(MAIN_MENU_PATH)
 
 
 func _on_debug_add_card_pressed() -> void:
@@ -822,14 +829,13 @@ func _unhandled_input(event: InputEvent) -> void:
 				_clear_player_slots()
 			# Winner/tie: cards persist in App.battle_placed_cards
 
-			# Added (minimal): report finished in multiplayer for paired battle tracking.
-			# Also notify left to match Leave button behavior.
+			# Report finished in multiplayer for paired battle tracking.
 			if _is_multiplayer and not _reported_battle_finished:
-				Net.notify_battle_finished()
+				# Note: Don't report here - on_battle_completed handles it for multi-battle queue
 				Net.notify_battle_left()
 				_reported_battle_finished = true
 
 			Net.clear_battle_state()
 			App.switch_to_main_music()
+			# App.on_battle_completed() handles scene transition (next battle or GameIntro)
 			App.on_battle_completed()
-			App.go(MAIN_MENU_PATH)

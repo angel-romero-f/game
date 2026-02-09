@@ -16,13 +16,14 @@ const MAX_LIVES: int = 3
 var current_lives: int = MAX_LIVES
 
 ## ========== PHASE SYSTEM ==========
-## Game alternates between Resource Collection and Battle phases
-enum GamePhase { RESOURCE_PHASE, BATTLE_PHASE }
+## Game phases: Card Command -> Claim & Conquer -> Card Collection -> loop
+enum GamePhase { CARD_COMMAND, CLAIM_CONQUER, CARD_COLLECTION }
 
 signal game_phase_changed(new_phase: GamePhase)
 signal minigame_completed_signal  # Emitted when a minigame is won
+signal turn_changed(player_id: int)  # Emitted when turn changes
 
-var current_game_phase: GamePhase = GamePhase.RESOURCE_PHASE
+var current_game_phase: GamePhase = GamePhase.CARD_COMMAND
 var minigames_completed_this_phase: int = 0
 const MAX_MINIGAMES_PER_PHASE: int = 2
 
@@ -35,19 +36,39 @@ var pending_return_map_sub_phase: int = -1
 ## True when we left for a minigame from territory; GameIntro will call on_minigame_completed() when it loads.
 var returning_from_territory_minigame: bool = false
 
-func enter_resource_phase() -> void:
-	current_game_phase = GamePhase.RESOURCE_PHASE
-	minigames_completed_this_phase = 0
-	phase_transition_text = "Collect Your Resources"
+## Turn tracking (host-authoritative in multiplayer)
+var current_turn_player_id: int = -1
+var current_turn_index: int = 0
+
+## ========== BATTLE QUEUE SYSTEM ==========
+## Stores selected battles for multi-battle progression
+## Array of battle indices [1, 2, 3] selected by player
+var battle_queue: Array = []
+## Current position in battle_queue (0-based)
+var current_battle_queue_index: int = -1
+## Metadata for current battle: {index, opponent_id, opponent_name, opponent_race}
+var current_battle_metadata: Dictionary = {}
+
+func enter_card_command_phase() -> void:
+	current_game_phase = GamePhase.CARD_COMMAND
+	phase_transition_text = "Card Command"
 	show_phase_transition = true
-	print("[Phase] Entering RESOURCE_PHASE")
+	print("[Phase] Entering CARD_COMMAND")
 	game_phase_changed.emit(current_game_phase)
 
-func enter_battle_phase() -> void:
-	current_game_phase = GamePhase.BATTLE_PHASE
-	phase_transition_text = "Choose Your Battles"
+func enter_claim_conquer_phase() -> void:
+	current_game_phase = GamePhase.CLAIM_CONQUER
+	phase_transition_text = "Claim & Conquer"
 	show_phase_transition = true
-	print("[Phase] Entering BATTLE_PHASE")
+	print("[Phase] Entering CLAIM_CONQUER")
+	game_phase_changed.emit(current_game_phase)
+
+func enter_card_collection_phase() -> void:
+	current_game_phase = GamePhase.CARD_COLLECTION
+	minigames_completed_this_phase = 0
+	phase_transition_text = "Card Collection"
+	show_phase_transition = true
+	print("[Phase] Entering CARD_COLLECTION")
 	game_phase_changed.emit(current_game_phase)
 
 func on_minigame_completed() -> void:
@@ -62,32 +83,95 @@ func on_minigame_completed() -> void:
 		# Don't auto-transition locally - host will broadcast phase change
 		return
 	
-	# Single player: check if we should auto-transition to battle phase
+	# Single player: check if we should auto-loop back to Card Command
 	if minigames_completed_this_phase >= MAX_MINIGAMES_PER_PHASE:
-		print("[Phase] Max minigames reached, transitioning to battle phase")
-		enter_battle_phase()
+		print("[Phase] Max minigames reached, looping to Card Command")
+		enter_card_command_phase()
 
 func on_battle_completed() -> void:
-	## Called when battle ends (win, lose, or tie)
-	print("[Phase] Battle completed, returning to resource phase")
-	# In multiplayer, phase transitions are handled by host after battle_finished
-	if not is_multiplayer:
-		enter_resource_phase()
+	## Called when a single battle ends - handles multi-battle queue progression
+	print("[Phase] Battle completed")
+	
+	# Check if more battles in queue
+	if battle_queue.size() > 0 and current_battle_queue_index < battle_queue.size() - 1:
+		current_battle_queue_index += 1
+		print("[Phase] Loading next battle from queue: ", current_battle_queue_index + 1, "/", battle_queue.size())
+		_load_next_queued_battle()
+	else:
+		# Queue exhausted - clear and return to GameIntro
+		print("[Phase] Battle queue exhausted, returning to GameIntro")
+		battle_queue.clear()
+		current_battle_queue_index = -1
+		current_battle_metadata.clear()
+		
+		# In multiplayer, notify host we finished our battles
+		if is_multiplayer and multiplayer.has_multiplayer_peer():
+			Net.notify_battle_finished()
+		
+		go("res://scenes/ui/GameIntro.tscn")
 
-func skip_to_battle_phase() -> void:
-	## Called when player chooses to skip remaining minigames
-	print("[Phase] Player skipping to battle phase")
+func _load_next_queued_battle() -> void:
+	## Load the next battle from the queue
+	var battle_idx: int = battle_queue[current_battle_queue_index]
+	current_battle_metadata = _get_battle_metadata(battle_idx)
+	print("[Phase] Loading battle ", battle_idx, " vs ", current_battle_metadata.get("opponent_name", "Unknown"))
+	
+	if BattleStateManager:
+		var territory_id := "battle_%d" % battle_idx
+		BattleStateManager.set_current_territory(territory_id)
+	
+	go("res://scenes/card_battle.tscn")
+
+func start_battle_queue(selected_battles: Array) -> void:
+	## Start the multi-battle queue with selected battles
+	battle_queue = selected_battles.duplicate()
+	current_battle_queue_index = 0
+	
+	if battle_queue.is_empty():
+		# No battles selected - skip to next player/phase
+		print("[Phase] No battles selected, skipping")
+		on_battle_completed()
+		return
+	
+	_load_next_queued_battle()
+
+func _get_battle_metadata(battle_idx: int) -> Dictionary:
+	## Get opponent info for a battle (placeholder mapping for now)
+	## Battle 1 -> player index 1, Battle 2 -> player index 2, etc.
+	var opponent_idx := battle_idx  # 1-based battle_idx maps to player index
+	var opponent_id: int = -1
+	var opponent_name := "Unknown"
+	var opponent_race := "Unknown"
+	
+	if opponent_idx < turn_order.size():
+		var opponent = turn_order[opponent_idx]
+		opponent_id = opponent.get("id", -1)
+		opponent_name = opponent.get("name", "Unknown")
+		opponent_race = opponent.get("race", "Unknown")
+	
+	return {
+		"battle_index": battle_idx,
+		"opponent_id": opponent_id,
+		"opponent_name": opponent_name,
+		"opponent_race": opponent_race
+	}
+
+func skip_to_done() -> void:
+	## Called when player chooses to skip (during Card Collection)
+	print("[Phase] Player skipping to done")
 	
 	# In multiplayer, request host to mark us as done
 	if is_multiplayer and multiplayer.has_multiplayer_peer():
 		Net.request_skip_to_done()
 		return
 	
-	# Single player: transition immediately
-	enter_battle_phase()
+	# Single player: transition immediately to next round
+	enter_card_command_phase()
 
 func can_play_minigame() -> bool:
 	## Returns true if player can still play minigames this phase
+	if current_game_phase != GamePhase.CARD_COLLECTION:
+		return false
 	# In multiplayer, check host-authoritative done state
 	if is_multiplayer and multiplayer.has_multiplayer_peer():
 		var my_id := multiplayer.get_unique_id()
@@ -98,14 +182,19 @@ func can_play_minigame() -> bool:
 		var count: int = Net.player_minigame_counts.get(my_id, 0)
 		if count >= MAX_MINIGAMES_PER_PHASE:
 			return false
-	return current_game_phase == GamePhase.RESOURCE_PHASE and minigames_completed_this_phase < MAX_MINIGAMES_PER_PHASE
+	return minigames_completed_this_phase < MAX_MINIGAMES_PER_PHASE
 
 func reset_phase_state() -> void:
 	## Reset phase state for a new game
-	current_game_phase = GamePhase.RESOURCE_PHASE
+	current_game_phase = GamePhase.CARD_COMMAND
 	minigames_completed_this_phase = 0
 	show_phase_transition = false
 	phase_transition_text = ""
+	current_turn_player_id = -1
+	current_turn_index = 0
+	battle_queue.clear()
+	current_battle_queue_index = -1
+	current_battle_metadata.clear()
 ## ========== END PHASE SYSTEM ==========
 
 ## ========== PLAYER HAND SYSTEM ==========
@@ -116,6 +205,8 @@ const ELF_CARDS: Array = [
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 2},
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/elf_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 0},
 ]
 
 const INFERNAL_CARDS: Array = [
@@ -123,9 +214,14 @@ const INFERNAL_CARDS: Array = [
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/infernal_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_fire_cards.pxo", "frame_index": 0},
 ]
 
 const FAIRY_CARDS: Array = [
+	{"sprite_frames": "res://assets/fairy_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_water_card.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
@@ -203,14 +299,15 @@ func initialize_player_hand(hand_size: int = 3) -> void:
 	match selected_race:
 		"Elf":
 			card_pool = ELF_CARDS.duplicate()
-			print("[Hand] Using Elf card pool")
 		"Infernal":
 			card_pool = INFERNAL_CARDS.duplicate()
+		"Fairy":
+			card_pool = FAIRY_CARDS.duplicate()
+		"Orc":
+			card_pool = ORC_CARDS.duplicate()
 			print("[Hand] Using Infernal card pool")
 		_:
-			card_pool = MIXED_CARD_POOL.duplicate()
-			print("[Hand] Using mixed card pool for ", selected_race)
-	
+			card_pool = MIXED_CARD_POOL.duplicate()	
 	card_pool.shuffle()
 	for i in range(mini(hand_size, card_pool.size())):
 		player_hand.append(card_pool[i].duplicate())
@@ -255,6 +352,10 @@ func initialize_player_card_collection() -> void:
 			card_pool = FAIRY_CARDS.duplicate()
 		"Orc":
 			card_pool = ORC_CARDS.duplicate()
+		"Fairy":
+			card_pool = FAIRY_CARDS.duplicate()
+		"Orc":
+			card_pool = ORC_CARDS.duplicate()
 		_:
 			card_pool = MIXED_CARD_POOL.duplicate()
 	card_pool.shuffle()
@@ -266,6 +367,7 @@ func initialize_player_card_collection() -> void:
 ## Add a random card when player wins a minigame
 func add_card_from_minigame_win() -> void:
 	var card_pool: Array
+	card_pool = MIXED_CARD_POOL.duplicate()
 	card_pool = MIXED_CARD_POOL.duplicate()
 	if card_pool.is_empty():
 		return
