@@ -125,6 +125,20 @@ const INFERNAL_CARDS: Array = [
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
 ]
 
+const FAIRY_CARDS: Array = [
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
+]
+
+const ORC_CARDS: Array = [
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
+]
+
 ## Mixed pool for races without specific cards (Orc, Fairy)
 const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 0},
