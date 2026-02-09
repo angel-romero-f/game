@@ -302,12 +302,13 @@ func _is_point_in_polygon(point: Vector2) -> bool:
 
 
 func _on_mouse_entered() -> void:
-	_show_hover_glow()
+	# No hover glow - color only changes when a card is placed
+	pass
 
 
 func _on_mouse_exited() -> void:
-	if not is_selected:
-		_hide_glow()
+	# No hover glow to hide
+	pass
 
 
 func _show_hover_glow() -> void:
@@ -385,7 +386,7 @@ func add_adjacent_node(node: TerritoryNode) -> void:
 		adjacent_nodes.append(node)
 
 
-## Select this territory (emits signal)
+## Select this territory (emits signal). Shows cyan glow while claim panel is open.
 func _select_territory() -> void:
 	if not territory_data:
 		push_warning("TerritoryNode '%s' has no territory_data. Cannot select." % name)

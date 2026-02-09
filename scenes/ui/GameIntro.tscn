@@ -44,6 +44,55 @@ grow_horizontal = 2
 grow_vertical = 2
 color = Color(0.1, 0.1, 0.15, 0.6)
 
+[node name="TerritoriesContainer" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TerritoryNode" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 226.0
+offset_top = 15.0
+offset_right = 408.0
+offset_bottom = 145.0
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 182, 0, 182, 130, 0, 130, 0, 0)
+territory_id_override = 1
+region_id_override = 1
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode2" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 510.0
+offset_top = 508.0
+offset_right = 666.0
+offset_bottom = 617.0
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 156, 0, 156, 109, 0, 109)
+territory_id_override = 2
+region_id_override = 5
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode3" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 421.0
+offset_top = 336.0
+offset_right = 627.7357
+offset_bottom = 523.7273
+rotation = 2.5132742
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 206.73575, 0, 206.73575, 187.7273)
+territory_id_override = 3
+region_id_override = 6
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
 [node name="ShowcaseContainer" type="CenterContainer" parent="."]
 layout_mode = 1
 anchors_preset = 15
@@ -535,33 +584,29 @@ vertical_alignment = 1
 [node name="FinishClaimingButton" type="Button" parent="."]
 visible = false
 layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
+anchors_preset = 2
 anchor_top = 1.0
-anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -120.0
-offset_top = -180.0
-offset_right = 120.0
-offset_bottom = -130.0
-grow_horizontal = 2
-grow_vertical = 2
+offset_left = 20.0
+offset_top = -130.0
+offset_right = 220.0
+offset_bottom = -80.0
+grow_horizontal = 0
+grow_vertical = 0
 text = "Finish claiming"
 
 [node name="ReadyForBattleButton" type="Button" parent="."]
 visible = false
 layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
+anchors_preset = 2
 anchor_top = 1.0
-anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -100.0
+offset_left = 20.0
 offset_top = -180.0
-offset_right = 100.0
+offset_right = 200.0
 offset_bottom = -130.0
-grow_horizontal = 2
-grow_vertical = 2
+grow_horizontal = 0
+grow_vertical = 0
 text = "Ready for battle"
 
 [node name="SettingsButton" type="Button" parent="."]
@@ -834,52 +879,3 @@ text = "Claim territory"
 [node name="PlayMinigameButton" type="Button" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer"]
 layout_mode = 2
 text = "Play minigame"
-
-[node name="TerritoriesContainer" type="Control" parent="."]
-layout_mode = 1
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
-mouse_filter = 2
-
-[node name="TerritoryNode" type="Control" parent="TerritoriesContainer"]
-layout_mode = 1
-anchors_preset = 0
-offset_left = 226.0
-offset_top = 15.0
-offset_right = 408.0
-offset_bottom = 145.0
-script = ExtResource("4_35fog")
-polygon_points = PackedVector2Array(0, 0, 182, 0, 182, 130, 0, 130, 0, 0)
-territory_id_override = 1
-region_id_override = 1
-metadata/_custom_type_script = "uid://nry7roh0gj2b"
-
-[node name="TerritoryNode2" type="Control" parent="TerritoriesContainer"]
-layout_mode = 1
-anchors_preset = 0
-offset_left = 510.0
-offset_top = 508.0
-offset_right = 666.0
-offset_bottom = 617.0
-script = ExtResource("4_35fog")
-polygon_points = PackedVector2Array(0, 0, 156, 0, 156, 109, 0, 109)
-territory_id_override = 2
-region_id_override = 5
-metadata/_custom_type_script = "uid://nry7roh0gj2b"
-
-[node name="TerritoryNode3" type="Control" parent="TerritoriesContainer"]
-layout_mode = 1
-anchors_preset = 0
-offset_left = 421.0
-offset_top = 336.0
-offset_right = 627.7357
-offset_bottom = 523.7273
-rotation = 2.5132742
-script = ExtResource("4_35fog")
-polygon_points = PackedVector2Array(0, 0, 206.73575, 0, 206.73575, 187.7273)
-territory_id_override = 3
-region_id_override = 6
-metadata/_custom_type_script = "uid://nry7roh0gj2b"

@@ -108,6 +108,11 @@ const TerritoryMapConfigScript := preload("res://scripts/TerritoryMapConfig.gd")
 # Claim panel size: full (claiming) vs compact (play minigame only)
 const CLAIM_PANEL_FULL_OFFSET := Vector4(-220.0, -180.0, 220.0, 180.0)   # left, top, right, bottom
 const CLAIM_PANEL_PLAY_ONLY_OFFSET := Vector4(-160.0, -55.0, 160.0, 55.0)
+## Seconds to wait on map after 2 minigames before showing "Choose Your Battles"
+const DELAY_BEFORE_BATTLE_TRANSITION_SEC := 1.0
+
+## True during the delayed battle transition (wait before "Choose Your Battles"); blocks territory interaction
+var _is_delayed_battle_transition_active := false
 
 ## Region ID (1-6) -> minigame. Each TerritoryNode's region_id_override picks which minigame runs when you click "Play [name]". Add more territories in the scene and set their Region Id Override to 1/2/3 (or 4-6 once you add scenes here).
 const REGION_MINIGAMES: Dictionary = {
@@ -314,6 +319,8 @@ func _ready() -> void:
 
 	# Initialize territory system
 	_initialize_territory_system()
+	# Disable territory interaction during intro (showcase, rolling, etc.)
+	_update_territory_interaction()
 
 	# Check if we're returning from minigame (skip intro if turn_order already set)
 	if App.turn_order.size() > 0:
@@ -450,20 +457,35 @@ func _initialize_territories() -> void:
 	print("[GameIntro] Initialized %d basic territories" % basic_configs.size())
 
 func _are_territories_interactable() -> bool:
-	## False during dice roll, phase overlay, or any non-map phase so players don't click territories by accident.
+	## False during dice roll, phase overlay, delayed battle transition, or any non-map phase.
 	if current_phase != Phase.GAME_READY:
 		return false
 	if phase_overlay and phase_overlay.visible:
 		return false
+	if _is_delayed_battle_transition_active:
+		return false
 	if player_roll_container and player_roll_container.visible:
 		return false
 	return true
+
+func _update_territory_interaction() -> void:
+	## Enable or disable territory input based on interactability (prevents hover/click during transitions).
+	if not territory_manager:
+		return
+	var interactable := _are_territories_interactable()
+	for tid_key in territory_manager.territories:
+		var node: TerritoryNode = territory_manager.territories[tid_key]
+		node.mouse_filter = Control.MOUSE_FILTER_STOP if interactable else Control.MOUSE_FILTER_IGNORE
 
 func _on_territory_selected(territory_id: int) -> void:
 	if not _are_territories_interactable() or not claim_territory_panel:
 		return
 	# RESOURCE_COLLECTION: only claimed territories can play minigame; open play-only panel or show message.
 	if map_sub_phase == MapSubPhase.RESOURCE_COLLECTION:
+		# Check if player has already completed 2 minigames
+		if App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
+			_show_unclaimed_territory_message()
+			return
 		var is_claimed: bool = _territory_claim_state != null and _territory_claim_state.call("is_claimed", territory_id)
 		var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
 		var local_id: Variant = _get_local_player_id()
@@ -476,6 +498,7 @@ func _on_territory_selected(territory_id: int) -> void:
 
 func _open_play_only_panel(territory_id: int) -> void:
 	## Panel with just "Play [minigame]" and Close (no slots, no claiming) - compact size
+	_deselect_claim_territory_if_any()
 	current_claim_territory_id = territory_id
 	claim_panel_play_only_mode = true
 	# Shrink panel to fit just title + two buttons
@@ -520,6 +543,7 @@ func _open_claim_panel(territory_id: int) -> void:
 	claim_territory_panel.offset_top = CLAIM_PANEL_FULL_OFFSET.y
 	claim_territory_panel.offset_right = CLAIM_PANEL_FULL_OFFSET.z
 	claim_territory_panel.offset_bottom = CLAIM_PANEL_FULL_OFFSET.w
+	_deselect_claim_territory_if_any()
 	current_claim_territory_id = territory_id
 	claim_selected_hand_index = -1
 	var title_label: Label = claim_territory_panel.get_node_or_null("MarginContainer/VBoxContainer/TitleLabel") as Label
@@ -567,7 +591,14 @@ func _open_claim_panel(territory_id: int) -> void:
 			claim_play_minigame_button.visible = false
 	claim_territory_panel.visible = true
 
+func _deselect_claim_territory_if_any() -> void:
+	if territory_manager and current_claim_territory_id >= 0:
+		var node: TerritoryNode = territory_manager.get_territory_node(current_claim_territory_id)
+		if node:
+			node.deselect()
+
 func _close_claim_panel() -> void:
+	_deselect_claim_territory_if_any()
 	current_claim_territory_id = -1
 	claim_territory_panel.visible = false
 	claim_panel_play_only_mode = false
@@ -690,6 +721,7 @@ func _show_collect_resources_overlay() -> void:
 	phase_label.text = "Collect your resources!"
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
+	_update_territory_interaction()
 	# Auto-dismiss like battle phase: fade in, hold, fade out, then enter resource collection
 	var tween := create_tween()
 	tween.tween_property(phase_overlay, "modulate:a", 1.0, 0.4)
@@ -699,13 +731,18 @@ func _show_collect_resources_overlay() -> void:
 
 func _on_collect_resources_overlay_finished() -> void:
 	phase_overlay.visible = false
+	_update_territory_interaction()
 	_enter_resource_collection()
 
 func _show_unclaimed_territory_message() -> void:
 	## Show message panel: you can only play minigames on territories you've claimed.
 	if not message_panel or not message_label:
 		return
-	message_label.text = "You can only play minigames on territories you've claimed."
+	# Check if message is about max minigames reached
+	if App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
+		message_label.text = "You've already completed %d minigames this phase. Click 'Ready for Battle' to continue." % App.MAX_MINIGAMES_PER_PHASE
+	else:
+		message_label.text = "You can only play minigames on territories you've claimed."
 	message_panel.visible = true
 	message_panel.modulate.a = 0.0
 	var tween := create_tween()
@@ -726,8 +763,19 @@ func _enter_resource_collection() -> void:
 
 func _on_ready_for_battle_pressed() -> void:
 	map_sub_phase = MapSubPhase.BATTLE_READY
-	_apply_phase_ui()
-	_animate_phase_buttons()
+	# Show phase transition overlay ("Choose Your Battles") then apply battle UI
+	App.enter_battle_phase()
+	_show_phase_transition_overlay()
+
+func _start_delayed_battle_transition() -> void:
+	## Wait a few seconds on the map, then show "Choose Your Battles" and enter battle phase
+	_is_delayed_battle_transition_active = true
+	_update_territory_interaction()
+	await get_tree().create_timer(DELAY_BEFORE_BATTLE_TRANSITION_SEC).timeout
+	_is_delayed_battle_transition_active = false
+	map_sub_phase = MapSubPhase.BATTLE_READY
+	App.enter_battle_phase()
+	_show_phase_transition_overlay()
 
 func _on_claim_play_minigame_pressed() -> void:
 	if current_claim_territory_id < 0 or not territory_manager or not territory_manager.territory_data.has(current_claim_territory_id):
@@ -1194,6 +1242,11 @@ func _show_corner_order() -> void:
 
 	await map_tween.finished
 
+	# Set phase BEFORE applying UI so single-player path is taken (hides old minigame buttons)
+	current_phase = Phase.GAME_READY
+	if not App.is_multiplayer:
+		map_sub_phase = MapSubPhase.CLAIMING
+
 	# Apply phase-aware UI visibility
 	_apply_phase_ui()
 
@@ -1218,10 +1271,6 @@ func _show_corner_order() -> void:
 	if card_icon_button.visible:
 		card_icon_button.modulate.a = 0.0
 		btn_tween.tween_property(card_icon_button, "modulate:a", 1.0, 0.3)
-
-	current_phase = Phase.GAME_READY
-	if not App.is_multiplayer:
-		map_sub_phase = MapSubPhase.CLAIMING
 
 func _on_minigame_pressed() -> void:
 	App.go("res://scenes/Game.tscn")
@@ -1280,16 +1329,9 @@ func _skip_to_game_ready() -> void:
 		var item := _create_order_item(player, i + 1, false)
 		order_corner_container.add_child(item)
 
-	# Check if we need to show phase transition overlay
-	if App.show_phase_transition:
-		App.show_phase_transition = false
-		_show_phase_transition_overlay()
-	else:
-		# Just apply phase-aware UI immediately with animation
-		_apply_phase_ui()
-		_animate_phase_buttons()
-
+	# Set phase before applying UI so the correct path is taken
 	current_phase = Phase.GAME_READY
+	var should_auto_transition_to_battle := false
 	if not App.is_multiplayer:
 		if App.pending_return_map_sub_phase >= 0:
 			map_sub_phase = App.pending_return_map_sub_phase as MapSubPhase
@@ -1298,7 +1340,24 @@ func _skip_to_game_ready() -> void:
 			map_sub_phase = MapSubPhase.CLAIMING
 		if App.returning_from_territory_minigame:
 			App.returning_from_territory_minigame = false
-			App.on_minigame_completed()
+			# Do NOT call App.on_minigame_completed() here - the minigame scene already called it.
+			if App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
+				if App.current_game_phase == App.GamePhase.BATTLE_PHASE:
+					App.current_game_phase = App.GamePhase.RESOURCE_PHASE
+					App.show_phase_transition = false
+				should_auto_transition_to_battle = true
+
+	# Check if we need to show phase transition overlay
+	if App.show_phase_transition:
+		App.show_phase_transition = false
+		_show_phase_transition_overlay()
+	else:
+		# Just apply phase-aware UI immediately with animation
+		_apply_phase_ui()
+		_animate_phase_buttons()
+		# After 2 minigames, wait a few seconds then show "Choose Your Battles" and go to battle phase
+		if not App.is_multiplayer and should_auto_transition_to_battle:
+			_start_delayed_battle_transition()
 
 func _on_settings_pressed() -> void:
 	toggle_pause()
@@ -1409,12 +1468,14 @@ func _apply_phase_ui() -> void:
 		if finish_claiming_button:
 			finish_claiming_button.visible = (map_sub_phase == MapSubPhase.CLAIMING)
 		if ready_for_battle_button:
-			ready_for_battle_button.visible = (map_sub_phase == MapSubPhase.RESOURCE_COLLECTION)
+			# No longer show Ready for Battle; we auto-transition after a delay instead
+			ready_for_battle_button.visible = false
 		if map_sub_phase == MapSubPhase.BATTLE_READY:
 			battle_button.visible = true
 		settings_button.visible = true
 		if App.player_card_collection.size() > 0:
 			card_icon_button.visible = true
+		_update_territory_interaction()
 		return
 
 	## Multiplayer or non-GAME_READY: use App phase
@@ -1487,6 +1548,8 @@ func _apply_phase_ui() -> void:
 	if App.player_card_collection.size() > 0:
 		card_icon_button.visible = true
 
+	_update_territory_interaction()
+
 func _show_phase_transition_overlay() -> void:
 	## Shows a brief overlay announcing the current phase
 	if not phase_overlay or not phase_label:
@@ -1495,6 +1558,7 @@ func _show_phase_transition_overlay() -> void:
 	phase_label.text = App.phase_transition_text
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
+	_update_territory_interaction()
 
 	# Fade in
 	var tween := create_tween()
@@ -1505,6 +1569,7 @@ func _show_phase_transition_overlay() -> void:
 
 func _on_phase_transition_finished() -> void:
 	phase_overlay.visible = false
+	_update_territory_interaction()
 	_apply_phase_ui()
 	_animate_phase_buttons()
 
