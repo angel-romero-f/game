@@ -10,7 +10,9 @@ const D20_FPS := 24.0
 const UI_FONT := preload("res://fonts/m5x7.ttf")
 
 enum Phase { SHOWCASE, ROLLING, SHOW_PLAYER_ROLL, SHOW_ORDER, GAME_READY }
+enum MapSubPhase { CLAIMING, RESOURCE_COLLECTION, BATTLE_READY }
 var current_phase: Phase = Phase.SHOWCASE
+var map_sub_phase: MapSubPhase = MapSubPhase.CLAIMING
 
 # Node references
 var map_bg: TextureRect
@@ -45,6 +47,26 @@ var hand_display_panel: PanelContainer
 var hand_container: HBoxContainer
 var is_hand_visible: bool = false
 
+# Claim territory panel
+var claim_territory_panel: PanelContainer
+var claim_slots_container: HBoxContainer
+var claim_hand_container: HBoxContainer
+var claim_cancel_button: Button
+var claim_button: Button
+var claim_play_minigame_button: Button
+var finish_claiming_button: Button
+var ready_for_battle_button: Button
+var current_claim_territory_id: int = -1
+var claim_panel_play_only_mode: bool = false
+var claim_slot_cards: Array = [null, null, null]  # 3 slots, each Dictionary or null
+var claim_hand_cards: Array = []  # working copy of hand when panel is open
+var claim_selected_hand_index: int = -1
+
+# Message panel for info/error messages
+var message_panel: PanelContainer
+var message_label: Label
+var message_close_button: Button
+
 # Battle selection UI nodes (multiplayer)
 var battle_button_right: Button
 var left_battle_selectors: VBoxContainer
@@ -78,7 +100,28 @@ var _d20_frame_timer: float = 0.0
 var order_items_center: Array = []  # Array of Control nodes in center display
 var order_items_corner: Array = []  # Array of Control nodes in corner display
 
+# Territory system
+var territory_manager: TerritoryManager = null
+var territories_container: Control = null
+var _territory_claim_state: Node = null  # Autoload for territory claims (runtime lookup)
+const TerritoryMapConfigScript := preload("res://scripts/TerritoryMapConfig.gd")
+# Claim panel size: full (claiming) vs compact (play minigame only)
+const CLAIM_PANEL_FULL_OFFSET := Vector4(-220.0, -180.0, 220.0, 180.0)   # left, top, right, bottom
+const CLAIM_PANEL_PLAY_ONLY_OFFSET := Vector4(-160.0, -55.0, 160.0, 55.0)
+
+## Region ID (1-6) -> minigame. Each TerritoryNode's region_id_override picks which minigame runs when you click "Play [name]". Add more territories in the scene and set their Region Id Override to 1/2/3 (or 4-6 once you add scenes here).
+const REGION_MINIGAMES: Dictionary = {
+	1: { "name": "Bridge", "scene": "res://scenes/BridgeGame.tscn" },
+	6: { "name": "Ice fishing", "scene": "res://scenes/IceFishingGame.tscn" },
+	5: { "name": "River crossing", "scene": "res://scenes/Game.tscn" },  # Replace with your river crossing scene when ready
+	4: { "name": "", "scene": "" },
+	3: { "name": "", "scene": "" },
+	2: { "name": "", "scene": "" }
+}
+
 func _ready() -> void:
+	# Build path without literal autoload name to avoid parse errors in some Godot setups
+	_territory_claim_state = get_node_or_null("/root/" + "Territory" + "Claim" + "State")
 	# Get node references
 	map_bg = $MapBackground
 	map_overlay = $MapOverlay
@@ -110,6 +153,88 @@ func _ready() -> void:
 	card_icon_button = $CardIconButton
 	hand_display_panel = $HandDisplayPanel
 	hand_container = $HandDisplayPanel/MarginContainer/VBoxContainer/HandContainer
+
+	# Claim territory panel
+	claim_territory_panel = $ClaimTerritoryPanel
+	claim_slots_container = $ClaimTerritoryPanel/MarginContainer/VBoxContainer/SlotsContainer
+	claim_hand_container = $ClaimTerritoryPanel/MarginContainer/VBoxContainer/ClaimHandContainer
+	claim_cancel_button = $ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer/CancelButton
+	claim_button = $ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer/ClaimButton
+	if claim_cancel_button:
+		claim_cancel_button.pressed.connect(_on_claim_cancel_clicked)
+	if claim_button:
+		claim_button.pressed.connect(_on_claim_territory_clicked)
+	claim_play_minigame_button = get_node_or_null("ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer/PlayMinigameButton") as Button
+	if claim_play_minigame_button:
+		claim_play_minigame_button.pressed.connect(_on_claim_play_minigame_pressed)
+	finish_claiming_button = get_node_or_null("FinishClaimingButton") as Button
+	if finish_claiming_button:
+		finish_claiming_button.pressed.connect(_on_finish_claiming_pressed)
+	ready_for_battle_button = get_node_or_null("ReadyForBattleButton") as Button
+	if ready_for_battle_button:
+		ready_for_battle_button.pressed.connect(_on_ready_for_battle_pressed)
+
+	# Message panel for info/error messages
+	message_panel = get_node_or_null("MessagePanel") as PanelContainer
+	if not message_panel:
+		# Create message panel programmatically if it doesn't exist in scene
+		message_panel = PanelContainer.new()
+		message_panel.name = "MessagePanel"
+		message_panel.set_anchors_preset(Control.PRESET_CENTER)
+		message_panel.offset_left = -200
+		message_panel.offset_top = -80
+		message_panel.offset_right = 200
+		message_panel.offset_bottom = 80
+		add_child(message_panel)
+		
+		var margin := MarginContainer.new()
+		margin.add_theme_constant_override("margin_left", 20)
+		margin.add_theme_constant_override("margin_top", 20)
+		margin.add_theme_constant_override("margin_right", 20)
+		margin.add_theme_constant_override("margin_bottom", 20)
+		message_panel.add_child(margin)
+		
+		var vbox := VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 15)
+		margin.add_child(vbox)
+		
+		message_label = Label.new()
+		message_label.add_theme_font_override("font", UI_FONT)
+		message_label.add_theme_font_size_override("font_size", 20)
+		message_label.add_theme_color_override("font_color", Color.WHITE)
+		message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(message_label)
+		
+		var button_container := HBoxContainer.new()
+		button_container.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_child(button_container)
+		
+		message_close_button = Button.new()
+		message_close_button.text = "Close"
+		message_close_button.pressed.connect(_on_message_close_pressed)
+		button_container.add_child(message_close_button)
+	else:
+		# Get references if panel exists in scene
+		message_label = message_panel.get_node_or_null("MarginContainer/VBoxContainer/MessageLabel") as Label
+		message_close_button = message_panel.get_node_or_null("MarginContainer/VBoxContainer/ButtonContainer/CloseButton") as Button
+		if message_close_button:
+			message_close_button.pressed.connect(_on_message_close_pressed)
+		if not message_label:
+			message_label = Label.new()
+			message_label.name = "MessageLabel"
+			message_label.add_theme_font_override("font", UI_FONT)
+			message_label.add_theme_font_size_override("font_size", 20)
+			message_label.add_theme_color_override("font_color", Color.WHITE)
+			message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			if message_panel.get_child_count() > 0:
+				var vbox = message_panel.get_child(0).get_node_or_null("VBoxContainer")
+				if vbox:
+					vbox.add_child(message_label)
+	
+	if message_panel:
+		message_panel.visible = false
 
 	# Battle selection UI nodes (multiplayer)
 	battle_button_right = $BattleButtonRight
@@ -187,6 +312,9 @@ func _ready() -> void:
 		# Force local App phase to match host-synced Net phase
 		_on_net_phase_changed(Net.current_phase)
 
+	# Initialize territory system
+	_initialize_territory_system()
+
 	# Check if we're returning from minigame (skip intro if turn_order already set)
 	if App.turn_order.size() > 0:
 		_skip_to_game_ready()
@@ -208,13 +336,489 @@ func _setup_showcase() -> void:
 		return
 
 	# Set race image
-	var texture_path := App.get_race_texture_path(local_player.get("race", "Elf"))
+	var texture_path: String = App.get_race_texture_path(String(local_player.get("race", "Elf")))
 	var texture = load(texture_path)
 	if texture:
 		showcase_race_image.texture = texture
 
 	# Set name
 	showcase_name_label.text = local_player.get("name", "Player")
+
+func _initialize_territory_system() -> void:
+	## Initialize territory system for map ↔ territory linkage
+	## Creates TerritoryManager and container if they don't exist
+	## Territories can be initialized from editor-placed nodes or config data
+	
+	# Get or create TerritoryManager
+	territory_manager = get_node_or_null("TerritoryManager") as TerritoryManager
+	if not territory_manager:
+		territory_manager = TerritoryManager.new()
+		territory_manager.name = "TerritoryManager"
+		add_child(territory_manager)
+	
+	# Get or create container for TerritoryNodes
+	# TerritoryNodes are Control nodes, so they can be direct children of GameIntro
+	territories_container = get_node_or_null("TerritoriesContainer") as Control
+	if not territories_container:
+		territories_container = Control.new()
+		territories_container.name = "TerritoriesContainer"
+		territories_container.set_anchors_preset(Control.PRESET_FULL_RECT)
+		territories_container.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let territories handle input
+		
+		# Add as child of GameIntro (before MapOverlay so territories are above map but below UI)
+		var map_overlay_index := get_child_count()
+		for i in range(get_child_count()):
+			if get_child(i) == map_overlay:
+				map_overlay_index = i
+				break
+		add_child(territories_container)
+		move_child(territories_container, map_overlay_index)
+	
+	# Connect territory signals (for external systems to listen)
+	if not territory_manager.territory_selected.is_connected(_on_territory_selected):
+		territory_manager.territory_selected.connect(_on_territory_selected)
+	if not territory_manager.card_placed.is_connected(_on_card_placed):
+		territory_manager.card_placed.connect(_on_card_placed)
+	
+	# Initialize territories from editor-placed nodes (if any exist)
+	# Or use config data if provided
+	# This can be customized based on how territories are defined
+	_initialize_territories()
+
+func _initialize_territories() -> void:
+	## Initialize territories on map load
+	## Creates all 31 territories based on the gray outlines on the map
+	
+	# Option 1: Initialize from editor-placed TerritoryNode children (if any exist)
+	if territories_container and territories_container.get_child_count() > 0:
+		var has_territory_nodes := false
+		for child in territories_container.get_children():
+			if child is TerritoryNode:
+				has_territory_nodes = true
+				break
+		
+		if has_territory_nodes:
+			territory_manager.initialize_from_editor_nodes(territories_container)
+			_apply_saved_territory_claims()
+			_refresh_territory_claimed_visuals()
+			return
+	
+	# Option 2: Initialize from TerritoryMapConfig resource (if exists)
+	var map_config_path := "res://scripts/TerritoryMapConfig.tres"
+	if ResourceLoader.exists(map_config_path):
+		var config = load(map_config_path)
+		if config and config.has_method("get_territory_configs"):
+			territory_manager.initialize_territories(config.get_territory_configs(), territories_container)
+			_apply_saved_territory_claims()
+			_refresh_territory_claimed_visuals()
+			return
+	
+	# Option 3: Initialize from default configuration (creates 31 territories)
+	# Call static method directly on the script class
+	if TerritoryMapConfigScript:
+		var default_config = TerritoryMapConfigScript.create_default_config()
+		if default_config and default_config.has_method("get_territory_configs"):
+			territory_manager.initialize_territories(default_config.get_territory_configs(), territories_container)
+			_apply_saved_territory_claims()
+			_refresh_territory_claimed_visuals()
+			print("[GameIntro] Initialized territories from default configuration")
+			return
+	
+	# Fallback: Create basic territories if config system fails
+	push_warning("[GameIntro] Could not load TerritoryMapConfig, creating basic territories")
+	var basic_configs: Array[Dictionary] = []
+	for i in range(31):
+		var default_size := Vector2(150, 120)
+		var default_polygon := PackedVector2Array([
+			Vector2(0, 0),
+			Vector2(default_size.x, 0),
+			Vector2(default_size.x, default_size.y),
+			Vector2(0, default_size.y)
+		])
+		
+		basic_configs.append({
+			"territory_id": i + 1,
+			"region_id": 1,
+			"position": Vector2(400.0 + float(i % 6) * 150.0, 300.0 + float(i) / 6.0 * 120.0),
+			"size": default_size,
+			"polygon_points": default_polygon,
+			"adjacent_territory_ids": []
+		})
+	territory_manager.initialize_territories(basic_configs, territories_container)
+	_apply_saved_territory_claims()
+	_refresh_territory_claimed_visuals()
+	print("[GameIntro] Initialized %d basic territories" % basic_configs.size())
+
+func _are_territories_interactable() -> bool:
+	## False during dice roll, phase overlay, or any non-map phase so players don't click territories by accident.
+	if current_phase != Phase.GAME_READY:
+		return false
+	if phase_overlay and phase_overlay.visible:
+		return false
+	if player_roll_container and player_roll_container.visible:
+		return false
+	return true
+
+func _on_territory_selected(territory_id: int) -> void:
+	if not _are_territories_interactable() or not claim_territory_panel:
+		return
+	# RESOURCE_COLLECTION: only claimed territories can play minigame; open play-only panel or show message.
+	if map_sub_phase == MapSubPhase.RESOURCE_COLLECTION:
+		var is_claimed: bool = _territory_claim_state != null and _territory_claim_state.call("is_claimed", territory_id)
+		var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
+		var local_id: Variant = _get_local_player_id()
+		if not is_claimed or owner_id != local_id:
+			_show_unclaimed_territory_message()
+			return
+		_open_play_only_panel(territory_id)
+	else:
+		_open_claim_panel(territory_id)
+
+func _open_play_only_panel(territory_id: int) -> void:
+	## Panel with just "Play [minigame]" and Close (no slots, no claiming) - compact size
+	current_claim_territory_id = territory_id
+	claim_panel_play_only_mode = true
+	# Shrink panel to fit just title + two buttons
+	claim_territory_panel.offset_left = CLAIM_PANEL_PLAY_ONLY_OFFSET.x
+	claim_territory_panel.offset_top = CLAIM_PANEL_PLAY_ONLY_OFFSET.y
+	claim_territory_panel.offset_right = CLAIM_PANEL_PLAY_ONLY_OFFSET.z
+	claim_territory_panel.offset_bottom = CLAIM_PANEL_PLAY_ONLY_OFFSET.w
+	var title_label: Label = claim_territory_panel.get_node_or_null("MarginContainer/VBoxContainer/TitleLabel") as Label
+	if title_label:
+		title_label.text = "Collect resources"
+	# Hide claim UI, show only play minigame + cancel
+	if claim_slots_container:
+		claim_slots_container.visible = false
+	var hand_label: Control = claim_territory_panel.get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	if hand_label:
+		hand_label.visible = false
+	if claim_hand_container:
+		claim_hand_container.visible = false
+	if claim_button:
+		claim_button.visible = false
+	if claim_cancel_button:
+		claim_cancel_button.visible = true
+		claim_cancel_button.text = "Close"
+	var region_id: int = 1
+	if territory_manager and territory_manager.territory_data.has(territory_id):
+		region_id = territory_manager.territory_data[territory_id].region_id
+	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "name": "", "scene": "" })
+	var scene_path: String = region_info.get("scene", "")
+	var region_name: String = region_info.get("name", "")
+	if claim_play_minigame_button:
+		if scene_path != "" and region_name != "":
+			claim_play_minigame_button.text = "Play %s" % region_name
+			claim_play_minigame_button.visible = true
+		else:
+			claim_play_minigame_button.visible = false
+	claim_territory_panel.visible = true
+
+func _open_claim_panel(territory_id: int) -> void:
+	claim_panel_play_only_mode = false
+	# Restore full panel size
+	claim_territory_panel.offset_left = CLAIM_PANEL_FULL_OFFSET.x
+	claim_territory_panel.offset_top = CLAIM_PANEL_FULL_OFFSET.y
+	claim_territory_panel.offset_right = CLAIM_PANEL_FULL_OFFSET.z
+	claim_territory_panel.offset_bottom = CLAIM_PANEL_FULL_OFFSET.w
+	current_claim_territory_id = territory_id
+	claim_selected_hand_index = -1
+	var title_label: Label = claim_territory_panel.get_node_or_null("MarginContainer/VBoxContainer/TitleLabel") as Label
+	if title_label:
+		title_label.text = "Claim Territory"
+	# Restore claim UI visibility
+	if claim_slots_container:
+		claim_slots_container.visible = true
+	var hand_label: Control = claim_territory_panel.get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	if hand_label:
+		hand_label.visible = true
+	if claim_hand_container:
+		claim_hand_container.visible = true
+	if claim_cancel_button:
+		claim_cancel_button.visible = true
+		claim_cancel_button.text = "Cancel"
+	# If already claimed, show saved cards; else empty slots
+	if _territory_claim_state and _territory_claim_state.call("is_claimed", territory_id):
+		var saved: Array = _territory_claim_state.call("get_cards", territory_id) as Array
+		claim_slot_cards = []
+		for i in range(3):
+			claim_slot_cards.append(saved[i] if i < saved.size() and saved[i] != null else null)
+		claim_hand_cards = App.player_card_collection.duplicate()
+		claim_button.visible = false
+	else:
+		claim_slot_cards = [null, null, null]
+		claim_hand_cards = App.player_card_collection.duplicate()
+		claim_button.visible = true
+	_populate_claim_slots()
+	_populate_claim_hand()
+	_update_claim_button_state()
+	# Play minigame button: only in BATTLE_READY (not during initial CLAIMING)
+	var show_play_minigame: bool = (map_sub_phase == MapSubPhase.BATTLE_READY)
+	var region_id: int = 1
+	if territory_manager and territory_manager.territory_data.has(territory_id):
+		region_id = territory_manager.territory_data[territory_id].region_id
+	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "name": "", "scene": "" })
+	var scene_path: String = region_info.get("scene", "")
+	var region_name: String = region_info.get("name", "")
+	if claim_play_minigame_button:
+		if show_play_minigame and scene_path != "" and region_name != "":
+			claim_play_minigame_button.text = "Play %s" % region_name
+			claim_play_minigame_button.visible = true
+		else:
+			claim_play_minigame_button.visible = false
+	claim_territory_panel.visible = true
+
+func _close_claim_panel() -> void:
+	current_claim_territory_id = -1
+	claim_territory_panel.visible = false
+	claim_panel_play_only_mode = false
+	# Restore full panel size for next open
+	claim_territory_panel.offset_left = CLAIM_PANEL_FULL_OFFSET.x
+	claim_territory_panel.offset_top = CLAIM_PANEL_FULL_OFFSET.y
+	claim_territory_panel.offset_right = CLAIM_PANEL_FULL_OFFSET.z
+	claim_territory_panel.offset_bottom = CLAIM_PANEL_FULL_OFFSET.w
+	# Restore claim UI for next open
+	if claim_slots_container:
+		claim_slots_container.visible = true
+	var hand_label: Control = claim_territory_panel.get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	if hand_label:
+		hand_label.visible = true
+	if claim_hand_container:
+		claim_hand_container.visible = true
+	if claim_cancel_button:
+		claim_cancel_button.visible = true
+		claim_cancel_button.text = "Cancel"
+
+func _populate_claim_slots() -> void:
+	for child in claim_slots_container.get_children():
+		child.queue_free()
+	var slot_size := Vector2(70, 100)
+	for i in range(3):
+		var panel := Panel.new()
+		panel.custom_minimum_size = slot_size
+		panel.set_meta("slot_index", i)
+		var tex := TextureRect.new()
+		tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+		tex.offset_left = 4
+		tex.offset_top = 4
+		tex.offset_right = -4
+		tex.offset_bottom = -4
+		tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		if claim_slot_cards[i] != null and claim_slot_cards[i] is Dictionary:
+			var path: String = claim_slot_cards[i].get("path", "")
+			var frame: int = int(claim_slot_cards[i].get("frame", 0))
+			if path != "" and ResourceLoader.exists(path):
+				var sf: SpriteFrames = load(path) as SpriteFrames
+				if sf and sf.has_animation("default"):
+					tex.texture = sf.get_frame_texture("default", frame)
+		panel.add_child(tex)
+		panel.gui_input.connect(_on_claim_slot_gui_input.bind(i))
+		claim_slots_container.add_child(panel)
+
+func _on_claim_slot_gui_input(event: InputEvent, slot_index: int) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
+			if claim_selected_hand_index >= 0 and claim_selected_hand_index < claim_hand_cards.size():
+				# Place selected card in slot
+				var card: Dictionary = claim_hand_cards[claim_selected_hand_index]
+				claim_slot_cards[slot_index] = card
+				claim_hand_cards.remove_at(claim_selected_hand_index)
+				claim_selected_hand_index = -1
+				_populate_claim_slots()
+				_populate_claim_hand()
+				_update_claim_button_state()
+			elif claim_slot_cards[slot_index] != null:
+				# Return card from slot to hand
+				claim_hand_cards.append(claim_slot_cards[slot_index])
+				claim_slot_cards[slot_index] = null
+				_populate_claim_slots()
+				_populate_claim_hand()
+				_update_claim_button_state()
+
+func _update_claim_button_state() -> void:
+	if not claim_button:
+		return
+	var has_any: bool = false
+	for slot_idx in range(3):
+		if claim_slot_cards[slot_idx] != null:
+			has_any = true
+			break
+	claim_button.disabled = not has_any
+
+func _populate_claim_hand() -> void:
+	for child in claim_hand_container.get_children():
+		child.queue_free()
+	var card_size := Vector2(60, 90)
+	for i in range(claim_hand_cards.size()):
+		var card_data: Dictionary = claim_hand_cards[i]
+		var btn := Button.new()
+		btn.custom_minimum_size = card_size
+		btn.flat = true
+		btn.set_meta("hand_index", i)
+		var tex := TextureRect.new()
+		tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+		tex.offset_left = 4
+		tex.offset_top = 4
+		tex.offset_right = -4
+		tex.offset_bottom = -4
+		tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		var path: String = card_data.get("path", "")
+		var frame: int = int(card_data.get("frame", 0))
+		if path != "" and ResourceLoader.exists(path):
+			var sf: SpriteFrames = load(path) as SpriteFrames
+			if sf and sf.has_animation("default"):
+				tex.texture = sf.get_frame_texture("default", frame)
+		btn.add_child(tex)
+		btn.pressed.connect(_on_claim_hand_card_clicked.bind(i))
+		claim_hand_container.add_child(btn)
+
+func _on_claim_hand_card_clicked(hand_index: int) -> void:
+	claim_selected_hand_index = hand_index
+
+func _on_finish_claiming_pressed() -> void:
+	_close_claim_panel()
+	_show_collect_resources_overlay()
+
+func _show_collect_resources_overlay() -> void:
+	if finish_claiming_button:
+		finish_claiming_button.visible = false
+	if not phase_overlay or not phase_label:
+		_enter_resource_collection()
+		return
+	phase_label.text = "Collect your resources!"
+	phase_overlay.visible = true
+	phase_overlay.modulate.a = 0.0
+	# Auto-dismiss like battle phase: fade in, hold, fade out, then enter resource collection
+	var tween := create_tween()
+	tween.tween_property(phase_overlay, "modulate:a", 1.0, 0.4)
+	tween.tween_interval(1.5)
+	tween.tween_property(phase_overlay, "modulate:a", 0.0, 0.4)
+	tween.tween_callback(_on_collect_resources_overlay_finished)
+
+func _on_collect_resources_overlay_finished() -> void:
+	phase_overlay.visible = false
+	_enter_resource_collection()
+
+func _show_unclaimed_territory_message() -> void:
+	## Show message panel: you can only play minigames on territories you've claimed.
+	if not message_panel or not message_label:
+		return
+	message_label.text = "You can only play minigames on territories you've claimed."
+	message_panel.visible = true
+	message_panel.modulate.a = 0.0
+	var tween := create_tween()
+	tween.tween_property(message_panel, "modulate:a", 1.0, 0.2)
+
+func _on_message_close_pressed() -> void:
+	## Close the message panel
+	if not message_panel:
+		return
+	var tween := create_tween()
+	tween.tween_property(message_panel, "modulate:a", 0.0, 0.15)
+	tween.tween_callback(func(): message_panel.visible = false)
+
+func _enter_resource_collection() -> void:
+	map_sub_phase = MapSubPhase.RESOURCE_COLLECTION
+	_apply_phase_ui()
+	_animate_phase_buttons()
+
+func _on_ready_for_battle_pressed() -> void:
+	map_sub_phase = MapSubPhase.BATTLE_READY
+	_apply_phase_ui()
+	_animate_phase_buttons()
+
+func _on_claim_play_minigame_pressed() -> void:
+	if current_claim_territory_id < 0 or not territory_manager or not territory_manager.territory_data.has(current_claim_territory_id):
+		return
+	var territory: Territory = territory_manager.territory_data[current_claim_territory_id]
+	var region_id: int = territory.region_id
+	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "scene": "" })
+	var scene_path: String = region_info.get("scene", "")
+	if scene_path != "" and ResourceLoader.exists(scene_path):
+		_close_claim_panel()
+		# So when we return, GameIntro restores RESOURCE_COLLECTION and increments minigame count
+		App.pending_return_map_sub_phase = MapSubPhase.RESOURCE_COLLECTION
+		App.returning_from_territory_minigame = true
+		App.go(scene_path)
+
+func _on_claim_territory_clicked() -> void:
+	if current_claim_territory_id < 0 or not territory_manager.territory_data.has(current_claim_territory_id):
+		_close_claim_panel()
+		return
+	# Require at least 1 card to claim (1-3 cards allowed)
+	var has_any_card: bool = false
+	for slot_idx in range(3):
+		if claim_slot_cards[slot_idx] != null:
+			has_any_card = true
+			break
+	if not has_any_card:
+		return
+	var territory: Territory = territory_manager.territory_data[current_claim_territory_id]
+	var local_id: Variant = _get_local_player_id()
+	if local_id == null:
+		_close_claim_panel()
+		return
+	# Place cards in territory data (only the slots that have cards)
+	for slot_idx in range(3):
+		if claim_slot_cards[slot_idx] != null:
+			territory.place_card(local_id, claim_slot_cards[slot_idx], slot_idx)
+	territory.set_owner(local_id)
+	# Persist
+	if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
+		_territory_claim_state.set_claim(current_claim_territory_id, local_id, claim_slot_cards)
+	# Remove only the placed cards from player collection (1-3 cards)
+	var placed_slots: Dictionary = {}
+	for slot_idx in range(3):
+		if claim_slot_cards[slot_idx] != null:
+			placed_slots[slot_idx] = claim_slot_cards[slot_idx]
+	App.remove_placed_cards_from_collection_for_slots(placed_slots)
+	_refresh_territory_claimed_visuals()
+	_close_claim_panel()
+
+func _on_claim_cancel_clicked() -> void:
+	_close_claim_panel()
+
+func _get_local_player_id() -> Variant:
+	for p in App.game_players:
+		if p.get("is_local", false):
+			return p.get("id", 1)
+	return 1
+
+func _apply_saved_territory_claims() -> void:
+	if not territory_manager:
+		return
+	if not _territory_claim_state:
+		return
+	var claims_dict: Variant = _territory_claim_state.get("claims")
+	if not (claims_dict is Dictionary):
+		return
+	for tid_key in claims_dict:
+		var tid: int = int(tid_key)
+		var claim_data: Dictionary = (claims_dict as Dictionary)[tid_key]
+		var owner_id: Variant = claim_data.get("owner_player_id", null)
+		var cards: Array = claim_data.get("cards", [])
+		if owner_id == null or not territory_manager.territory_data.has(tid):
+			continue
+		var territory: Territory = territory_manager.territory_data[tid]
+		territory.set_owner(owner_id)
+		for slot_idx in range(min(3, cards.size())):
+			if cards[slot_idx] != null:
+				territory.place_card(owner_id, cards[slot_idx], slot_idx)
+	_refresh_territory_claimed_visuals()
+
+func _refresh_territory_claimed_visuals() -> void:
+	if not territory_manager:
+		return
+	for tid_key in territory_manager.territories:
+		var node: TerritoryNode = territory_manager.territories[tid_key]
+		node.update_claimed_visual()
+
+func _on_card_placed(territory_id: int, player_id: int) -> void:
+	## Called when a card is placed on a territory
+	## No gameplay logic - just map ↔ territory linkage
+	print("[GameIntro] Card placed on territory %d by player %d" % [territory_id, player_id])
 
 func _process(delta: float) -> void:
 	match current_phase:
@@ -443,7 +1047,7 @@ func _resolve_ties() -> void:
 
 	# First, ensure all players have valid rolls (no zeros)
 	for i in range(App.game_players.size()):
-		var current_roll = App.game_players[i].get("roll", 0)
+		var current_roll: int = int(App.game_players[i].get("roll", 0))
 		if current_roll <= 0:
 			App.game_players[i]["roll"] = randi_range(1, 20)
 			print("Fixed invalid roll for player: ", App.game_players[i].get("name", "Unknown"))
@@ -454,7 +1058,7 @@ func _resolve_ties() -> void:
 
 		# Count rolls by value, storing player indices
 		for i in range(App.game_players.size()):
-			var roll = App.game_players[i].get("roll", 0)
+			var roll: int = int(App.game_players[i].get("roll", 0))
 			if not rolls_count.has(roll):
 				rolls_count[roll] = []
 			rolls_count[roll].append(i)  # Store index instead of reference
@@ -518,7 +1122,7 @@ func _create_order_item(player: Dictionary, order_position: int, is_center: bool
 
 	# Race icon
 	var race_icon := TextureRect.new()
-	var texture_path := App.get_race_texture_path(player.get("race", "Elf"))
+	var texture_path: String = App.get_race_texture_path(String(player.get("race", "Elf")))
 	var texture = load(texture_path)
 	if texture:
 		race_icon.texture = texture
@@ -616,6 +1220,8 @@ func _show_corner_order() -> void:
 		btn_tween.tween_property(card_icon_button, "modulate:a", 1.0, 0.3)
 
 	current_phase = Phase.GAME_READY
+	if not App.is_multiplayer:
+		map_sub_phase = MapSubPhase.CLAIMING
 
 func _on_minigame_pressed() -> void:
 	App.go("res://scenes/Game.tscn")
@@ -684,6 +1290,15 @@ func _skip_to_game_ready() -> void:
 		_animate_phase_buttons()
 
 	current_phase = Phase.GAME_READY
+	if not App.is_multiplayer:
+		if App.pending_return_map_sub_phase >= 0:
+			map_sub_phase = App.pending_return_map_sub_phase as MapSubPhase
+			App.pending_return_map_sub_phase = -1
+		else:
+			map_sub_phase = MapSubPhase.CLAIMING
+		if App.returning_from_territory_minigame:
+			App.returning_from_territory_minigame = false
+			App.on_minigame_completed()
 
 func _on_settings_pressed() -> void:
 	toggle_pause()
@@ -775,7 +1390,34 @@ func _db_to_linear(db: float) -> float:
 ## ========== PHASE SYSTEM UI ==========
 
 func _apply_phase_ui() -> void:
-	## Shows/hides buttons based on current game phase
+	## Single-player map flow: CLAIMING -> RESOURCE_COLLECTION -> BATTLE_READY
+	if not App.is_multiplayer and current_phase == Phase.GAME_READY:
+		# Hide the three standalone minigame buttons (Bridge / Ice fishing / River); minigames are played via territories
+		minigame_button.visible = false
+		bridge_minigame_button.visible = false
+		ice_fishing_button.visible = false
+		play_minigames_button.visible = false
+		skip_to_battle_button.visible = false
+		# Show minigame counter only in resource collection so player sees e.g. 1/2, 2/2
+		minigames_counter_label.visible = (map_sub_phase == MapSubPhase.RESOURCE_COLLECTION)
+		if minigames_counter_label.visible:
+			_update_minigames_counter()
+		battle_button.visible = false
+		battle_button_right.visible = false
+		left_battle_selectors.visible = false
+		right_battle_selectors.visible = false
+		if finish_claiming_button:
+			finish_claiming_button.visible = (map_sub_phase == MapSubPhase.CLAIMING)
+		if ready_for_battle_button:
+			ready_for_battle_button.visible = (map_sub_phase == MapSubPhase.RESOURCE_COLLECTION)
+		if map_sub_phase == MapSubPhase.BATTLE_READY:
+			battle_button.visible = true
+		settings_button.visible = true
+		if App.player_card_collection.size() > 0:
+			card_icon_button.visible = true
+		return
+
+	## Multiplayer or non-GAME_READY: use App phase
 	match App.current_game_phase:
 		App.GamePhase.RESOURCE_PHASE:
 			# Show all minigame buttons in a row
@@ -850,7 +1492,6 @@ func _show_phase_transition_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		_apply_phase_ui()
 		return
-
 	phase_label.text = App.phase_transition_text
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
@@ -896,6 +1537,12 @@ func _animate_phase_buttons() -> void:
 	if card_icon_button.visible:
 		card_icon_button.modulate.a = 0.0
 		btn_tween.tween_property(card_icon_button, "modulate:a", 1.0, 0.3)
+	if finish_claiming_button and finish_claiming_button.visible:
+		finish_claiming_button.modulate.a = 0.0
+		btn_tween.tween_property(finish_claiming_button, "modulate:a", 1.0, 0.3)
+	if ready_for_battle_button and ready_for_battle_button.visible:
+		ready_for_battle_button.modulate.a = 0.0
+		btn_tween.tween_property(ready_for_battle_button, "modulate:a", 1.0, 0.3)
 
 	# Settings always visible
 	settings_button.modulate.a = 0.0
