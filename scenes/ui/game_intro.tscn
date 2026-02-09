@@ -1,9 +1,9 @@
-[gd_scene load_steps=7 format=3 uid="uid://be4idcbjrjt5g"]
+[gd_scene load_steps=7 format=3 uid="uid://c4f2c1607m3nt"]
 
-[ext_resource type="Script" uid="uid://boc3ncb3lcip" path="res://scripts/ui/GameIntro.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://bpfva4dgesxq3" path="res://pictures/map.png" id="2_map"]
-[ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="3_iwbf0"]
-[ext_resource type="Script" uid="uid://nry7roh0gj2b" path="res://scripts/TerritoryNode.gd" id="4_35fog"]
+[ext_resource type="Script" uid="uid://boc3ncb3lcip" path="res://scripts/ui/GameIntro.gd" id="1_c8f5n"]
+[ext_resource type="Texture2D" uid="uid://bpfva4dgesxq3" path="res://pictures/map.png" id="2_u8phj"]
+[ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="3_vp4a4"]
+[ext_resource type="Script" uid="uid://nry7roh0gj2b" path="res://scripts/TerritoryNode.gd" id="4_84bnw"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_D20"]
 bg_color = Color(0, 0, 0, 0)
@@ -22,7 +22,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-script = ExtResource("1_script")
+script = ExtResource("1_c8f5n")
 
 [node name="MapBackground" type="TextureRect" parent="."]
 layout_mode = 1
@@ -31,7 +31,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
-texture = ExtResource("2_map")
+texture = ExtResource("2_u8phj")
 expand_mode = 1
 stretch_mode = 6
 
@@ -79,7 +79,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 60
 text = "Player Name"
 horizontal_alignment = 1
@@ -103,7 +103,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 36
 text = "Rolling..."
 horizontal_alignment = 1
@@ -135,7 +135,7 @@ grow_vertical = 2
 theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 68
 text = "D20"
 horizontal_alignment = 1
@@ -147,7 +147,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 5
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 80
 text = "20"
 horizontal_alignment = 1
@@ -180,7 +180,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 40
 text = "Your Roll"
 horizontal_alignment = 1
@@ -190,7 +190,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 5
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 110
 text = "20"
 horizontal_alignment = 1
@@ -227,7 +227,7 @@ theme_override_constants/separation = 15
 [node name="TitleLabel" type="Label" parent="OrderCenterContainer/Panel/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 42
 text = "Turn Order"
 horizontal_alignment = 1
@@ -252,7 +252,7 @@ theme_override_constants/separation = 5
 [node name="TitleLabel" type="Label" parent="OrderCornerContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 20
 text = "Turn Order"
 horizontal_alignment = 1
@@ -271,7 +271,7 @@ offset_right = -80.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "River"
 
@@ -289,7 +289,7 @@ offset_right = 70.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Bridge"
 
@@ -307,7 +307,7 @@ offset_right = 230.0
 offset_bottom = -30.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Ice Fishing"
 
@@ -325,7 +325,7 @@ offset_right = 70.0
 offset_bottom = -90.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 20
 text = "Random"
 
@@ -340,7 +340,7 @@ offset_top = -25.0
 offset_right = 170.0
 offset_bottom = 25.0
 grow_vertical = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 26
 text = "Left Battle"
 
@@ -371,7 +371,7 @@ offset_right = -20.0
 offset_bottom = 25.0
 grow_horizontal = 0
 grow_vertical = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 26
 text = "Right Battle"
 
@@ -405,7 +405,7 @@ grow_horizontal = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 4
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 28
 text = "Current decider: Player"
 horizontal_alignment = 1
@@ -424,7 +424,7 @@ offset_right = 80.0
 offset_bottom = -40.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Skip Battling"
 
@@ -454,7 +454,7 @@ grow_vertical = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 5
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 36
 text = "Waiting for other players..."
 horizontal_alignment = 1
@@ -474,7 +474,7 @@ offset_right = 110.0
 offset_bottom = -90.0
 grow_horizontal = 2
 grow_vertical = 0
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Skip to Battle Phase"
 
@@ -495,7 +495,7 @@ grow_vertical = 0
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 3
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 20
 text = "Minigames: 0/2"
 horizontal_alignment = 1
@@ -526,7 +526,7 @@ grow_vertical = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 6
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 64
 text = "Collect Your Resources"
 horizontal_alignment = 1
@@ -575,7 +575,7 @@ offset_top = 10.0
 offset_right = -10.0
 offset_bottom = 50.0
 grow_horizontal = 0
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Settings"
 
@@ -606,7 +606,7 @@ theme_override_constants/separation = 10
 
 [node name="SettingsLabel" type="Label" parent="SettingsPanel/SettingsContainer"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 40
 text = "Settings"
 horizontal_alignment = 1
@@ -617,7 +617,7 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/MasterVolume"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Master Volume"
 
@@ -633,7 +633,7 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/MusicVolume"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Music Volume"
 
@@ -649,7 +649,7 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/SFXVolume"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Game Elements Volume"
 
@@ -665,7 +665,7 @@ theme_override_constants/separation = 5
 
 [node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/UIVolume"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "UI Volume"
 
@@ -682,14 +682,14 @@ theme_override_constants/separation = 10
 [node name="ResumeButton" type="Button" parent="SettingsPanel/SettingsContainer/ButtonContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 24
 text = "Close"
 
 [node name="MainMenuButton" type="Button" parent="SettingsPanel/SettingsContainer/ButtonContainer"]
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 24
 text = "Main Menu"
 
@@ -707,7 +707,7 @@ offset_right = -15.0
 offset_bottom = -15.0
 grow_horizontal = 0
 grow_vertical = 0
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 16
 text = "Cards"
 
@@ -758,7 +758,7 @@ layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 20
 text = "Your Hand"
 horizontal_alignment = 1
@@ -797,7 +797,7 @@ theme_override_constants/separation = 12
 
 [node name="TitleLabel" type="Label" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_fonts/font = ExtResource("3_vp4a4")
 theme_override_font_sizes/font_size = 22
 text = "Claim Territory"
 horizontal_alignment = 1
@@ -851,7 +851,7 @@ offset_left = 226.0
 offset_top = 15.0
 offset_right = 408.0
 offset_bottom = 145.0
-script = ExtResource("4_35fog")
+script = ExtResource("4_84bnw")
 polygon_points = PackedVector2Array(0, 0, 182, 0, 182, 130, 0, 130, 0, 0)
 territory_id_override = 1
 region_id_override = 1
@@ -867,7 +867,7 @@ offset_left = -0.33602905
 offset_top = -12.343994
 offset_right = 0.14398193
 offset_bottom = 0.104003906
-script = ExtResource("4_35fog")
+script = ExtResource("4_84bnw")
 polygon_points = PackedVector2Array(0, 0, 156, 0, 156, 109, 0, 109, 0, 0)
 territory_id_override = 2
 region_id_override = 5
@@ -884,7 +884,7 @@ offset_top = -123.999985
 offset_right = 94.425964
 offset_bottom = 5.557251
 rotation = 0.9180432
-script = ExtResource("4_35fog")
+script = ExtResource("4_84bnw")
 polygon_points = PackedVector2Array(192.97795, 0, 192.97795, 180.10123, 0, 180.10123)
 territory_id_override = 3
 region_id_override = 6

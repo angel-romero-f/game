@@ -3,15 +3,7 @@ extends Node
 const PORT := 9999
 const MAX_CLIENTS := 4
 
-# Debug flag - set to true to enable verbose networking logs
-const DEBUG_NETWORKING := true
-
 var peer: ENetMultiplayerPeer
-
-func _debug_log(message: String) -> void:
-	if DEBUG_NETWORKING:
-		var timestamp := Time.get_time_string_from_system()
-		print("[Net %s] %s" % [timestamp, message])
 
 signal joined_game
 signal left_game
@@ -60,111 +52,33 @@ var battle_finished_reports: Dictionary = {} # {peer_id: bool}
 
 const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
 
-func _ready() -> void:
-	_debug_log("=== Net autoload initialized ===")
-	_debug_log("Default port: %d" % PORT)
-	_debug_log("Max clients: %d" % MAX_CLIENTS)
-	_debug_log("Available network interfaces:")
-	for addr in IP.get_local_addresses():
-		_debug_log("  - %s" % addr)
-
-## Call this to print current network status (useful for debugging)
-func print_network_status() -> void:
-	_debug_log("=== NETWORK STATUS ===")
-	if multiplayer.multiplayer_peer == null:
-		_debug_log("State: NOT CONNECTED (no peer)")
-	else:
-		var status := multiplayer.multiplayer_peer.get_connection_status()
-		var status_str := "UNKNOWN"
-		match status:
-			MultiplayerPeer.CONNECTION_DISCONNECTED:
-				status_str = "DISCONNECTED"
-			MultiplayerPeer.CONNECTION_CONNECTING:
-				status_str = "CONNECTING..."
-			MultiplayerPeer.CONNECTION_CONNECTED:
-				status_str = "CONNECTED"
-		_debug_log("Connection status: %s" % status_str)
-		_debug_log("Is server: %s" % str(multiplayer.is_server()))
-		_debug_log("My unique ID: %d" % multiplayer.get_unique_id())
-		_debug_log("Connected peers: %s" % str(multiplayer.get_peers()))
-		_debug_log("Player names: %s" % str(player_names))
-		_debug_log("Player races: %s" % str(player_races))
-	_debug_log("======================")
-
 ## Host a game server
 func host_game() -> void:
-	_debug_log("=== HOST_GAME CALLED ===")
-	
 	# Clean up any existing connection first (silent cleanup)
 	if multiplayer.multiplayer_peer:
-		_debug_log("Cleaning up existing peer connection")
 		_cleanup_connection()
 	
 	peer = ENetMultiplayerPeer.new()
-	
-	# IMPORTANT: Explicitly bind to all interfaces (0.0.0.0) for LAN access
-	# This ensures the server listens on all network interfaces, not just localhost
-	peer.set_bind_ip("*")
-	_debug_log("Set bind IP to '*' (all interfaces)")
-	
 	var err := peer.create_server(PORT, MAX_CLIENTS)
 	if err != OK:
 		push_error("create_server failed: %s" % err)
-		_debug_log("ERROR: create_server failed with error code: %s" % err)
 		return
-	
 	multiplayer.multiplayer_peer = peer
 	_connect_signals()
-	
-	# Log all available network interfaces for debugging
-	_debug_log("Server created successfully on port %d" % PORT)
-	_debug_log("Max clients: %d" % MAX_CLIENTS)
-	_debug_log("Host unique ID: %d" % multiplayer.get_unique_id())
-	_debug_log("Available IP addresses on this machine:")
-	var addresses := IP.get_local_addresses()
-	for addr in addresses:
-		_debug_log("  - %s" % addr)
-	_debug_log("Host code (LAN IP): %s" % get_host_code())
-	_debug_log("=== SERVER READY ===")
-	
 	joined_game.emit()
 
-## Join a game using code string like:
-## - IPv4: "192.168.1.12" or "192.168.1.12:9999"
-## - IPv6: "2607:fb91::1" or "[2607:fb91::1]:9999"
+## Join a game using code string like "192.168.1.12" or "192.168.1.12:9999"
 func join_game(code: String) -> void:
-	_debug_log("=== JOIN_GAME CALLED ===")
-	_debug_log("Raw code input: '%s'" % code)
-	
 	# Clean up any existing connection first (silent cleanup)
 	if multiplayer.multiplayer_peer:
-		_debug_log("Cleaning up existing peer connection")
 		_cleanup_connection()
 	
 	var ip := ""
 	var port := PORT
 	
-	# Parse code: handle both IPv4 and IPv6 formats
+	# Parse code: accept "ip" or "ip:port"
 	code = code.strip_edges()
-	
-	# Check if it's IPv6 format (contains multiple colons or starts with bracket)
-	if code.begins_with("["):
-		# Bracketed IPv6: [2607:fb91::1] or [2607:fb91::1]:9999
-		var bracket_end := code.find("]")
-		if bracket_end > 0:
-			ip = code.substr(1, bracket_end - 1)  # Extract IP without brackets
-			if code.length() > bracket_end + 1 and code[bracket_end + 1] == ":":
-				# Has port after bracket
-				port = code.substr(bracket_end + 2).to_int()
-				if port <= 0:
-					port = PORT
-		else:
-			ip = code  # Malformed, try anyway
-	elif code.count(":") > 1:
-		# Unbracketed IPv6 (no port possible in this format): 2607:fb91::1
-		ip = code
-	elif ":" in code:
-		# IPv4 with port: 192.168.1.12:9999
+	if ":" in code:
 		var parts := code.split(":")
 		if parts.size() >= 2:
 			ip = parts[0]
@@ -174,187 +88,44 @@ func join_game(code: String) -> void:
 		else:
 			ip = code
 	else:
-		# Plain IPv4: 192.168.1.12
 		ip = code
-	
-	_debug_log("Parsed IP: '%s', Port: %d" % [ip, port])
-	_debug_log("IP type: %s" % ("IPv6" if ":" in ip else "IPv4"))
 	
 	if ip.is_empty():
 		push_error("Invalid host code: empty IP")
-		_debug_log("ERROR: Empty IP address!")
 		return
 	
-	# Check if trying to connect to localhost vs LAN
-	if ip == "127.0.0.1" or ip == "localhost":
-		_debug_log("WARNING: Connecting to localhost - this will only work on the same machine!")
-	
 	peer = ENetMultiplayerPeer.new()
-	
-	_debug_log("Attempting to connect to %s:%d..." % [ip, port])
 	var err := peer.create_client(ip, port)
 	if err != OK:
 		push_error("create_client failed: %s" % err)
-		_debug_log("ERROR: create_client failed with error code: %s" % err)
-		_debug_log("Common causes:")
-		_debug_log("  - Host not running or not reachable")
-		_debug_log("  - Firewall blocking port %d" % port)
-		_debug_log("  - Wrong IP address")
 		return
-	
 	multiplayer.multiplayer_peer = peer
 	_connect_signals()
-	
-	_debug_log("Client peer created, waiting for connection...")
-	_debug_log("Local addresses on this machine:")
-	var addresses := IP.get_local_addresses()
-	for addr in addresses:
-		_debug_log("  - %s" % addr)
-	
-	# Monitor connection state
-	_start_connection_monitor()
-	
 	joined_game.emit()
 
-## Monitor connection state changes for debugging
-var _connection_monitor_active := false
-
-func _start_connection_monitor() -> void:
-	if _connection_monitor_active:
-		return
-	_connection_monitor_active = true
-	_debug_log("Starting connection state monitor...")
-	
-	# Connect to connection signals for better debugging
-	if not multiplayer.connected_to_server.is_connected(_on_connected_to_server):
-		multiplayer.connected_to_server.connect(_on_connected_to_server)
-	if not multiplayer.connection_failed.is_connected(_on_connection_failed):
-		multiplayer.connection_failed.connect(_on_connection_failed)
-	if not multiplayer.server_disconnected.is_connected(_on_server_disconnected):
-		multiplayer.server_disconnected.connect(_on_server_disconnected)
-
-func _stop_connection_monitor() -> void:
-	_connection_monitor_active = false
-	if multiplayer.connected_to_server.is_connected(_on_connected_to_server):
-		multiplayer.connected_to_server.disconnect(_on_connected_to_server)
-	if multiplayer.connection_failed.is_connected(_on_connection_failed):
-		multiplayer.connection_failed.disconnect(_on_connection_failed)
-	if multiplayer.server_disconnected.is_connected(_on_server_disconnected):
-		multiplayer.server_disconnected.disconnect(_on_server_disconnected)
-
-func _on_connected_to_server() -> void:
-	_debug_log("=== CONNECTED TO SERVER SUCCESSFULLY ===")
-	_debug_log("My unique ID: %d" % multiplayer.get_unique_id())
-
-func _on_connection_failed() -> void:
-	_debug_log("=== CONNECTION FAILED ===")
-	_debug_log("Could not connect to the server!")
-	_debug_log("Troubleshooting:")
-	_debug_log("  1. Is the host running and on the same network?")
-	_debug_log("  2. Is port %d open on the host's firewall?" % PORT)
-	_debug_log("  3. Is the IP address correct?")
-	_debug_log("  4. Try pinging the host IP from terminal")
-
-func _on_server_disconnected() -> void:
-	_debug_log("=== DISCONNECTED FROM SERVER ===")
-	_debug_log("Lost connection to the host")
-
-## Get the host's likely network address (IPv4 or IPv6)
-## Returns IP only, no port. For IPv6, returns bracketed format like [2607:fb91::1]
+## Get the host's likely LAN IP address (IP only, no port)
 func get_host_code() -> String:
 	var addresses := IP.get_local_addresses()
 	
-	_debug_log("get_host_code() - Scanning for network IP...")
-	_debug_log("All addresses found: %s" % str(addresses))
-	
-	# Collect candidate IPs with priorities (lower = better)
-	var ipv4_candidates: Array = []
-	var ipv6_candidates: Array = []
-	
+	# Try to find a non-localhost IPv4 address
+	# Private IP ranges: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
 	for address in addresses:
-		if typeof(address) != TYPE_STRING:
-			continue
-		
-		# Check if IPv6 (contains colons)
-		if ":" in address:
-			# Skip localhost IPv6
-			if address == "0:0:0:0:0:0:0:1" or address == "::1":
-				_debug_log("  Skipping %s (IPv6 localhost)" % address)
+		if typeof(address) == TYPE_STRING:
+			# Skip IPv6 and localhost
+			if ":" in address or address == "127.0.0.1" or address.begins_with("127."):
 				continue
-			# Skip link-local IPv6 (fe80::)
-			if address.begins_with("fe80:"):
-				_debug_log("  Skipping %s (IPv6 link-local)" % address)
-				continue
-			# Global unicast IPv6 addresses start with 2 or 3
-			if address.begins_with("2") or address.begins_with("3"):
-				ipv6_candidates.append({"ip": address, "reason": "IPv6 global"})
-				_debug_log("  IPv6 Candidate: %s (global unicast)" % address)
-			continue
-		
-		# IPv4 handling
-		if address == "127.0.0.1" or address.begins_with("127."):
-			_debug_log("  Skipping %s (IPv4 localhost)" % address)
-			continue
-		
-		var parts := address.split(".")
-		if parts.size() != 4:
-			continue
-		
-		# Skip IANA reserved ranges that aren't routable
-		# 192.0.0.x - IANA reserved (DS-Lite, etc.)
-		# 192.0.2.x - TEST-NET-1
-		# 198.51.100.x - TEST-NET-2
-		# 203.0.113.x - TEST-NET-3
-		if address.begins_with("192.0.0.") or address.begins_with("192.0.2.") or address.begins_with("198.51.100.") or address.begins_with("203.0.113."):
-			_debug_log("  Skipping %s (IANA reserved - not routable)" % address)
-			continue
-		
-		# Skip common VM bridge ranges (these are NOT reachable from other devices)
-		# 192.168.64.x - Parallels/UTM default bridge
-		# 192.168.56.x - VirtualBox host-only
-		# 172.17.x.x - Docker default bridge
-		if address.begins_with("192.168.64.") or address.begins_with("192.168.56.") or address.begins_with("172.17."):
-			_debug_log("  Skipping %s (VM bridge - not reachable externally)" % address)
-			continue
-		
-		# Prioritize real network interfaces
-		# Priority 1: Standard home/office LAN (192.168.x.x except VM bridges, 10.x.x.x)
-		if address.begins_with("192.168."):
-			ipv4_candidates.append({"ip": address, "priority": 1, "reason": "192.168.x.x LAN"})
-			_debug_log("  IPv4 Candidate: %s (priority 1 - 192.168.x.x LAN)" % address)
-		elif address.begins_with("10."):
-			ipv4_candidates.append({"ip": address, "priority": 1, "reason": "10.x.x.x LAN"})
-			_debug_log("  IPv4 Candidate: %s (priority 1 - 10.x.x.x LAN)" % address)
-		# Priority 2: 172.16-31.x.x private range
-		elif address.begins_with("172."):
-			var second_octet := parts[1].to_int()
-			if second_octet >= 16 and second_octet <= 31:
-				ipv4_candidates.append({"ip": address, "priority": 2, "reason": "172.x private"})
-				_debug_log("  IPv4 Candidate: %s (priority 2 - 172.x private)" % address)
-		# Priority 3: Any other non-localhost IPv4 (could be public/institutional network)
-		else:
-			ipv4_candidates.append({"ip": address, "priority": 3, "reason": "other IPv4"})
-			_debug_log("  IPv4 Candidate: %s (priority 3 - other network IP)" % address)
-	
-	# Prefer IPv4 if we have good candidates
-	if ipv4_candidates.size() > 0:
-		ipv4_candidates.sort_custom(func(a, b): return a["priority"] < b["priority"])
-		var best = ipv4_candidates[0]
-		_debug_log("  SELECTED IPv4: %s (%s)" % [best["ip"], best["reason"]])
-		return best["ip"]
-	
-	# Fall back to IPv6 global addresses (common on university/modern networks)
-	if ipv6_candidates.size() > 0:
-		var best = ipv6_candidates[0]
-		# Return IPv6 in a format that can be used directly
-		# Note: For connection, IPv6 addresses need brackets in URLs but ENet handles raw
-		_debug_log("  SELECTED IPv6: %s (%s)" % [best["ip"], best["reason"]])
-		_debug_log("  NOTE: IPv6-only network detected. Both devices must support IPv6.")
-		return best["ip"]
+			# Check for private IP ranges
+			if address.begins_with("192.168.") or address.begins_with("10."):
+				return address
+			# Check for 172.16-31.x.x range
+			if address.begins_with("172."):
+				var parts := address.split(".")
+				if parts.size() >= 2:
+					var second_octet := parts[1].to_int()
+					if second_octet >= 16 and second_octet <= 31:
+						return address
 	
 	# Fallback to localhost
-	_debug_log("  WARNING: No network IP found! Falling back to 127.0.0.1")
-	_debug_log("  This means networking will ONLY work on the same machine!")
 	return "127.0.0.1"
 
 func _connect_signals() -> void:
@@ -371,22 +142,13 @@ func _disconnect_signals() -> void:
 		multiplayer.peer_disconnected.disconnect(_on_peer_disconnected)
 
 func _on_peer_connected(id: int) -> void:
-	_debug_log("=== PEER CONNECTED: %d ===" % id)
-	_debug_log("Total peers now: %d" % (multiplayer.get_peers().size() + 1))
-	_debug_log("Is server: %s" % str(multiplayer.is_server()))
-	
 	# Only server handles spawns
 	if multiplayer.is_server():
-		_debug_log("Server spawning player for peer %d" % id)
 		get_tree().call_group("game", "server_spawn_player", id)
 
 func _on_peer_disconnected(id: int) -> void:
-	_debug_log("=== PEER DISCONNECTED: %d ===" % id)
-	_debug_log("Total peers remaining: %d" % multiplayer.get_peers().size())
-	
 	# Only server handles despawns
 	if multiplayer.is_server():
-		_debug_log("Server despawning player for peer %d" % id)
 		get_tree().call_group("game", "server_despawn_player", id)
 		if player_names.has(id):
 			player_names.erase(id)
@@ -397,9 +159,7 @@ func _on_peer_disconnected(id: int) -> void:
 
 ## Internal cleanup (doesn't emit left_game signal)
 func _cleanup_connection() -> void:
-	_debug_log("Cleaning up connection...")
 	_disconnect_signals()
-	_stop_connection_monitor()
 	if multiplayer.multiplayer_peer:
 		multiplayer.multiplayer_peer.close()
 	multiplayer.multiplayer_peer = null
@@ -407,7 +167,6 @@ func _cleanup_connection() -> void:
 	player_names.clear()
 	player_races.clear()
 	player_rolls.clear()
-	_debug_log("Connection cleanup complete")
 
 ## Disconnect from multiplayer session
 func disconnect_from_game() -> void:
@@ -671,27 +430,6 @@ func remove_battle_card(slot_index: int) -> void:
 func _server_remove_battle_card(peer_id: int, slot_index: int) -> void:
 	if battle_placed_cards.has(peer_id) and battle_placed_cards[peer_id].has(slot_index):
 		battle_placed_cards[peer_id].erase(slot_index)
-		sync_battle_cards.rpc(battle_placed_cards)
-
-## Request to clear all of my placed cards (e.g. when I lose a battle). Server clears and broadcasts.
-func request_clear_my_battle_cards() -> void:
-	if multiplayer.is_server():
-		_server_clear_battle_cards_for_peer(multiplayer.get_unique_id())
-	else:
-		clear_my_battle_cards.rpc_id(1)
-
-@rpc("any_peer", "reliable")
-func clear_my_battle_cards() -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_clear_battle_cards_for_peer(id)
-
-func _server_clear_battle_cards_for_peer(peer_id: int) -> void:
-	if battle_placed_cards.has(peer_id):
-		battle_placed_cards.erase(peer_id)
 		sync_battle_cards.rpc(battle_placed_cards)
 
 @rpc("authority", "call_local", "reliable")

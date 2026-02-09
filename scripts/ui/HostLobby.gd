@@ -32,18 +32,7 @@ func _ready() -> void:
 	Net.submit_player_name(App.player_name)
 	
 	if code_label:
-		var host_code := Net.get_host_code()
-		# Check if IPv6 (contains colons)
-		if ":" in host_code:
-			code_label.text = "Host code:\n" + host_code
-			print("[HostLobby] IPv6 host code displayed: %s" % host_code)
-			print("[HostLobby] NOTE: This is an IPv6 address (common on university WiFi)")
-			print("[HostLobby] Players should copy this EXACT address to join")
-		else:
-			code_label.text = "Host code: " + host_code
-			print("[HostLobby] IPv4 host code displayed: %s" % host_code)
-		print("[HostLobby] Players on other devices should connect to this IP")
-		print("[HostLobby] Make sure both devices are on the same network (WiFi/LAN)")
+		code_label.text = "Host code: " + Net.get_host_code()
 	
 	# Connect to multiplayer signals to update player list
 	if multiplayer.peer_connected.is_connected(_on_peer_connected):
