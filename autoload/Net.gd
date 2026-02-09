@@ -71,6 +71,8 @@ func host_game() -> void:
 ## - IPv4: "192.168.1.12" or "192.168.1.12:9999"
 ## - IPv6: "2607:fb91::1" or "[2607:fb91::1]:9999"
 func join_game(code: String) -> void:
+	_debug_log("=== JOIN_GAME CALLED ===")
+	_debug_log("Raw code input: '%s'" % code)
 	
 	var ip := ""
 	var port := PORT
@@ -105,14 +107,21 @@ func join_game(code: String) -> void:
 		# Plain IPv4: 192.168.1.12
 		ip = code
 
+	_debug_log("Parsed IP: '%s', Port: %d" % [ip, port])
+	_debug_log("IP type: %s" % ("IPv6" if ":" in ip else "IPv4"))
+
 	if ip.is_empty():
 		push_error("Invalid host code: empty IP")
+	_debug_log("=== DISCONNECTED FROM SERVER ===")
+	_debug_log("Lost connection to the host")
 
 ## Get the host's likely network address (IPv4 or IPv6)
 ## Returns IP only, no port. For IPv6, returns bracketed format like [2607:fb91::1]
 func get_host_code() -> String:
 	var addresses := IP.get_local_addresses()
 
+	_debug_log("get_host_code() - Scanning for network IP...")
+	_debug_log("All addresses found: %s" % str(addresses))
 
 	# Collect candidate IPs with priorities (lower = better)
 	var ipv4_candidates: Array = []
@@ -126,17 +135,21 @@ func get_host_code() -> String:
 		if ":" in address:
 			# Skip localhost IPv6
 			if address == "0:0:0:0:0:0:0:1" or address == "::1":
+				_debug_log("  Skipping %s (IPv6 localhost)" % address)
 				continue
 			# Skip link-local IPv6 (fe80::)
 			if address.begins_with("fe80:"):
+				_debug_log("  Skipping %s (IPv6 link-local)" % address)
 				continue
 			# Global unicast IPv6 addresses start with 2 or 3
 			if address.begins_with("2") or address.begins_with("3"):
 				ipv6_candidates.append({"ip": address, "reason": "IPv6 global"})
+				_debug_log("  IPv6 Candidate: %s (global unicast)" % address)
 			continue
 		
 		# IPv4 handling
 		if address == "127.0.0.1" or address.begins_with("127."):
+			_debug_log("  Skipping %s (IPv4 localhost)" % address)
 			continue
 		
 		var parts := address.split(".")
@@ -149,6 +162,7 @@ func get_host_code() -> String:
 		# 198.51.100.x - TEST-NET-2
 		# 203.0.113.x - TEST-NET-3
 		if address.begins_with("192.0.0.") or address.begins_with("192.0.2.") or address.begins_with("198.51.100.") or address.begins_with("203.0.113."):
+			_debug_log("  Skipping %s (IANA reserved - not routable)" % address)
 			continue
 		
 		# Skip common VM bridge ranges (these are NOT reachable from other devices)
@@ -156,27 +170,33 @@ func get_host_code() -> String:
 		# 192.168.56.x - VirtualBox host-only
 		# 172.17.x.x - Docker default bridge
 		if address.begins_with("192.168.64.") or address.begins_with("192.168.56.") or address.begins_with("172.17."):
+			_debug_log("  Skipping %s (VM bridge - not reachable externally)" % address)
 			continue
 		
 		# Prioritize real network interfaces
 		# Priority 1: Standard home/office LAN (192.168.x.x except VM bridges, 10.x.x.x)
 		if address.begins_with("192.168."):
 			ipv4_candidates.append({"ip": address, "priority": 1, "reason": "192.168.x.x LAN"})
+			_debug_log("  IPv4 Candidate: %s (priority 1 - 192.168.x.x LAN)" % address)
 		elif address.begins_with("10."):
 			ipv4_candidates.append({"ip": address, "priority": 1, "reason": "10.x.x.x LAN"})
+			_debug_log("  IPv4 Candidate: %s (priority 1 - 10.x.x.x LAN)" % address)
 		# Priority 2: 172.16-31.x.x private range
 		elif address.begins_with("172."):
 			var second_octet := parts[1].to_int()
 			if second_octet >= 16 and second_octet <= 31:
 				ipv4_candidates.append({"ip": address, "priority": 2, "reason": "172.x private"})
+				_debug_log("  IPv4 Candidate: %s (priority 2 - 172.x private)" % address)
 		# Priority 3: Any other non-localhost IPv4 (could be public/institutional network)
 		else:
 			ipv4_candidates.append({"ip": address, "priority": 3, "reason": "other IPv4"})
+			_debug_log("  IPv4 Candidate: %s (priority 3 - other network IP)" % address)
 	
 	# Prefer IPv4 if we have good candidates
 	if ipv4_candidates.size() > 0:
 		ipv4_candidates.sort_custom(func(a, b): return a["priority"] < b["priority"])
 		var best = ipv4_candidates[0]
+		_debug_log("  SELECTED IPv4: %s (%s)" % [best["ip"], best["reason"]])
 		return best["ip"]
 	
 	# Fall back to IPv6 global addresses (common on university/modern networks)
@@ -184,11 +204,22 @@ func get_host_code() -> String:
 		var best = ipv6_candidates[0]
 		# Return IPv6 in a format that can be used directly
 		# Note: For connection, IPv6 addresses need brackets in URLs but ENet handles raw
+		_debug_log("  SELECTED IPv6: %s (%s)" % [best["ip"], best["reason"]])
+		_debug_log("  NOTE: IPv6-only network detected. Both devices must support IPv6.")
 		return best["ip"]
 
 	# Fallback to localhost
+	_debug_log("  WARNING: No network IP found! Falling back to 127.0.0.1")
+	_debug_log("  This means networking will ONLY work on the same machine!")
 	return "127.0.0.1"
 
+const DEBUG_NETWORKING := true
+
+func _debug_log(message: String) -> void:
+	if DEBUG_NETWORKING:
+		var timestamp := Time.get_time_string_from_system()
+		print("[Net %s] %s" % [timestamp, message])
+		
 func _connect_signals() -> void:
 	# Disconnect first to avoid duplicates
 	_disconnect_signals()
@@ -235,8 +266,8 @@ func disconnect_from_game() -> void:
 	left_game.emit()
 
 ## Submit local player's name to the host
-func submit_player_name(name: String) -> void:
-	var cleaned := name.strip_edges()
+func submit_player_name(player_name: String) -> void:
+	var cleaned := player_name.strip_edges()
 	if cleaned.is_empty():
 		return
 	
@@ -257,11 +288,11 @@ func submit_player_race(race: String) -> void:
 		set_player_race.rpc_id(1, cleaned)
 
 @rpc("any_peer", "reliable")
-func set_player_name(name: String) -> void:
+func set_player_name(player_name: String) -> void:
 	if not multiplayer.is_server():
 		return
 	
-	var cleaned := name.strip_edges()
+	var cleaned := player_name.strip_edges()
 	if cleaned.is_empty():
 		return
 	
@@ -276,8 +307,8 @@ func sync_player_names(names: Dictionary) -> void:
 	player_names = names.duplicate(true)
 	player_names_updated.emit()
 
-func _set_player_name(id: int, name: String) -> void:
-	player_names[id] = name
+func _set_player_name(id: int, player_name: String) -> void:
+	player_names[id] = player_name
 
 func _sync_player_names() -> void:
 	sync_player_names.rpc(player_names)
@@ -958,5 +989,5 @@ func _server_battle_finished_report(peer_id: int) -> void:
 		_advance_decider_to_next_eligible()
 
 @rpc("authority", "call_local", "reliable")
-func rpc_battle_finished(p1_id: int, p2_id: int, side: String) -> void:
+func rpc_battle_finished(_p1_id: int, _p2_id: int, _side: String) -> void:
 	battle_finished_broadcast.emit()
