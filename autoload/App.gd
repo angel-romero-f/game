@@ -229,6 +229,10 @@ func initialize_player_card_collection() -> void:
 			card_pool = ELF_CARDS.duplicate()
 		"Infernal":
 			card_pool = INFERNAL_CARDS.duplicate()
+		"Fairy":
+			card_pool = FAIRY_CARDS.duplicate()
+		"Orc":
+			card_pool = ORC_CARDS.duplicate()
 		_:
 			card_pool = MIXED_CARD_POOL.duplicate()
 	card_pool.shuffle()
@@ -240,13 +244,7 @@ func initialize_player_card_collection() -> void:
 ## Add a random card when player wins a minigame
 func add_card_from_minigame_win() -> void:
 	var card_pool: Array
-	match selected_race:
-		"Elf":
-			card_pool = ELF_CARDS.duplicate()
-		"Infernal":
-			card_pool = INFERNAL_CARDS.duplicate()
-		_:
-			card_pool = MIXED_CARD_POOL.duplicate()
+	card_pool = MIXED_CARD_POOL.duplicate()
 	if card_pool.is_empty():
 		return
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
