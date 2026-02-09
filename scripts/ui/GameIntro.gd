@@ -62,6 +62,11 @@ var claim_slot_cards: Array = [null, null, null]  # 3 slots, each Dictionary or 
 var claim_hand_cards: Array = []  # working copy of hand when panel is open
 var claim_selected_hand_index: int = -1
 
+# Message panel for info/error messages
+var message_panel: PanelContainer
+var message_label: Label
+var message_close_button: Button
+
 # Battle selection UI nodes (multiplayer)
 var battle_button_right: Button
 var left_battle_selectors: VBoxContainer
@@ -168,6 +173,68 @@ func _ready() -> void:
 	ready_for_battle_button = get_node_or_null("ReadyForBattleButton") as Button
 	if ready_for_battle_button:
 		ready_for_battle_button.pressed.connect(_on_ready_for_battle_pressed)
+
+	# Message panel for info/error messages
+	message_panel = get_node_or_null("MessagePanel") as PanelContainer
+	if not message_panel:
+		# Create message panel programmatically if it doesn't exist in scene
+		message_panel = PanelContainer.new()
+		message_panel.name = "MessagePanel"
+		message_panel.set_anchors_preset(Control.PRESET_CENTER)
+		message_panel.offset_left = -200
+		message_panel.offset_top = -80
+		message_panel.offset_right = 200
+		message_panel.offset_bottom = 80
+		add_child(message_panel)
+		
+		var margin := MarginContainer.new()
+		margin.add_theme_constant_override("margin_left", 20)
+		margin.add_theme_constant_override("margin_top", 20)
+		margin.add_theme_constant_override("margin_right", 20)
+		margin.add_theme_constant_override("margin_bottom", 20)
+		message_panel.add_child(margin)
+		
+		var vbox := VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 15)
+		margin.add_child(vbox)
+		
+		message_label = Label.new()
+		message_label.add_theme_font_override("font", UI_FONT)
+		message_label.add_theme_font_size_override("font_size", 20)
+		message_label.add_theme_color_override("font_color", Color.WHITE)
+		message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+		message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(message_label)
+		
+		var button_container := HBoxContainer.new()
+		button_container.alignment = BoxContainer.ALIGNMENT_CENTER
+		vbox.add_child(button_container)
+		
+		message_close_button = Button.new()
+		message_close_button.text = "Close"
+		message_close_button.pressed.connect(_on_message_close_pressed)
+		button_container.add_child(message_close_button)
+	else:
+		# Get references if panel exists in scene
+		message_label = message_panel.get_node_or_null("MarginContainer/VBoxContainer/MessageLabel") as Label
+		message_close_button = message_panel.get_node_or_null("MarginContainer/VBoxContainer/ButtonContainer/CloseButton") as Button
+		if message_close_button:
+			message_close_button.pressed.connect(_on_message_close_pressed)
+		if not message_label:
+			message_label = Label.new()
+			message_label.name = "MessageLabel"
+			message_label.add_theme_font_override("font", UI_FONT)
+			message_label.add_theme_font_size_override("font_size", 20)
+			message_label.add_theme_color_override("font_color", Color.WHITE)
+			message_label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+			message_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			if message_panel.get_child_count() > 0:
+				var vbox = message_panel.get_child(0).get_node_or_null("VBoxContainer")
+				if vbox:
+					vbox.add_child(message_label)
+	
+	if message_panel:
+		message_panel.visible = false
 
 	# Battle selection UI nodes (multiplayer)
 	battle_button_right = $BattleButtonRight
@@ -635,17 +702,22 @@ func _on_collect_resources_overlay_finished() -> void:
 	_enter_resource_collection()
 
 func _show_unclaimed_territory_message() -> void:
-	## Brief full-screen message: you can only play minigames on territories you've claimed.
-	if not phase_overlay or not phase_label:
+	## Show message panel: you can only play minigames on territories you've claimed.
+	if not message_panel or not message_label:
 		return
-	phase_label.text = "You can only play minigames on territories you've claimed."
-	phase_overlay.visible = true
-	phase_overlay.modulate.a = 0.0
+	message_label.text = "You can only play minigames on territories you've claimed."
+	message_panel.visible = true
+	message_panel.modulate.a = 0.0
 	var tween := create_tween()
-	tween.tween_property(phase_overlay, "modulate:a", 1.0, 0.2)
-	tween.tween_interval(2.0)
-	tween.tween_property(phase_overlay, "modulate:a", 0.0, 0.3)
-	tween.tween_callback(func(): phase_overlay.visible = false)
+	tween.tween_property(message_panel, "modulate:a", 1.0, 0.2)
+
+func _on_message_close_pressed() -> void:
+	## Close the message panel
+	if not message_panel:
+		return
+	var tween := create_tween()
+	tween.tween_property(message_panel, "modulate:a", 0.0, 0.15)
+	tween.tween_callback(func(): message_panel.visible = false)
 
 func _enter_resource_collection() -> void:
 	map_sub_phase = MapSubPhase.RESOURCE_COLLECTION
