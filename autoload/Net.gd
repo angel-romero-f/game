@@ -22,6 +22,7 @@ signal player_rolls_updated
 # Phase sync signals
 signal phase_changed(phase_id: int)
 signal done_counts_updated(done_count: int, total: int)
+signal turn_changed(peer_id: int)  # Emitted when current player's turn changes
 signal battle_decider_changed(peer_id: int)
 signal battle_choices_updated(snapshot: Dictionary)
 signal battle_started(p1_id: int, p2_id: int, side: String)
@@ -32,12 +33,16 @@ var player_races: Dictionary = {} # peer_id -> race_name (String)
 var player_rolls: Dictionary = {} # peer_id -> roll value (int)
 
 # ========== PHASE SYNC STATE ==========
-# Current game phase: 0 = RESOURCE_PHASE, 1 = BATTLE_PHASE
+# Current game phase: 0 = CARD_COMMAND, 1 = CLAIM_CONQUER, 2 = CARD_COLLECTION
 var current_phase: int = 0
 # Per-player done state in current phase: {peer_id: bool}
 var player_done_state: Dictionary = {}
-# Per-player minigame counts for resource phase: {peer_id: int}
+# Per-player minigame counts for Card Collection phase: {peer_id: int}
 var player_minigame_counts: Dictionary = {}
+# Current player's turn (peer_id)
+var current_turn_peer_id: int = -1
+# Current position in turn order
+var current_turn_index: int = 0
 
 # ========== BATTLE PHASE STATE ==========
 # Current position in turn order for battle decisions
@@ -506,28 +511,104 @@ func start_race_select() -> void:
 @rpc("authority", "call_local", "reliable")
 func start_game() -> void:
 	App.setup_multiplayer_game()
-	# Host initializes phase state for all participants
-	if multiplayer.is_server():
-		host_init_resource_phase()
+	# Note: host_init_card_command_phase() is called AFTER d20 rolls complete in GameIntro
+	# to ensure turn_order is properly established first
 	App.go("res://scenes/ui/GameIntro.tscn")
 
-## Host: Initialize resource phase for all participants (call at game start and when returning to resource)
-func host_init_resource_phase() -> void:
+## Host: Initialize Card Command phase for all participants (call at game start and at round start)
+func host_init_card_command_phase() -> void:
 	if not multiplayer.is_server():
 		return
 
 	reset_phase_sync_state()
-	current_phase = 0
+	current_phase = 0  # CARD_COMMAND
 	_init_phase_done_state()
+	
+	# Set first player's turn based on turn order
+	if App.turn_order.size() > 0:
+		var first_player = App.turn_order[0]
+		current_turn_peer_id = first_player.get("id", -1)
+		current_turn_index = 0
+	else:
+		current_turn_peer_id = multiplayer.get_unique_id()
+		current_turn_index = 0
 
 	var all_peers := _get_all_peer_ids()
 	var total := all_peers.size()
-	print("[Net] Host init resource phase with ", total, " participants: ", all_peers)
+	print("[Net] Host init Card Command phase with ", total, " participants. First turn: ", current_turn_peer_id)
 
 	# Broadcast initial state to all clients
 	rpc_set_phase.rpc(0)
-	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate()) # <<< ADD THIS
+	rpc_set_current_turn.rpc(current_turn_peer_id)
+	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
 	rpc_sync_done_counts.rpc(0, total)
+
+## Host: Initialize Card Collection phase (after all players finish their turns)
+func host_init_card_collection_phase() -> void:
+	if not multiplayer.is_server():
+		return
+	
+	current_phase = 2  # CARD_COLLECTION
+	_init_phase_done_state()
+	
+	var all_peers := _get_all_peer_ids()
+	var total := all_peers.size()
+	print("[Net] Host init Card Collection phase with ", total, " participants")
+	
+	rpc_set_phase.rpc(2)
+	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
+	rpc_sync_done_counts.rpc(0, total)
+
+## Authority broadcasts current turn player
+@rpc("authority", "call_local", "reliable")
+func rpc_set_current_turn(peer_id: int) -> void:
+	current_turn_peer_id = peer_id
+	turn_changed.emit(peer_id)
+
+## Client requests to end their Card Command turn
+func request_end_card_command_turn() -> void:
+	if multiplayer.is_server():
+		_server_advance_card_command_turn(multiplayer.get_unique_id())
+	else:
+		server_end_card_command_turn.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func server_end_card_command_turn() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_advance_card_command_turn(id)
+
+func _server_advance_card_command_turn(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	
+	# Verify it's actually this player's turn
+	if peer_id != current_turn_peer_id:
+		print("[Net] REJECTED turn end from ", peer_id, " (not their turn, current: ", current_turn_peer_id, ")")
+		return
+	
+	print("[Net] Player ", peer_id, " finished Card Command turn (index ", current_turn_index, ")")
+	
+	# Mark this player as done
+	player_done_state[peer_id] = true
+	
+	# Find next player in turn order
+	current_turn_index += 1
+	if current_turn_index >= App.turn_order.size():
+		# All players have finished their turns - advance to Claim & Conquer
+		print("[Net] All players finished Card Command - entering Claim & Conquer")
+		_server_enter_claim_conquer_phase()
+	else:
+		# Advance to next player's turn
+		var next_player = App.turn_order[current_turn_index]
+		current_turn_peer_id = next_player.get("id", -1)
+		print("[Net] Next Card Command turn: ", current_turn_peer_id, " (index ", current_turn_index, ")")
+		rpc_set_current_turn.rpc(current_turn_peer_id)
+		# Sync done state so UI can update
+		rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
 
 ## Host generates rolls for all players and syncs to everyone
 func host_generate_and_sync_rolls() -> void:
@@ -805,8 +886,10 @@ func _check_all_done_and_advance() -> void:
 	
 	if done_count >= all_peers.size():
 		# All done - advance to next phase
-		if current_phase == 0:
-			_server_enter_battle_phase()
+		if current_phase == 0:  # CARD_COMMAND -> CLAIM_CONQUER
+			_server_enter_claim_conquer_phase()
+		elif current_phase == 2:  # CARD_COLLECTION -> CARD_COMMAND (loop)
+			host_init_card_command_phase()
 
 ## Client requests to increment their minigame count
 func request_increment_minigame() -> void:
@@ -883,11 +966,11 @@ func rpc_sync_done_state(done_state: Dictionary, minigame_counts: Dictionary) ->
 func rpc_sync_done_counts(done: int, total: int) -> void:
 	done_counts_updated.emit(done, total)
 
-## Server enters battle phase
-func _server_enter_battle_phase() -> void:
+## Server enters Claim & Conquer phase (phase 1)
+func _server_enter_claim_conquer_phase() -> void:
 	if not multiplayer.is_server():
 		return
-	current_phase = 1
+	current_phase = 1  # CLAIM_CONQUER
 	rpc_set_phase.rpc(1)
 	_init_battle_phase()
 
@@ -975,9 +1058,9 @@ func _check_battle_phase_complete() -> void:
 			break
 	
 	if all_decided:
-		print("[Net] Battle phase complete, returning to resource phase")
-		# Use host_init_resource_phase for consistent initialization
-		host_init_resource_phase()
+		print("[Net] Claim & Conquer phase complete, entering Card Collection")
+		# After all battles decided, enter Card Collection phase
+		host_init_card_collection_phase()
 
 ## Authority broadcasts current decider
 @rpc("authority", "call_local", "reliable")

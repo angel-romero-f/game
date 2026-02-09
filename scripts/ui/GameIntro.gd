@@ -12,6 +12,10 @@ const UI_FONT := preload("res://fonts/m5x7.ttf")
 enum Phase { SHOWCASE, ROLLING, SHOW_PLAYER_ROLL, SHOW_ORDER, GAME_READY }
 var current_phase: Phase = Phase.SHOWCASE
 
+## Unified overlay state to prevent stacking
+enum OverlayState { NONE, PHASE_TRANSITION, WAITING, D20_ROLLING }
+var _overlay_state: OverlayState = OverlayState.NONE
+
 # Node references
 var map_bg: TextureRect
 var map_overlay: ColorRect
@@ -181,11 +185,7 @@ func _ready() -> void:
 	# Connect Net signals for multiplayer phase/battle sync
 	if App.is_multiplayer:
 		_connect_net_signals()
-		
-	# After connecting Net signals:
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		# Force local App phase to match host-synced Net phase
-		_on_net_phase_changed(Net.current_phase)
+		# Note: Don't call _on_net_phase_changed here - wait for intro to complete
 
 	# Check if we're returning from minigame (skip intro if turn_order already set)
 	if App.turn_order.size() > 0:
@@ -590,8 +590,17 @@ func _show_corner_order() -> void:
 
 	await map_tween.finished
 
-	# Apply phase-aware UI visibility
-	_apply_phase_ui()
+	# Mark intro as complete BEFORE applying phase UI
+	current_phase = Phase.GAME_READY
+
+	# Host initializes Card Command phase now that turn order is established
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		Net.host_init_card_command_phase()
+
+	# Show "Card Command" phase transition overlay
+	App.phase_transition_text = "Card Command"
+	App.show_phase_transition = true
+	_show_phase_transition_overlay()
 
 	# Animate buttons fading in
 	var btn_tween := create_tween()
@@ -614,8 +623,6 @@ func _show_corner_order() -> void:
 	if card_icon_button.visible:
 		card_icon_button.modulate.a = 0.0
 		btn_tween.tween_property(card_icon_button, "modulate:a", 1.0, 0.3)
-
-	current_phase = Phase.GAME_READY
 
 func _on_minigame_pressed() -> void:
 	App.go("res://scenes/Game.tscn")
@@ -674,6 +681,9 @@ func _skip_to_game_ready() -> void:
 		var item := _create_order_item(player, i + 1, false)
 		order_corner_container.add_child(item)
 
+	# Mark intro as complete BEFORE applying phase UI
+	current_phase = Phase.GAME_READY
+
 	# Check if we need to show phase transition overlay
 	if App.show_phase_transition:
 		App.show_phase_transition = false
@@ -682,8 +692,6 @@ func _skip_to_game_ready() -> void:
 		# Just apply phase-aware UI immediately with animation
 		_apply_phase_ui()
 		_animate_phase_buttons()
-
-	current_phase = Phase.GAME_READY
 
 func _on_settings_pressed() -> void:
 	toggle_pause()
@@ -774,16 +782,100 @@ func _db_to_linear(db: float) -> float:
 
 ## ========== PHASE SYSTEM UI ==========
 
+func _set_overlay_state(state: OverlayState, text: String = "") -> void:
+	## Unified overlay controller - only one overlay visible at a time
+	_overlay_state = state
+	# Hide all overlay elements first
+	phase_overlay.visible = false
+	waiting_overlay.visible = false
+	
+	match state:
+		OverlayState.NONE:
+			pass
+		OverlayState.PHASE_TRANSITION:
+			phase_label.text = text
+			phase_overlay.visible = true
+		OverlayState.WAITING:
+			waiting_label.text = text
+			waiting_overlay.visible = true
+		OverlayState.D20_ROLLING:
+			# During d20 rolling, use phase overlay for dimming only
+			phase_label.text = ""
+			phase_overlay.visible = true
+
 func _apply_phase_ui() -> void:
 	## Shows/hides buttons based on current game phase
+	## Only applies when intro sequence is complete (Phase.GAME_READY)
+	if current_phase != Phase.GAME_READY:
+		return
+	
 	match App.current_game_phase:
-		App.GamePhase.RESOURCE_PHASE:
+		App.GamePhase.CARD_COMMAND:
+			# Card Command phase - placeholder UI
+			# Hide all minigame buttons
+			minigame_button.visible = false
+			bridge_minigame_button.visible = false
+			ice_fishing_button.visible = false
+			play_minigames_button.visible = false
+			skip_to_battle_button.visible = false
+			minigames_counter_label.visible = false
+			
+			# Hide battle selection UI
+			battle_button.visible = false
+			battle_button_right.visible = false
+			left_battle_selectors.visible = false
+			right_battle_selectors.visible = false
+			current_decider_label.visible = false
+			skip_battle_decision_button.visible = false
+			
+			# TODO: Add "Place Cards" button UI here
+			# NOTE: On first turn, player must place at least 1 card
+			
+			# For now, use skip_to_battle_button as placeholder "Done" button
+			skip_to_battle_button.visible = true
+			skip_to_battle_button.text = "Done Placing Cards"
+			
+			# Check if it's our turn (host-authoritative)
+			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+				var my_id := multiplayer.get_unique_id()
+				if Net.current_turn_peer_id != my_id:
+					# Not our turn - show waiting overlay
+					skip_to_battle_button.visible = false
+					var turn_name := _get_player_name_for_peer(Net.current_turn_peer_id)
+					_set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
+					is_waiting_for_others = true
+				else:
+					# Our turn - hide overlay, show button
+					_set_overlay_state(OverlayState.NONE)
+					is_waiting_for_others = false
+			else:
+				_set_overlay_state(OverlayState.NONE)
+				is_waiting_for_others = false
+
+		App.GamePhase.CLAIM_CONQUER:
+			# Hide all minigame buttons
+			minigame_button.visible = false
+			bridge_minigame_button.visible = false
+			ice_fishing_button.visible = false
+			play_minigames_button.visible = false
+			skip_to_battle_button.visible = false
+			minigames_counter_label.visible = false
+
+			if App.is_multiplayer:
+				# Multiplayer: use battle selection UI
+				_update_battle_selection_ui()
+			else:
+				# Single player: just show battle button
+				battle_button.visible = true
+
+		App.GamePhase.CARD_COLLECTION:
 			# Show all minigame buttons in a row
 			minigame_button.visible = true
 			bridge_minigame_button.visible = true
 			ice_fishing_button.visible = true
 			play_minigames_button.visible = false  # Hide mock button
 			skip_to_battle_button.visible = true
+			skip_to_battle_button.text = "Skip to Next Round"
 			battle_button.visible = false
 			battle_button_right.visible = false
 			left_battle_selectors.visible = false
@@ -811,32 +903,17 @@ func _apply_phase_ui() -> void:
 				ice_fishing_button.disabled = true
 				play_minigames_button.disabled = true
 				skip_to_battle_button.disabled = true
-				_show_waiting_for_others_overlay()
+				_set_overlay_state(OverlayState.WAITING, "Waiting for others...")
+				is_waiting_for_others = true
 			else:
-				# Re-enable buttons when returning to resource phase
+				# Re-enable buttons
 				minigame_button.disabled = false
 				bridge_minigame_button.disabled = false
 				ice_fishing_button.disabled = false
 				play_minigames_button.disabled = false
 				skip_to_battle_button.disabled = false
-				waiting_overlay.visible = false
+				_set_overlay_state(OverlayState.NONE)
 				is_waiting_for_others = false
-
-		App.GamePhase.BATTLE_PHASE:
-			# Hide all minigame buttons
-			minigame_button.visible = false
-			bridge_minigame_button.visible = false
-			ice_fishing_button.visible = false
-			play_minigames_button.visible = false
-			skip_to_battle_button.visible = false
-			minigames_counter_label.visible = false
-
-			if App.is_multiplayer:
-				# Multiplayer: use battle selection UI
-				_update_battle_selection_ui()
-			else:
-				# Single player: just show battle button
-				battle_button.visible = true
 
 	# Settings is always visible when game is ready
 	settings_button.visible = true
@@ -844,6 +921,15 @@ func _apply_phase_ui() -> void:
 	# Card icon button is always visible when game is ready (if player has cards)
 	if App.player_card_collection.size() > 0:
 		card_icon_button.visible = true
+
+func _get_player_name_for_peer(peer_id: int) -> String:
+	## Helper to get player name from peer ID
+	if Net.player_names.has(peer_id):
+		return Net.player_names[peer_id]
+	for player in App.turn_order:
+		if player.get("id", -1) == peer_id:
+			return player.get("name", "Player")
+	return "Player"
 
 func _show_phase_transition_overlay() -> void:
 	## Shows a brief overlay announcing the current phase
@@ -908,16 +994,38 @@ func _update_minigames_counter() -> void:
 		minigames_counter_label.text = "Minigames: %d/%d" % [App.minigames_completed_this_phase, App.MAX_MINIGAMES_PER_PHASE]
 
 func _on_skip_to_battle_pressed() -> void:
-	## Handle skip to battle button press
-	App.skip_to_battle_phase()
-
-	# Multiplayer: skip marks you as done; stay on this scene and wait for others
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		_show_waiting_for_others_overlay()
-		return
-
-	# Single player: transition immediately (existing behavior)
-	App.go("res://scenes/ui/GameIntro.tscn")
+	## Handle skip/done button press - behavior depends on phase
+	match App.current_game_phase:
+		App.GamePhase.CARD_COMMAND:
+			# In Card Command phase, this is "Done Placing Cards"
+			# Hide the button immediately to prevent double-clicking
+			skip_to_battle_button.visible = false
+			
+			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+				# Use turn-based advancement (not done counting)
+				Net.request_end_card_command_turn()
+				# Show waiting overlay - next player will get their turn or phase advances
+				_set_overlay_state(OverlayState.WAITING, "Waiting for other players...")
+				is_waiting_for_others = true
+			else:
+				# Single player: move to Claim & Conquer
+				App.enter_claim_conquer_phase()
+				_show_phase_transition_overlay()
+		
+		App.GamePhase.CARD_COLLECTION:
+			# In Card Collection phase, this is "Skip to Next Round"
+			App.skip_to_done()
+			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+				_set_overlay_state(OverlayState.WAITING, "Waiting for other players...")
+				is_waiting_for_others = true
+			else:
+				# Single player: loop back to Card Command
+				App.enter_card_command_phase()
+				_show_phase_transition_overlay()
+		
+		_:
+			# Fallback for any other phase
+			App.skip_to_done()
 
 ## ========== END PHASE SYSTEM UI ==========
 
@@ -1065,6 +1173,8 @@ func _connect_net_signals() -> void:
 		Net.phase_changed.connect(_on_net_phase_changed)
 	if not Net.done_counts_updated.is_connected(_on_done_counts_updated):
 		Net.done_counts_updated.connect(_on_done_counts_updated)
+	if not Net.turn_changed.is_connected(_on_turn_changed):
+		Net.turn_changed.connect(_on_turn_changed)
 	if not Net.battle_decider_changed.is_connected(_on_battle_decider_changed):
 		Net.battle_decider_changed.connect(_on_battle_decider_changed)
 	if not Net.battle_choices_updated.is_connected(_on_battle_choices_updated):
@@ -1079,19 +1189,29 @@ func _on_net_phase_changed(phase_id: int) -> void:
 
 	var prev_phase := App.current_game_phase
 
-	if phase_id == 0:
-		App.current_game_phase = App.GamePhase.RESOURCE_PHASE
-		App.minigames_completed_this_phase = 0
-		App.phase_transition_text = "Collect Your Resources"
-	else:
-		App.current_game_phase = App.GamePhase.BATTLE_PHASE
-		App.phase_transition_text = "Choose Your Battles"
+	# Map phase_id to GamePhase enum: 0=CARD_COMMAND, 1=CLAIM_CONQUER, 2=CARD_COLLECTION
+	match phase_id:
+		0:
+			App.current_game_phase = App.GamePhase.CARD_COMMAND
+			App.phase_transition_text = "Card Command"
+		1:
+			App.current_game_phase = App.GamePhase.CLAIM_CONQUER
+			App.phase_transition_text = "Claim & Conquer"
+		2:
+			App.current_game_phase = App.GamePhase.CARD_COLLECTION
+			App.minigames_completed_this_phase = 0
+			App.phase_transition_text = "Card Collection"
+
+	# Only update UI if intro sequence is complete
+	if current_phase != Phase.GAME_READY:
+		print("[GameIntro] Intro not complete, deferring UI update")
+		return
 
 	# Only show the overlay if the phase actually changed
 	App.show_phase_transition = (App.current_game_phase != prev_phase)
 
 	is_waiting_for_others = false
-	waiting_overlay.visible = false
+	_set_overlay_state(OverlayState.NONE)
 
 	minigame_button.disabled = false
 	bridge_minigame_button.disabled = false
@@ -1105,18 +1225,29 @@ func _on_net_phase_changed(phase_id: int) -> void:
 		# No overlay; just apply UI immediately
 		_apply_phase_ui()
 
+func _on_turn_changed(peer_id: int) -> void:
+	## Update UI when turn changes
+	print("[GameIntro] Turn changed to: ", peer_id)
+	# Reapply phase UI to update whose turn it is
+	if current_phase == Phase.GAME_READY:
+		_apply_phase_ui()
+
 func _on_done_counts_updated(done: int, total: int) -> void:
 	## Update waiting overlay with done counts
 	local_done_count = done
 	local_total_count = total
 
-	if is_waiting_for_others and waiting_overlay.visible:
+	if is_waiting_for_others and _overlay_state == OverlayState.WAITING:
 		waiting_label.text = "Waiting for other players... (%d/%d done)" % [done, total]
 	
 	# ROBUSTNESS: Check if Net phase has advanced but App phase hasn't
-	var net_phase_as_enum := App.GamePhase.RESOURCE_PHASE if Net.current_phase == 0 else App.GamePhase.BATTLE_PHASE
+	var net_phase_as_enum: App.GamePhase
+	match Net.current_phase:
+		0: net_phase_as_enum = App.GamePhase.CARD_COMMAND
+		1: net_phase_as_enum = App.GamePhase.CLAIM_CONQUER
+		2: net_phase_as_enum = App.GamePhase.CARD_COLLECTION
+		_: net_phase_as_enum = App.GamePhase.CARD_COMMAND
 	if net_phase_as_enum != App.current_game_phase:
-		_on_net_phase_changed(Net.current_phase)
 		print("[GameIntro] Phase mismatch detected (Net: %d, App: %d). Forcing sync." % [Net.current_phase, App.current_game_phase])
 		_on_net_phase_changed(Net.current_phase)
 
@@ -1180,9 +1311,13 @@ func _update_battle_selection_ui() -> void:
 	## Update battle selection UI based on current state
 	if not App.is_multiplayer:
 		return
+	
+	# Don't update during intro sequence
+	if current_phase != Phase.GAME_READY:
+		return
 
-	if App.current_game_phase != App.GamePhase.BATTLE_PHASE:
-		# Hide battle selection UI in resource phase
+	if App.current_game_phase != App.GamePhase.CLAIM_CONQUER:
+		# Hide battle selection UI in non-battle phases
 		battle_button_right.visible = false
 		left_battle_selectors.visible = false
 		right_battle_selectors.visible = false
@@ -1192,7 +1327,8 @@ func _update_battle_selection_ui() -> void:
 
 	# Check if battle is in progress
 	if Net.battle_in_progress:
-		_show_battle_in_progress_overlay()
+		_set_overlay_state(OverlayState.WAITING, "Battle in progress... waiting")
+		is_waiting_for_others = true
 		return
 
 	var my_id := multiplayer.get_unique_id()
@@ -1223,7 +1359,7 @@ func _update_battle_selection_ui() -> void:
 		battle_button_right.disabled = right_full
 		skip_battle_decision_button.visible = true
 		skip_battle_decision_button.disabled = false
-		waiting_overlay.visible = false
+		_set_overlay_state(OverlayState.NONE)
 
 		# Update button text if full
 		if left_full:
@@ -1241,8 +1377,7 @@ func _update_battle_selection_ui() -> void:
 		skip_battle_decision_button.visible = false
 
 		# Show waiting message
-		waiting_label.text = "Waiting for %s to choose..." % decider_name
-		waiting_overlay.visible = true
+		_set_overlay_state(OverlayState.WAITING, "Waiting for %s to choose..." % decider_name)
 
 func _update_battle_selector_list(container: VBoxContainer, queue: Array) -> void:
 	## Update a selector container with player names/icons from queue
@@ -1295,13 +1430,12 @@ func _get_player_data_by_id(peer_id: int) -> Dictionary:
 	return {}
 
 func _show_battle_in_progress_overlay() -> void:
-	## Show waiting overlay during battle in progress
-	waiting_label.text = "Battle in progress... waiting"
-	waiting_overlay.visible = true
+	## Show waiting overlay during battle in progress (uses unified overlay)
+	_set_overlay_state(OverlayState.WAITING, "Battle in progress... waiting")
 	is_waiting_for_others = true
 
 func _show_waiting_for_others_overlay() -> void:
-	## Show waiting overlay when player is done
+	## Show waiting overlay when player is done (uses unified overlay)
 	is_waiting_for_others = true
 	
 	# Compute done counts directly from Net state (not cached values which may be 0/0)
@@ -1314,8 +1448,7 @@ func _show_waiting_for_others_overlay() -> void:
 		# Fallback: use game_players count if Net state not initialized
 		total = App.game_players.size()
 	
-	waiting_label.text = "Waiting for other players... (%d/%d done)" % [done, total]
-	waiting_overlay.visible = true
+	_set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [done, total])
 	
 	# Disable minigame buttons
 	minigame_button.disabled = true
