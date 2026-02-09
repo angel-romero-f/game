@@ -201,8 +201,8 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 
 
 func _on_battle_cards_updated() -> void:
-	## Refresh opponent slots with face-down cards from remote player(s).
-	if state == State.WAITING_FOR_PLAYER or state == State.WAITING_FOR_ALL_READY:
+	## Refresh opponent slots from remote player(s). Also refresh in RESOLVED so loser's cards clear when synced.
+	if state in [State.WAITING_FOR_PLAYER, State.WAITING_FOR_ALL_READY, State.RESOLVED]:
 		_update_opponent_cards_from_net()
 
 
@@ -216,7 +216,18 @@ func _on_battle_start_requested() -> void:
 	await _flip_opponent_cards_from_pool()
 	_resolve_battle()
 	_show_result()
+	_report_battle_resolved()
 	state = State.RESOLVED
+
+
+func _report_battle_resolved() -> void:
+	## Report result to BattleStateManager and sync loser's card clearance to Net (multiplayer).
+	var result := _get_battle_result()
+	var local_won := result == "win"
+	if BattleStateManager:
+		BattleStateManager.record_battle_result(result, local_won)
+	if _is_multiplayer and result == "lose":
+		Net.request_clear_my_battle_cards()
 
 
 func _update_opponent_cards_from_net() -> void:
@@ -227,9 +238,8 @@ func _update_opponent_cards_from_net() -> void:
 		if int(pid) != my_id:
 			other_peer_id = int(pid)
 			break
-	if other_peer_id < 0:
-		return
-	var other_cards: Dictionary = Net.battle_placed_cards.get(other_peer_id, {})
+	# If no other peer (e.g. loser was cleared), other_cards is empty - we'll clear opponent slots
+	var other_cards: Dictionary = Net.battle_placed_cards.get(other_peer_id, {}) if other_peer_id >= 0 else {}
 	if not _deck_o:
 		return
 	var back_frames: SpriteFrames = _deck_o.get("deck_sprite_frames")
@@ -268,6 +278,7 @@ func _update_opponent_cards_from_net() -> void:
 func _setup_ui() -> void:
 	if _start_button:
 		_start_button.visible = false
+		_start_button.text = "Ready"
 		if not _start_button.pressed.is_connected(_on_start_battle_pressed):
 			_start_button.pressed.connect(_on_start_battle_pressed)
 
@@ -364,7 +375,7 @@ func _player_ready() -> bool:
 func _update_start_button_visibility() -> void:
 	if not _start_button:
 		return
-	_start_button.visible = _player_ready() and state == State.WAITING_FOR_PLAYER
+	_start_button.visible = state == State.WAITING_FOR_PLAYER
 
 
 func _place_opponent_backs() -> void:
@@ -417,8 +428,6 @@ func _place_opponent_backs() -> void:
 func _on_start_battle_pressed() -> void:
 	if state != State.WAITING_FOR_PLAYER:
 		return
-	if not _player_ready():
-		return
 
 	if _is_multiplayer:
 		Net.request_battle_ready()
@@ -434,6 +443,7 @@ func _on_start_battle_pressed() -> void:
 	await _flip_opponent_cards_from_pool()
 	_resolve_battle()
 	_show_result()
+	_report_battle_resolved()
 	state = State.RESOLVED
 
 
