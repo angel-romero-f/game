@@ -40,7 +40,6 @@ var settings_panel: Panel
 var phase_overlay: ColorRect
 var phase_label: Label
 var minigames_counter_label: Label
-var territory_nodes: Array = []
 
 # Hand display nodes
 var card_icon_button: Button
@@ -121,7 +120,6 @@ func _ready() -> void:
 	# Get node references
 	map_bg = $MapBackground
 	map_overlay = $MapOverlay
-	map_overlay.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	showcase_container = $ShowcaseContainer
 	showcase_race_image = $ShowcaseContainer/VBoxContainer/RaceImageContainer/RaceImage
 	showcase_name_label = $ShowcaseContainer/VBoxContainer/NameLabel
@@ -1558,24 +1556,6 @@ func _populate_hand_display() -> void:
 					card_visual.texture = sprite_frames.get_frame_texture("default", frame_index)
 
 		hand_container.add_child(card_visual)
-		hand_card_nodes.append(card_visual)
-		card_visual.gui_input.connect(_on_hand_card_gui_input.bind(i))
-
-
-func _on_hand_card_gui_input(event: InputEvent, card_index: int) -> void:
-	if event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_select_hand_card(card_index)
-
-
-func _select_hand_card(card_index: int) -> void:
-	selected_card_index = card_index
-	for i in range(hand_card_nodes.size()):
-		var node: Control = hand_card_nodes[i]
-		if node and node is TextureRect:
-			if i == selected_card_index:
-				node.modulate = Color(1.2, 1.2, 1.2, 1.0)
-			else:
-				node.modulate = Color(1, 1, 1, 1)
 
 func _show_card_icon_button() -> void:
 	## Shows the card icon button with a fade-in animation
