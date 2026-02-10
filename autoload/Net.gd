@@ -77,66 +77,180 @@ func host_game() -> void:
 	_connect_signals()
 	joined_game.emit()
 
-## Join a game using code string like "192.168.1.12" or "192.168.1.12:9999"
+## Join a game using code string like:
+## - IPv4: "192.168.1.12" or "192.168.1.12:9999"
+## - IPv6: "2607:fb91::1" or "[2607:fb91::1]:9999"
 func join_game(code: String) -> void:
-	# Clean up any existing connection first (silent cleanup)
-	if multiplayer.multiplayer_peer:
-		_cleanup_connection()
+	_debug_log("=== JOIN_GAME CALLED ===")
+	_debug_log("Raw code input: '%s'" % code)
 	
 	var ip := ""
 	var port := PORT
-	
-	# Parse code: accept "ip" or "ip:port"
+
+	# Parse code: handle both IPv4 and IPv6 formats
 	code = code.strip_edges()
-	if ":" in code:
+	
+	# Check if it's IPv6 format (contains multiple colons or starts with bracket)
+	if code.begins_with("["):
+		# Bracketed IPv6: [2607:fb91::1] or [2607:fb91::1]:9999
+		var bracket_end := code.find("]")
+		if bracket_end > 0:
+			ip = code.substr(1, bracket_end - 1)  # Extract IP without brackets
+			if code.length() > bracket_end + 1 and code[bracket_end + 1] == ":":
+				# Has port after bracket
+				port = code.substr(bracket_end + 2).to_int()
+				if port <= 0:
+					port = PORT
+		else:
+			ip = code  # Malformed, try anyway
+	elif code.count(":") > 1:
+		# Unbracketed IPv6 (no port possible in this format): 2607:fb91::1
+		ip = code
+	elif ":" in code:
+		# IPv4 with port: 192.168.1.12:9999
 		var parts := code.split(":")
 		if parts.size() >= 2:
 			ip = parts[0]
-			port = parts[1].to_int()
-			if port <= 0:
-				port = PORT
 		else:
 			ip = code
 	else:
+		# Plain IPv4: 192.168.1.12
 		ip = code
-	
+
+	_debug_log("Parsed IP: '%s', Port: %d" % [ip, port])
+	_debug_log("IP type: %s" % ("IPv6" if ":" in ip else "IPv4"))
+
 	if ip.is_empty():
 		push_error("Invalid host code: empty IP")
 		return
-	
+
+	# Clean up any existing connection first
+	if multiplayer.multiplayer_peer:
+		_debug_log("Cleaning up existing peer connection")
+		_cleanup_connection()
+
+	# Create ENet client peer and attempt connection
 	peer = ENetMultiplayerPeer.new()
 	var err := peer.create_client(ip, port)
 	if err != OK:
-		push_error("create_client failed: %s" % err)
+		push_error("create_client failed with error %s" % err)
+		_debug_log("create_client failed with error %s" % err)
+		peer = null
 		return
+
 	multiplayer.multiplayer_peer = peer
 	_connect_signals()
-	joined_game.emit()
 
-## Get the host's likely LAN IP address (IP only, no port)
+	_debug_log("Client peer created, connecting to %s:%d..." % [ip, port])
+	_debug_log("Local addresses on this machine:")
+	for addr in IP.get_local_addresses():
+		if typeof(addr) == TYPE_STRING:
+			_debug_log("  - %s" % String(addr))
+
+## Get the host's likely network address (IPv4 or IPv6)
+## Returns IP only, no port. For IPv6, returns bracketed format like [2607:fb91::1]
 func get_host_code() -> String:
 	var addresses := IP.get_local_addresses()
+
+	_debug_log("get_host_code() - Scanning for network IP...")
+	_debug_log("All addresses found: %s" % str(addresses))
+
+	# Collect candidate IPs with priorities (lower = better)
+	var ipv4_candidates: Array = []
+	var ipv6_candidates: Array = []
 	
-	# Try to find a non-localhost IPv4 address
-	# Private IP ranges: 192.168.x.x, 10.x.x.x, 172.16-31.x.x
 	for address in addresses:
-		if typeof(address) == TYPE_STRING:
-			# Skip IPv6 and localhost
-			if ":" in address or address == "127.0.0.1" or address.begins_with("127."):
+		if typeof(address) != TYPE_STRING:
+			continue
+		
+		# Check if IPv6 (contains colons)
+		if ":" in address:
+			# Skip localhost IPv6
+			if address == "0:0:0:0:0:0:0:1" or address == "::1":
+				_debug_log("  Skipping %s (IPv6 localhost)" % address)
 				continue
-			# Check for private IP ranges
-			if address.begins_with("192.168.") or address.begins_with("10."):
-				return address
-			# Check for 172.16-31.x.x range
-			if address.begins_with("172."):
-				var parts := address.split(".")
-				if parts.size() >= 2:
-					var second_octet := parts[1].to_int()
-					if second_octet >= 16 and second_octet <= 31:
-						return address
+			# Skip link-local IPv6 (fe80::)
+			if address.begins_with("fe80:"):
+				_debug_log("  Skipping %s (IPv6 link-local)" % address)
+				continue
+			# Global unicast IPv6 addresses start with 2 or 3
+			if address.begins_with("2") or address.begins_with("3"):
+				ipv6_candidates.append({"ip": address, "reason": "IPv6 global"})
+				_debug_log("  IPv6 Candidate: %s (global unicast)" % address)
+			continue
+		
+		# IPv4 handling
+		if address == "127.0.0.1" or address.begins_with("127."):
+			_debug_log("  Skipping %s (IPv4 localhost)" % address)
+			continue
+		
+		var parts := address.split(".")
+		if parts.size() != 4:
+			continue
+		
+		# Skip IANA reserved ranges that aren't routable
+		# 192.0.0.x - IANA reserved (DS-Lite, etc.)
+		# 192.0.2.x - TEST-NET-1
+		# 198.51.100.x - TEST-NET-2
+		# 203.0.113.x - TEST-NET-3
+		if address.begins_with("192.0.0.") or address.begins_with("192.0.2.") or address.begins_with("198.51.100.") or address.begins_with("203.0.113."):
+			_debug_log("  Skipping %s (IANA reserved - not routable)" % address)
+			continue
+		
+		# Skip common VM bridge ranges (these are NOT reachable from other devices)
+		# 192.168.64.x - Parallels/UTM default bridge
+		# 192.168.56.x - VirtualBox host-only
+		# 172.17.x.x - Docker default bridge
+		if address.begins_with("192.168.64.") or address.begins_with("192.168.56.") or address.begins_with("172.17."):
+			_debug_log("  Skipping %s (VM bridge - not reachable externally)" % address)
+			continue
+		
+		# Prioritize real network interfaces
+		# Priority 1: Standard home/office LAN (192.168.x.x except VM bridges, 10.x.x.x)
+		if address.begins_with("192.168."):
+			ipv4_candidates.append({"ip": address, "priority": 1, "reason": "192.168.x.x LAN"})
+			_debug_log("  IPv4 Candidate: %s (priority 1 - 192.168.x.x LAN)" % address)
+		elif address.begins_with("10."):
+			ipv4_candidates.append({"ip": address, "priority": 1, "reason": "10.x.x.x LAN"})
+			_debug_log("  IPv4 Candidate: %s (priority 1 - 10.x.x.x LAN)" % address)
+		# Priority 2: 172.16-31.x.x private range
+		elif address.begins_with("172."):
+			var second_octet := parts[1].to_int()
+			if second_octet >= 16 and second_octet <= 31:
+				ipv4_candidates.append({"ip": address, "priority": 2, "reason": "172.x private"})
+				_debug_log("  IPv4 Candidate: %s (priority 2 - 172.x private)" % address)
+		# Priority 3: Any other non-localhost IPv4 (could be public/institutional network)
+		else:
+			ipv4_candidates.append({"ip": address, "priority": 3, "reason": "other IPv4"})
+			_debug_log("  IPv4 Candidate: %s (priority 3 - other network IP)" % address)
 	
+	# Prefer IPv4 if we have good candidates
+	if ipv4_candidates.size() > 0:
+		ipv4_candidates.sort_custom(func(a, b): return a["priority"] < b["priority"])
+		var best = ipv4_candidates[0]
+		_debug_log("  SELECTED IPv4: %s (%s)" % [best["ip"], best["reason"]])
+		return best["ip"]
+	
+	# Fall back to IPv6 global addresses (common on university/modern networks)
+	if ipv6_candidates.size() > 0:
+		var best = ipv6_candidates[0]
+		# Return IPv6 in a format that can be used directly
+		# Note: For connection, IPv6 addresses need brackets in URLs but ENet handles raw
+		_debug_log("  SELECTED IPv6: %s (%s)" % [best["ip"], best["reason"]])
+		_debug_log("  NOTE: IPv6-only network detected. Both devices must support IPv6.")
+		return best["ip"]
+
 	# Fallback to localhost
+	_debug_log("  WARNING: No network IP found! Falling back to 127.0.0.1")
+	_debug_log("  This means networking will ONLY work on the same machine!")
 	return "127.0.0.1"
+
+const DEBUG_NETWORKING := true
+
+func _debug_log(message: String) -> void:
+	if DEBUG_NETWORKING:
+		var timestamp := Time.get_time_string_from_system()
+		print("[Net %s] %s" % [timestamp, message])
 
 func _connect_signals() -> void:
 	# Disconnect first to avoid duplicates

@@ -97,4 +97,3 @@ func get_last_result(territory_id: String = "") -> String:
 func last_winner_is_local(territory_id: String = "") -> bool:
 	var state := _get_state(territory_id)
 	return bool(state.get("last_winner_is_local", false))
-
