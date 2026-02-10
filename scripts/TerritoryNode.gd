@@ -386,18 +386,20 @@ func add_adjacent_node(node: TerritoryNode) -> void:
 		adjacent_nodes.append(node)
 
 
-## Select this territory (emits signal). Shows cyan glow while claim panel is open.
+## Select this territory (emits signal). Does NOT show glow - GameIntro calls show_selection_glow() when panel opens.
 func _select_territory() -> void:
 	if not territory_data:
 		push_warning("TerritoryNode '%s' has no territory_data. Cannot select." % name)
 		return
-	
-	is_selected = true
-	_show_selected_glow()
 	territory_selected.emit(territory_data.territory_id)
 
 
-## Deselect this territory
+## Show cyan selection glow (call when claim panel is open for this territory)
+func show_selection_glow() -> void:
+	is_selected = true
+	_show_selected_glow()
+
+## Deselect this territory (remove cyan glow - call when claim panel closes)
 func deselect() -> void:
 	is_selected = false
 	_hide_glow()

@@ -15,7 +15,7 @@ var is_multiplayer: bool = false
 const MAX_LIVES: int = 3
 var current_lives: int = MAX_LIVES
 
-## ========== PHASE SYSTEM ==========
+## ---------- PHASE SYSTEM ----------
 ## Game phases: Card Command -> Claim & Conquer -> Card Collection -> loop
 enum GamePhase { CARD_COMMAND, CLAIM_CONQUER, CARD_COLLECTION }
 
@@ -31,7 +31,7 @@ const MAX_MINIGAMES_PER_PHASE: int = 2
 var show_phase_transition: bool = false
 var phase_transition_text: String = ""
 
-## When returning from a territory minigame: restore GameIntro map sub-phase (0=CLAIMING, 1=RESOURCE_COLLECTION, 2=BATTLE_READY). -1 = not returning.
+## When returning from a territory minigame: restore GameIntro map sub-phase. Use CLAIMING, RESOURCE_COLLECTION, or BATTLE_READY. Use -1 when not returning.
 var pending_return_map_sub_phase: int = -1
 ## True when we left for a minigame from territory; GameIntro will call on_minigame_completed() when it loads.
 var returning_from_territory_minigame: bool = false
@@ -40,7 +40,7 @@ var returning_from_territory_minigame: bool = false
 var current_turn_player_id: int = -1
 var current_turn_index: int = 0
 
-## ========== BATTLE QUEUE SYSTEM ==========
+## ---------- BATTLE QUEUE SYSTEM ----------
 ## Stores selected battles for multi-battle progression
 ## Array of battle indices [1, 2, 3] selected by player
 var battle_queue: Array = []
@@ -51,6 +51,7 @@ var current_battle_metadata: Dictionary = {}
 
 func enter_card_command_phase() -> void:
 	current_game_phase = GamePhase.CARD_COMMAND
+	minigames_completed_this_phase = 0
 	phase_transition_text = "Card Command"
 	show_phase_transition = true
 	print("[Phase] Entering CARD_COMMAND")
@@ -58,6 +59,7 @@ func enter_card_command_phase() -> void:
 
 func enter_claim_conquer_phase() -> void:
 	current_game_phase = GamePhase.CLAIM_CONQUER
+	minigames_completed_this_phase = 0
 	phase_transition_text = "Claim & Conquer"
 	show_phase_transition = true
 	print("[Phase] Entering CLAIM_CONQUER")
@@ -71,6 +73,11 @@ func enter_card_collection_phase() -> void:
 	print("[Phase] Entering CARD_COLLECTION")
 	game_phase_changed.emit(current_game_phase)
 
+func enter_battle_phase() -> void:
+	## Show "Choose Your Battles" overlay when entering battle selection (single-player map flow)
+	phase_transition_text = "Choose Your Battles"
+	show_phase_transition = true
+
 func on_minigame_completed() -> void:
 	## Called when player wins a minigame
 	minigames_completed_this_phase += 1
@@ -83,10 +90,12 @@ func on_minigame_completed() -> void:
 		# Don't auto-transition locally - host will broadcast phase change
 		return
 	
-	# Single player: check if we should auto-loop back to Card Command
+	# Single player: when max minigames reached, transition depends on current phase
 	if minigames_completed_this_phase >= MAX_MINIGAMES_PER_PHASE:
-		print("[Phase] Max minigames reached, looping to Card Command")
-		enter_card_command_phase()
+		if current_game_phase == GamePhase.CARD_COLLECTION:
+			print("[Phase] Max minigames reached, looping to Card Command")
+			enter_card_command_phase()
+		# If in CLAIM_CONQUER, GameIntro handles BATTLE_READY transition (delayed overlay)
 
 func on_battle_completed() -> void:
 	## Called when a single battle ends - handles multi-battle queue progression
@@ -195,9 +204,9 @@ func reset_phase_state() -> void:
 	battle_queue.clear()
 	current_battle_queue_index = -1
 	current_battle_metadata.clear()
-## ========== END PHASE SYSTEM ==========
+## ---------- END PHASE SYSTEM ----------
 
-## ========== PLAYER HAND SYSTEM ==========
+## ---------- PLAYER HAND SYSTEM ----------
 ## Available cards - each entry is {sprite_frames_path, frame_index}
 ## Race-specific card pools
 const ELF_CARDS: Array = [
@@ -259,7 +268,7 @@ var player_card_collection: Array = []
 ## New code should prefer BattleStateManager for per-territory state.
 var battle_placed_cards: Dictionary = {}
 
-## ========== MAP TERRITORY OWNERSHIP ==========
+## ---------- MAP TERRITORY OWNERSHIP ----------
 ## territory_id -> {
 ##   "owner_id": int,
 ##   "owner_name": String,
@@ -288,7 +297,7 @@ func place_card_on_territory(territory_id: String, player: Dictionary, card_data
 func get_territory(territory_id: String) -> Dictionary:
 	return territories.get(territory_id, {})
 
-## ========== END MAP TERRITORY OWNERSHIP ==========
+## ---------- END MAP TERRITORY OWNERSHIP ----------
 
 func initialize_player_hand(hand_size: int = 3) -> void:
 	## Randomly selects cards from the appropriate pool based on selected race
@@ -352,10 +361,6 @@ func initialize_player_card_collection() -> void:
 			card_pool = FAIRY_CARDS.duplicate()
 		"Orc":
 			card_pool = ORC_CARDS.duplicate()
-		"Fairy":
-			card_pool = FAIRY_CARDS.duplicate()
-		"Orc":
-			card_pool = ORC_CARDS.duplicate()
 		_:
 			card_pool = MIXED_CARD_POOL.duplicate()
 	card_pool.shuffle()
@@ -366,15 +371,13 @@ func initialize_player_card_collection() -> void:
 
 ## Add a random card when player wins a minigame
 func add_card_from_minigame_win() -> void:
-	var card_pool: Array
-	card_pool = MIXED_CARD_POOL.duplicate()
-	card_pool = MIXED_CARD_POOL.duplicate()
+	var card_pool: Array = MIXED_CARD_POOL.duplicate()
 	if card_pool.is_empty():
 		return
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
 	player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
 	print("[Cards] Added card from minigame win. Collection size: ", player_card_collection.size())
-## ========== END PLAYER HAND SYSTEM ==========
+## ---------- END PLAYER HAND SYSTEM ----------
 
 func reset_lives() -> void:
 	current_lives = MAX_LIVES
@@ -514,6 +517,11 @@ func setup_multiplayer_game() -> void:
 	reset_territories()
 	initialize_player_hand()
 	initialize_player_card_collection()
+	# Clear territory claims so all territories start unclaimed (multiplayer uses Net sync)
+	var tcs_path: String = "/root/" + "Territory" + "Claim" + "State"
+	var tcs: Node = get_node_or_null(tcs_path)
+	if tcs and tcs.has_method("clear_all"):
+		tcs.clear_all()
 	
 	# Build player list from Net.player_names and Net.player_races
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1

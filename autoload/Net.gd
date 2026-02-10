@@ -19,14 +19,19 @@ signal battle_decider_changed(peer_id: int)
 signal battle_choices_updated(snapshot: Dictionary)
 signal battle_started(p1_id: int, p2_id: int, side: String)
 signal battle_finished_broadcast()
+signal territory_claimed(territory_id: int, owner_id: int, cards: Array)
+signal territory_claim_rejected(territory_id: int, claimer_name: String)
+signal map_sub_phase_changed(sub_phase: int)  # CLAIMING=0, RESOURCE_COLLECTION=1, BATTLE_READY=2
 
 var player_names: Dictionary = {}
 var player_races: Dictionary = {} # peer_id -> race_name (String)
 var player_rolls: Dictionary = {} # peer_id -> roll value (int)
 
-# ========== PHASE SYNC STATE ==========
+# ---------- PHASE SYNC STATE ----------
 # Current game phase: 0 = CARD_COMMAND, 1 = CLAIM_CONQUER, 2 = CARD_COLLECTION
 var current_phase: int = 0
+# Map sub-phase within CLAIM_CONQUER: 0 = CLAIMING, 1 = RESOURCE_COLLECTION, 2 = BATTLE_READY
+var map_sub_phase: int = 0
 # Per-player done state in current phase: {peer_id: bool}
 var player_done_state: Dictionary = {}
 # Per-player minigame counts for Card Collection phase: {peer_id: int}
@@ -36,7 +41,7 @@ var current_turn_peer_id: int = -1
 # Current position in turn order
 var current_turn_index: int = 0
 
-# ========== BATTLE PHASE STATE ==========
+# ---------- BATTLE PHASE STATE ----------
 # Current position in turn order for battle decisions
 var battle_decision_index: int = 0
 # Current decider's peer_id
@@ -453,7 +458,7 @@ func request_rolls_from_host() -> void:
 	if multiplayer.is_server():
 		host_generate_and_sync_rolls()
 
-## ========== CARD BATTLE MULTIPLAYER ==========
+## ---------- CARD BATTLE MULTIPLAYER ----------
 ## Server-authoritative state for the card battle scene.
 ## peer_id -> { slot_index (0-2) -> { "path": String, "frame": int } }
 var battle_placed_cards: Dictionary = {}
@@ -573,11 +578,12 @@ func notify_battle_left() -> void:
 				if not path.is_empty():
 					BattleStateManager.set_local_slot(int(slot_idx), path, frame, territory_id)
 
-# ========== PHASE SYNC SYSTEM ==========
+# ---------- PHASE SYNC SYSTEM ----------
 
 ## Reset all phase-related state for a new game
 func reset_phase_sync_state() -> void:
 	current_phase = 0
+	map_sub_phase = 0
 	player_done_state.clear()
 	player_minigame_counts.clear()
 	battle_decision_index = 0
@@ -606,10 +612,10 @@ func _init_phase_done_state() -> void:
 		player_done_state[pid] = false
 		player_minigame_counts[pid] = 0
 
-## Count how many players are done
+## Count how many players are done (among tracked peers)
 func _count_done_players() -> int:
 	var count := 0
-	for pid in player_done_state.keys():
+	for pid in _get_all_peer_ids():
 		if player_done_state.get(pid, false):
 			count += 1
 	return count
@@ -620,15 +626,20 @@ func _check_all_done_and_advance() -> void:
 		return
 	var all_peers := _get_all_peer_ids()
 	var done_count := _count_done_players()
+	var total := all_peers.size()
 	
 	# Broadcast updated done state dictionary AND counts to all clients
 	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
-	rpc_sync_done_counts.rpc(done_count, all_peers.size())
+	rpc_sync_done_counts.rpc(done_count, total)
 	
-	if done_count >= all_peers.size():
+	# Require at least 1 player and all to be done
+	if total > 0 and done_count >= total:
 		# All done - advance to next phase
 		if current_phase == 0:  # CARD_COMMAND -> CLAIM_CONQUER
 			_server_enter_claim_conquer_phase()
+		elif current_phase == 1:  # CLAIM_CONQUER: all done minigames -> BATTLE_READY
+			_sync_battle_state()  # Ensure clients have battle state before showing battle UI
+			rpc_map_sub_phase.rpc(2)
 		elif current_phase == 2:  # CARD_COLLECTION -> CARD_COMMAND (loop)
 			host_init_card_command_phase()
 
@@ -707,15 +718,139 @@ func rpc_sync_done_state(done_state: Dictionary, minigame_counts: Dictionary) ->
 func rpc_sync_done_counts(done: int, total: int) -> void:
 	done_counts_updated.emit(done, total)
 
-## Server enters Claim & Conquer phase (phase 1)
+## ---------- TERRITORY CLAIM SYNC ----------
+## Any peer requests to claim a territory; server validates and broadcasts
+func request_claim_territory(territory_id: int, owner_id: int, cards: Array) -> void:
+	if multiplayer.is_server():
+		_server_process_claim_territory(multiplayer.get_unique_id(), territory_id, owner_id, cards)
+	else:
+		server_claim_territory.rpc_id(1, territory_id, owner_id, cards)
+
+@rpc("any_peer", "reliable")
+func server_claim_territory(territory_id: int, owner_id: int, cards: Array) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = multiplayer.get_unique_id()
+	_server_process_claim_territory(sender_id, territory_id, owner_id, cards)
+
+func _server_process_claim_territory(requester_id: int, territory_id: int, owner_id: int, cards: Array) -> void:
+	if not multiplayer.is_server():
+		return
+	# Requester must claim for themselves
+	if requester_id != owner_id:
+		return
+	# Check if territory is already claimed by another player
+	var tcs := _get_territory_claim_state()
+	if tcs and tcs.has_method("is_claimed") and tcs.call("is_claimed", territory_id):
+		var existing_owner_id = tcs.call("get_owner_id", territory_id)
+		if existing_owner_id != null and int(existing_owner_id) != int(owner_id):
+			var claimer_name := _get_player_name(int(existing_owner_id))
+			rpc_claim_rejected.rpc_id(requester_id, territory_id, claimer_name)
+			return
+	# Apply and broadcast
+	if tcs and tcs.has_method("set_claim"):
+		tcs.call("set_claim", territory_id, owner_id, cards)
+	rpc_territory_claimed.rpc(territory_id, owner_id, cards)
+
+func _get_territory_claim_state() -> Node:
+	return get_node_or_null("/root/" + "Territory" + "Claim" + "State")
+
+func _get_player_name(peer_id: int) -> String:
+	for p in App.game_players:
+		if int(p.get("id", -1)) == int(peer_id):
+			return str(p.get("name", "Player"))
+	return "Player"
+
+@rpc("authority", "call_local", "reliable")
+func rpc_territory_claimed(territory_id: int, owner_id: int, cards: Array) -> void:
+	territory_claimed.emit(territory_id, owner_id, cards)
+
+@rpc("authority", "reliable")
+func rpc_claim_rejected(territory_id: int, claimer_name: String) -> void:
+	territory_claim_rejected.emit(territory_id, claimer_name)
+
+## ---------- MAP SUB-PHASE SYNC (Claim & Conquer: CLAIMING -> RESOURCE_COLLECTION -> BATTLE_READY) ----------
+## Claiming is turn-based (same order as Card Command). Player clicks "Done claiming" to end turn.
+
+func request_end_claiming_turn() -> void:
+	if multiplayer.is_server():
+		_server_advance_claiming_turn(multiplayer.get_unique_id())
+	else:
+		server_end_claiming_turn.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func server_end_claiming_turn() -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_advance_claiming_turn(id)
+
+func _server_advance_claiming_turn(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if peer_id != current_turn_peer_id:
+		print("[Net] REJECTED claiming turn end from ", peer_id, " (not their turn)")
+		return
+	current_turn_index += 1
+	if current_turn_index >= App.turn_order.size():
+		# All players have had their claiming turn - advance to RESOURCE_COLLECTION
+		_init_phase_done_state()
+		rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
+		rpc_map_sub_phase.rpc(1)
+	else:
+		var next_player = App.turn_order[current_turn_index]
+		current_turn_peer_id = next_player.get("id", -1)
+		rpc_set_current_turn.rpc(current_turn_peer_id)
+
+func _server_broadcast_map_sub_phase(sub_phase: int) -> void:
+	if not multiplayer.is_server():
+		return
+	rpc_map_sub_phase.rpc(sub_phase)
+
+@rpc("authority", "call_local", "reliable")
+func rpc_map_sub_phase(sub_phase: int) -> void:
+	map_sub_phase = sub_phase
+	map_sub_phase_changed.emit(sub_phase)
+
+## Server enters Claim & Conquer phase (phase 1) - from CARD_COMMAND, skips CLAIMING
+## In multiplayer we skip the CLAIMING turn round and go straight to RESOURCE_COLLECTION (minigames).
 func _server_enter_claim_conquer_phase() -> void:
 	if not multiplayer.is_server():
 		return
 	current_phase = 1  # CLAIM_CONQUER
-	# Initialize battle state BEFORE phase change (phase_changed triggers UI update)
+	# Initialize battle state for later BATTLE_READY
 	_init_battle_phase()
-	# Phase change must be LAST - triggers UI update that reads battle decider
+	# Skip CLAIMING sub-phase: go straight to RESOURCE_COLLECTION (one "Done placing cards" phase, then minigames)
+	_init_phase_done_state()
+	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
 	rpc_set_phase.rpc(1)
+	rpc_map_sub_phase.rpc(1)  # RESOURCE_COLLECTION
+
+## Server enters Claim & Conquer from battles (loop) - starts at CLAIMING, then RESOURCE_COLLECTION, then BATTLE_READY
+func _server_enter_claim_conquer_from_battles() -> void:
+	if not multiplayer.is_server():
+		return
+	current_phase = 1  # CLAIM_CONQUER
+	# Initialize battle state for later BATTLE_READY
+	_init_battle_phase()
+	# Reset turn for claiming: first player's turn
+	current_turn_index = 0
+	if App.turn_order.size() > 0:
+		current_turn_peer_id = App.turn_order[0].get("id", -1)
+	else:
+		current_turn_peer_id = multiplayer.get_unique_id()
+	# Clear done state for new round (RESOURCE_COLLECTION will re-init when we advance from CLAIMING)
+	_init_phase_done_state()
+	# Broadcast turn, done state, phase - order matters: turn/done before phase/sub_phase
+	rpc_set_current_turn.rpc(current_turn_peer_id)
+	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
+	rpc_sync_done_counts.rpc(0, _get_all_peer_ids().size())
+	rpc_set_phase.rpc(1)
+	rpc_map_sub_phase.rpc(0)  # CLAIMING first - claim territories, then minigames
 
 ## Initialize battle phase state
 func _init_battle_phase() -> void:
@@ -744,8 +879,7 @@ func _advance_decider_to_next_eligible() -> void:
 	if battle_in_progress:
 		return
 	
-	var turn_order := App.turn_order
-	if turn_order.is_empty():
+	if App.turn_order.is_empty():
 		return
 	
 	# Check if both queues are full - auto-skip remaining UNDECIDED
@@ -761,10 +895,11 @@ func _advance_decider_to_next_eligible() -> void:
 	# Find next eligible player
 	var found := false
 	var start_idx := battle_decision_index
+	var order_size: int = App.turn_order.size()
 	
-	for i in range(turn_order.size()):
-		var idx := (start_idx + i) % turn_order.size()
-		var player = turn_order[idx]
+	for i in range(order_size):
+		var idx: int = (start_idx + i) % order_size
+		var player = App.turn_order[idx]
 		var pid: int = player.get("id", -1)
 		
 		# Skip if already made a choice
@@ -801,9 +936,9 @@ func _check_battle_phase_complete() -> void:
 			break
 	
 	if all_decided:
-		print("[Net] Claim & Conquer phase complete, entering Card Collection")
-		# After all battles decided, enter Card Collection phase
-		host_init_card_collection_phase()
+		print("[Net] Battles complete, entering next round (Claim -> Minigames -> Battle)")
+		# Loop back: CLAIMING (claim territories) -> RESOURCE_COLLECTION (minigames) -> BATTLE_READY
+		_server_enter_claim_conquer_from_battles()
 
 ## Authority broadcasts current decider
 @rpc("authority", "call_local", "reliable")

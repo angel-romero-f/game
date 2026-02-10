@@ -2,6 +2,7 @@ extends Node2D
 
 var game_over: bool = false
 var player_won: bool = false
+var _has_returned: bool = false
 
 @onready var background: AnimatedSprite2D = $Background
 
@@ -49,6 +50,9 @@ func _input(event):
 func handle_continue():
 	if not game_over:
 		return
+	if _has_returned:
+		return
+	_has_returned = true
 	
 	if player_won:
 		# Won - award card, report completion and return to map
