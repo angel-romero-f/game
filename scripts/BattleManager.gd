@@ -119,20 +119,59 @@ func _cache_nodes() -> void:
 
 
 func _restore_and_sync_placed_cards() -> void:
-	## Restore from BattleStateManager. In multiplayer, restore locally and sync to server.
-	var placed: Dictionary = {}
-	if BattleStateManager:
-		placed = BattleStateManager.get_local_slots()
-	if placed.is_empty():
+	## Restore from BattleStateManager.
+	if not BattleStateManager:
 		return
-	_restore_cards_to_slots(placed)
-	if _is_multiplayer:
-		for slot_idx in placed:
-			var data: Dictionary = placed[slot_idx]
-			var path: String = data.get("path", "")
-			var frame: int = int(data.get("frame", 0))
-			if not path.is_empty():
-				Net.request_place_battle_card(slot_idx, path, frame)
+
+	# CHECK FOR TERRITORY BATTLE
+	var tid: String = BattleStateManager.current_territory_id
+	var is_territory_battle: bool = (tid != "")
+
+	if is_territory_battle:
+		print("[BattleManager] Territory Battle detected for ID: ", tid)
+		# 1. Setup Opponent (Attacker) Cards
+		var attacking_slots: Dictionary = BattleStateManager.get_attacking_slots(tid)
+		if _deck_o:
+			var back_frames: SpriteFrames = _deck_o.get("deck_sprite_frames")
+			var back_frame_index: int = int(_deck_o.get("frame_index"))
+			
+			for slot_idx in range(_opponent_slot_nodes.size()):
+				var slot = _opponent_slot_nodes[slot_idx]
+				if not slot: continue
+				
+				var card_data = attacking_slots.get(int(slot_idx))
+				if card_data == null: card_data = attacking_slots.get(str(slot_idx))
+				
+				if card_data:
+					# Create card in slot
+					var card := CARD_SCENE.instantiate()
+					get_tree().current_scene.add_child(card)
+					var area := card.get_node_or_null("Card_Collision") as Area2D
+					if area: area.input_pickable = false
+					
+					# Set to back
+					card.card_sprite_frames = back_frames
+					card.frame_index = back_frame_index
+					
+					_opponent_cards_by_slot[slot] = card
+					if slot.has_method("force_snap_card"):
+						slot.force_snap_card(card)
+					
+					# Store face data as metadata for flip logic
+					card.set_meta("territory_face_path", card_data.get("path", ""))
+					card.set_meta("territory_face_frame", card_data.get("frame", 0))
+
+	# 2. Restore Player (Defending) Cards
+	var placed: Dictionary = BattleStateManager.get_local_slots()
+	if not placed.is_empty():
+		_restore_cards_to_slots(placed)
+		if _is_multiplayer:
+			for slot_idx in placed:
+				var data: Dictionary = placed[slot_idx]
+				var path: String = data.get("path", "")
+				var frame: int = int(data.get("frame", 0))
+				if not path.is_empty():
+					Net.request_place_battle_card(slot_idx, path, frame)
 
 
 func _restore_cards_to_slots(placed: Dictionary) -> void:
@@ -143,7 +182,7 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 	var hand_container := root.get_node_or_null("HandCardsLayer/HandCardsContainer")
 	if not hand_container:
 		hand_container = root
-	var card_manager := root.get_node_or_null("CardManager")
+	var card_manager := root.get_node_or_null("CardManager") # Unused
 	for slot_idx in placed:
 		if slot_idx < 0 or slot_idx >= _player_slot_nodes.size():
 			continue
@@ -270,6 +309,7 @@ func _update_opponent_cards_from_net() -> void:
 func _setup_ui() -> void:
 	if _start_button:
 		_start_button.visible = false
+		_start_button.text = "Ready"
 		if not _start_button.pressed.is_connected(_on_start_battle_pressed):
 			_start_button.pressed.connect(_on_start_battle_pressed)
 
@@ -366,7 +406,7 @@ func _player_ready() -> bool:
 func _update_start_button_visibility() -> void:
 	if not _start_button:
 		return
-	_start_button.visible = _player_ready() and state == State.WAITING_FOR_PLAYER
+	_start_button.visible = state == State.WAITING_FOR_PLAYER
 
 
 func _place_opponent_backs() -> void:
@@ -419,8 +459,6 @@ func _place_opponent_backs() -> void:
 func _on_start_battle_pressed() -> void:
 	if state != State.WAITING_FOR_PLAYER:
 		return
-	if not _player_ready():
-		return
 
 	if _is_multiplayer:
 		Net.request_battle_ready()
@@ -464,6 +502,23 @@ func _flip_opponent_cards_from_pool() -> void:
 				var data: Dictionary = other_cards[slot_idx]
 				var path: String = data.get("path", "")
 				var fidx: int = int(data.get("frame", 0))
+				if not path.is_empty():
+					var frames: SpriteFrames = load(path) as SpriteFrames
+					if frames:
+						chosen[slot] = {"frames": frames, "frame_index": fidx}
+
+						chosen[slot] = {"frames": frames, "frame_index": fidx}
+
+	# Single-player territory battle override:
+	# If cards were already placed by _restore_and_sync_placed_cards (stored in _opponent_cards_by_slot)
+	# and have metadata, we use that instead of random pool.
+	if not _is_multiplayer and BattleStateManager and BattleStateManager.current_territory_id != "":
+		for slot in _opponent_slot_nodes:
+			if not slot: continue
+			var card = _opponent_cards_by_slot.get(slot, null)
+			if card and card.has_meta("territory_face_path"):
+				var path: String = card.get_meta("territory_face_path", "")
+				var fidx: int = int(card.get_meta("territory_face_frame", 0))
 				if not path.is_empty():
 					var frames: SpriteFrames = load(path) as SpriteFrames
 					if frames:
@@ -637,6 +692,22 @@ func _on_leave_pressed() -> void:
 		# Record outcome in BattleStateManager (from local perspective)
 		if BattleStateManager:
 			BattleStateManager.record_battle_result(result, player_wins)
+		# Report card losses to BSM and TCS for territory battles
+		if BattleStateManager and App.pending_territory_battle_ids.size() > 0:
+			var tid_str: String = BattleStateManager.current_territory_id
+			if not tid_str.is_empty():
+				# In territory battle: local = defender, opponent = attacker
+				if not player_wins:
+					# Defender lost: clear defending slots, update TCS
+					BattleStateManager.set_defending_slots(tid_str, {})
+					var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+					if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
+						var owner_id: Variant = tcs.call("get_owner_id", int(tid_str))
+						if owner_id != null:
+							tcs.call("set_claim", int(tid_str), int(owner_id), [null, null, null])
+				else:
+					# Attacker lost: clear attacking slots for this territory
+					BattleStateManager.set_attacking_slots(tid_str, {})
 		if not player_wins:
 			# Loser: clear placed cards from collection and slots
 			_clear_player_slots()
@@ -647,6 +718,22 @@ func _on_leave_pressed() -> void:
 		else:
 			# Winner/tie: persist cards in slots
 			_persist_local_placed_cards()
+			# Territory battle: update defending_slots and TCS with remaining cards
+			if BattleStateManager and App.pending_territory_battle_ids.size() > 0:
+				var tid_str: String = BattleStateManager.current_territory_id
+				if not tid_str.is_empty():
+					var remaining: Dictionary = BattleStateManager.get_local_slots()
+					BattleStateManager.set_defending_slots(tid_str, remaining)
+					var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+					if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
+						var owner_id: Variant = tcs.call("get_owner_id", int(tid_str))
+						if owner_id != null:
+							var cards: Array = [null, null, null]
+							for idx in remaining:
+								var c: Dictionary = remaining[idx]
+								if int(idx) < 3 and c.get("path", "") != "":
+									cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame", 0))}
+							tcs.call("set_claim", int(tid_str), int(owner_id), cards)
 		# Clear battle state when leaving resolved battle
 		Net.clear_battle_state()
 	else:

@@ -57,14 +57,17 @@ var claim_slots_container: HBoxContainer
 var claim_hand_container: HBoxContainer
 var claim_cancel_button: Button
 var claim_button: Button
+var claim_attack_button: Button
 var claim_play_minigame_button: Button
 var finish_claiming_button: Button
 var ready_for_battle_button: Button
 var current_claim_territory_id: int = -1
 var claim_panel_play_only_mode: bool = false
-var claim_slot_cards: Array = [null, null, null]  # 3 slots, each Dictionary or null
+var claim_slot_cards: Array = [null, null, null]  # 3 slots (claim) or defending (attack mode)
+var claim_attacking_slot_cards: Array = [null, null, null]  # attacking slots when in attack mode
 var claim_hand_cards: Array = []  # working copy of hand when panel is open
 var claim_selected_hand_index: int = -1
+var claim_panel_attack_mode: bool = false  # true when viewing claimed territory with defending cards (show Defending/Attacking)
 
 # Message panel for info/error messages
 var message_panel: PanelContainer
@@ -172,10 +175,13 @@ func _ready() -> void:
 	claim_hand_container = $ClaimTerritoryPanel/MarginContainer/VBoxContainer/ClaimHandContainer
 	claim_cancel_button = $ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer/CancelButton
 	claim_button = $ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer/ClaimButton
+	claim_attack_button = get_node_or_null("ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer/AttackButton") as Button
 	if claim_cancel_button:
 		claim_cancel_button.pressed.connect(_on_claim_cancel_clicked)
 	if claim_button:
 		claim_button.pressed.connect(_on_claim_territory_clicked)
+	if claim_attack_button:
+		claim_attack_button.pressed.connect(_on_attack_territory_clicked)
 	claim_play_minigame_button = get_node_or_null("ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer/PlayMinigameButton") as Button
 	if claim_play_minigame_button:
 		claim_play_minigame_button.pressed.connect(_on_claim_play_minigame_pressed)
@@ -332,6 +338,12 @@ func _ready() -> void:
 	# Check if we're returning from minigame (skip intro if turn_order already set)
 	if App.turn_order.size() > 0:
 		_skip_to_game_ready()
+		if App.returning_from_territory_battles:
+			App.returning_from_territory_battles = false
+			# Re-apply claims from TCS (battle may have removed cards) and refresh visuals
+			_apply_saved_territory_claims()
+			_refresh_territory_claimed_visuals()
+			call_deferred("_show_collect_resources_overlay")
 		return
 
 	# Start the intro sequence
@@ -541,6 +553,9 @@ func _open_play_only_panel(territory_id: int) -> void:
 			claim_play_minigame_button.visible = true
 		else:
 			claim_play_minigame_button.visible = false
+	# Hide Attack button during Resource Collection (only show in Card Command phase)
+	if claim_attack_button:
+		claim_attack_button.visible = false
 	claim_territory_panel.z_index = 100
 	claim_territory_panel.visible = true
 	# Show cyan highlight on selected territory
@@ -550,6 +565,8 @@ func _open_play_only_panel(territory_id: int) -> void:
 
 func _open_claim_panel(territory_id: int) -> void:
 	claim_panel_play_only_mode = false
+	if BattleStateManager:
+		BattleStateManager.set_current_territory(str(territory_id))
 	# Restore full panel size
 	claim_territory_panel.offset_left = CLAIM_PANEL_FULL_OFFSET.x
 	claim_territory_panel.offset_top = CLAIM_PANEL_FULL_OFFSET.y
@@ -572,22 +589,60 @@ func _open_claim_panel(territory_id: int) -> void:
 	if claim_cancel_button:
 		claim_cancel_button.visible = true
 		claim_cancel_button.text = "Cancel"
-	# If already claimed, show saved cards; else empty slots
-	if _territory_claim_state and _territory_claim_state.call("is_claimed", territory_id):
-		var saved: Array = _territory_claim_state.call("get_cards", territory_id) as Array
-		claim_slot_cards = []
+	# Attack slots only after first Card Command phase completed (i.e. in CLAIM_CONQUER)
+	var is_claimed: bool = _territory_claim_state and _territory_claim_state.call("is_claimed", territory_id)
+	var tid_str := str(territory_id)
+	claim_panel_attack_mode = is_claimed and (App.current_game_phase == App.GamePhase.CLAIM_CONQUER)
+
+	if claim_panel_attack_mode:
+		# Load defending from BSM (owner may have edited); fall back to TCS if BSM empty
+		var defs: Dictionary = BattleStateManager.get_defending_slots(tid_str) if BattleStateManager else {}
+		if not defs.is_empty():
+			claim_slot_cards = [null, null, null]
+			for idx in defs:
+				if int(idx) < 3:
+					claim_slot_cards[int(idx)] = defs[idx]
+		else:
+			var saved: Array = _territory_claim_state.call("get_cards", territory_id) as Array if _territory_claim_state else []
+			claim_slot_cards = []
+			for i in range(3):
+				claim_slot_cards.append(saved[i] if i < saved.size() and saved[i] != null else null)
+		# Load attacking from BSM
+		var atks: Dictionary = BattleStateManager.get_attacking_slots(tid_str) if BattleStateManager else {}
+		claim_attacking_slot_cards = [null, null, null]
 		for i in range(3):
-			claim_slot_cards.append(saved[i] if i < saved.size() and saved[i] != null else null)
+			if atks.has(i):
+				claim_attacking_slot_cards[i] = atks[i]
 		claim_hand_cards = App.player_card_collection.duplicate()
 		claim_button.visible = false
+		var local_id: Variant = _get_local_player_id()
+		var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
+		var is_owner: bool = owner_id != null and int(local_id) == int(owner_id)
+		if claim_attack_button:
+			# Attack button only visible in Card Command phase (CLAIMING), not Resource Collection
+			claim_attack_button.visible = not is_owner and (map_sub_phase == MapSubPhase.CLAIMING)
 	else:
-		claim_slot_cards = [null, null, null]
-		claim_hand_cards = App.player_card_collection.duplicate()
-		claim_button.visible = true
+		claim_attacking_slot_cards = [null, null, null]
+		if is_claimed:
+			var saved: Array = _territory_claim_state.call("get_cards", territory_id) as Array
+			claim_slot_cards = []
+			for i in range(3):
+				claim_slot_cards.append(saved[i] if i < saved.size() and saved[i] != null else null)
+			claim_hand_cards = App.player_card_collection.duplicate()
+			claim_button.visible = false
+		else:
+			claim_slot_cards = [null, null, null]
+			claim_hand_cards = App.player_card_collection.duplicate()
+			claim_button.visible = true
+		if claim_attack_button:
+			claim_attack_button.visible = false
+	if hand_label and hand_label is Label:
+		(hand_label as Label).text = "Place attacking cards to start battle" if claim_panel_attack_mode else "Place 1-3 cards (click card, then click a slot)"
 	_populate_claim_slots()
 	_populate_claim_hand()
 	_update_claim_button_state()
-	# Play minigame button: only in BATTLE_READY (not during initial CLAIMING)
+	_update_attack_button_state()
+	# Play minigame button: only in BATTLE_READY; during CLAIMING show Attack button, not Play minigame
 	var show_play_minigame: bool = (map_sub_phase == MapSubPhase.BATTLE_READY)
 	var region_id: int = 1
 	if territory_manager and territory_manager.territory_data.has(territory_id):
@@ -595,12 +650,27 @@ func _open_claim_panel(territory_id: int) -> void:
 	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "name": "", "scene": "" })
 	var scene_path: String = region_info.get("scene", "")
 	var region_name: String = region_info.get("name", "")
-	if claim_play_minigame_button:
-		if show_play_minigame and scene_path != "" and region_name != "":
-			claim_play_minigame_button.text = "Play %s" % region_name
-			claim_play_minigame_button.visible = true
-		else:
+	# Explicitly enforce: during CLAIMING show Attack (for non-owner in attack mode), never Play minigame
+	if map_sub_phase == MapSubPhase.CLAIMING:
+		if claim_play_minigame_button:
 			claim_play_minigame_button.visible = false
+		if claim_attack_button:
+			if claim_panel_attack_mode:
+				var local_id: Variant = _get_local_player_id()
+				var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
+				var is_owner: bool = owner_id != null and int(local_id) == int(owner_id)
+				claim_attack_button.visible = not is_owner
+			else:
+				claim_attack_button.visible = false
+	else:
+		if claim_play_minigame_button:
+			if show_play_minigame and scene_path != "" and region_name != "":
+				claim_play_minigame_button.text = "Play %s" % region_name
+				claim_play_minigame_button.visible = true
+			else:
+				claim_play_minigame_button.visible = false
+		if claim_attack_button:
+			claim_attack_button.visible = false
 	claim_territory_panel.z_index = 100
 	claim_territory_panel.visible = true
 	# Show cyan highlight on selected territory so user knows which one they're placing cards on
@@ -640,6 +710,91 @@ func _populate_claim_slots() -> void:
 	for child in claim_slots_container.get_children():
 		child.queue_free()
 	var slot_size := Vector2(70, 100)
+	var local_id: Variant = _get_local_player_id()
+	var owner_id: Variant = _territory_claim_state.call("get_owner_id", current_claim_territory_id) if _territory_claim_state else null
+	var is_owner: bool = owner_id != null and int(local_id) == int(owner_id)
+
+	if claim_panel_attack_mode:
+		# Build Defending (top 3) + Attacking (bottom 3) with labels
+		var vbox := VBoxContainer.new()
+		vbox.add_theme_constant_override("separation", 8)
+		# Defending row
+		var def_label := Label.new()
+		def_label.text = "Defending"
+		def_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(def_label)
+		var def_row := HBoxContainer.new()
+		def_row.add_theme_constant_override("separation", 10)
+		for i in range(3):
+			var panel := Panel.new()
+			panel.custom_minimum_size = slot_size
+			panel.set_meta("slot_type", "defending")
+			panel.set_meta("slot_index", i)
+			var tex := TextureRect.new()
+			tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+			tex.offset_left = 4
+			tex.offset_top = 4
+			tex.offset_right = -4
+			tex.offset_bottom = -4
+			tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			tex.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let panel receive clicks for owner edit
+			if claim_slot_cards[i] != null and claim_slot_cards[i] is Dictionary:
+				if is_owner:
+					var path: String = claim_slot_cards[i].get("path", "")
+					var frame: int = int(claim_slot_cards[i].get("frame", 0))
+					if path != "" and ResourceLoader.exists(path):
+						var sf: SpriteFrames = load(path) as SpriteFrames
+						if sf and sf.has_animation("default"):
+							tex.texture = sf.get_frame_texture("default", frame)
+				else:
+					# Non-owner: show card back
+					var back := _get_card_back_texture()
+					if back:
+						tex.texture = back
+			panel.add_child(tex)
+			if is_owner:
+				panel.gui_input.connect(_on_claim_slot_gui_input_attack.bind("defending", i))
+			panel.mouse_filter = Control.MOUSE_FILTER_STOP
+			def_row.add_child(panel)
+		vbox.add_child(def_row)
+		# Attacking row
+		var atk_label := Label.new()
+		atk_label.text = "Attacking"
+		atk_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		vbox.add_child(atk_label)
+		var atk_row := HBoxContainer.new()
+		atk_row.add_theme_constant_override("separation", 10)
+		for i in range(3):
+			var panel := Panel.new()
+			panel.custom_minimum_size = slot_size
+			panel.set_meta("slot_type", "attacking")
+			panel.set_meta("slot_index", i)
+			var tex := TextureRect.new()
+			tex.set_anchors_preset(Control.PRESET_FULL_RECT)
+			tex.offset_left = 4
+			tex.offset_top = 4
+			tex.offset_right = -4
+			tex.offset_bottom = -4
+			tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
+			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+			tex.mouse_filter = Control.MOUSE_FILTER_IGNORE  # Let panel receive clicks
+			if claim_attacking_slot_cards[i] != null and claim_attacking_slot_cards[i] is Dictionary:
+				var path: String = claim_attacking_slot_cards[i].get("path", "")
+				var frame: int = int(claim_attacking_slot_cards[i].get("frame", 0))
+				if path != "" and ResourceLoader.exists(path):
+					var sf: SpriteFrames = load(path) as SpriteFrames
+					if sf and sf.has_animation("default"):
+						tex.texture = sf.get_frame_texture("default", frame)
+			panel.add_child(tex)
+			if not is_owner:
+				panel.gui_input.connect(_on_claim_slot_gui_input_attack.bind("attacking", i))
+			panel.mouse_filter = Control.MOUSE_FILTER_STOP
+			atk_row.add_child(panel)
+		vbox.add_child(atk_row)
+		claim_slots_container.add_child(vbox)
+		return
+
 	for i in range(3):
 		var panel := Panel.new()
 		panel.custom_minimum_size = slot_size
@@ -684,6 +839,53 @@ func _on_claim_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 				_populate_claim_hand()
 				_update_claim_button_state()
 
+func _get_card_back_texture() -> Texture2D:
+	var path := "res://assets/cardback.pxo"
+	if not ResourceLoader.exists(path):
+		return null
+	var sf: SpriteFrames = load(path) as SpriteFrames
+	if not sf or not sf.has_animation("default"):
+		return null
+	return sf.get_frame_texture("default", 0)
+
+func _on_claim_slot_gui_input_attack(event: InputEvent, slot_type: String, slot_index: int) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
+			return
+		var arr: Array = claim_slot_cards if slot_type == "defending" else claim_attacking_slot_cards
+		if claim_selected_hand_index >= 0 and claim_selected_hand_index < claim_hand_cards.size():
+			# Place selected card in slot
+			var card: Dictionary = claim_hand_cards[claim_selected_hand_index]
+			if slot_type == "attacking":
+				claim_attacking_slot_cards[slot_index] = card
+			elif slot_type == "defending":
+				claim_slot_cards[slot_index] = card
+			claim_hand_cards.remove_at(claim_selected_hand_index)
+			claim_selected_hand_index = -1
+		elif arr[slot_index] != null:
+			if slot_type == "attacking":
+				claim_hand_cards.append(claim_attacking_slot_cards[slot_index])
+				claim_attacking_slot_cards[slot_index] = null
+			elif slot_type == "defending":
+				claim_hand_cards.append(claim_slot_cards[slot_index])
+				claim_slot_cards[slot_index] = null
+		if slot_type == "defending":
+			var defending_dict: Dictionary = {}
+			for idx in range(3):
+				if claim_slot_cards[idx] != null and claim_slot_cards[idx] is Dictionary:
+					defending_dict[idx] = claim_slot_cards[idx]
+			if BattleStateManager:
+				BattleStateManager.set_defending_slots(str(current_claim_territory_id), defending_dict)
+			# Keep TCS in sync for territory display
+			if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
+				var owner_id: Variant = _territory_claim_state.call("get_owner_id", current_claim_territory_id)
+				if owner_id != null:
+					_territory_claim_state.set_claim(current_claim_territory_id, int(owner_id), claim_slot_cards)
+		_populate_claim_slots()
+		_populate_claim_hand()
+		_update_attack_button_state()
+
 func _update_claim_button_state() -> void:
 	if not claim_button:
 		return
@@ -693,6 +895,16 @@ func _update_claim_button_state() -> void:
 			has_any = true
 			break
 	claim_button.disabled = not has_any
+
+func _update_attack_button_state() -> void:
+	if not claim_attack_button:
+		return
+	var has_any: bool = false
+	for slot_idx in range(3):
+		if claim_attacking_slot_cards[slot_idx] != null:
+			has_any = true
+			break
+	claim_attack_button.disabled = not has_any
 
 func _populate_claim_hand() -> void:
 	for child in claim_hand_container.get_children():
@@ -728,11 +940,28 @@ func _on_claim_hand_card_clicked(hand_index: int) -> void:
 func _on_finish_claiming_pressed() -> void:
 	## Called when "Done claiming" is clicked (skip_to_battle_button in CLAIMING sub-phase)
 	_close_claim_panel()
+	
+	# Common Logic: Check for battles first
+	# If battles exist, we run them locally (synced via Net in BattleManager).
+	# After battles are done, we End Turn (Multiplayer) or Advance Turn (Single Player) in App.on_battle_completed
+	
+	if BattleStateManager:
+		App.pending_territory_battle_ids = BattleStateManager.get_territory_ids_with_battle()
+		print("[DEBUG] Finish Claiming Pressed. Pending Battle IDs: ", App.pending_territory_battle_ids)
+
+	if App.pending_territory_battle_ids.size() > 0:
+		# Kickstart the battle sequence
+		print("[DEBUG] Battles found! calling App.on_battle_completed() to start first battle.")
+		App.on_battle_completed()
+		return
+		
+	# No battles - proceed to end turn / resource collection immediately
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 		skip_to_battle_button.visible = false
+		print("[DEBUG] No battles, requesting end claiming turn (Multiplayer)")
 		Net.request_end_claiming_turn()
-		# turn_changed will fire and _apply_phase_ui will show "Waiting for [next player]..." like Card Command
 	else:
+		print("[DEBUG] No battles found. Showing collect resources overlay (Single Player).")
 		_show_collect_resources_overlay()
 
 func _show_collect_resources_overlay() -> void:
@@ -803,20 +1032,40 @@ func _enter_resource_collection() -> void:
 	_animate_phase_buttons()
 
 func _on_ready_for_battle_pressed() -> void:
-	map_sub_phase = MapSubPhase.BATTLE_READY
-	# Show phase transition overlay ("Choose Your Battles") then apply battle UI
-	App.enter_battle_phase()
-	_show_phase_transition_overlay()
+	_transition_to_next_round()
+
+func _transition_to_next_round() -> void:
+	## Transition back to Claiming phase for the next round
+	map_sub_phase = MapSubPhase.CLAIMING
+	App.minigames_completed_this_phase = 0
+	_apply_phase_ui()
+	_animate_phase_buttons()
+	
+	# Show "Next Round" or "Claim & Conquer" overlay
+	if phase_overlay and phase_label:
+		phase_label.text = "Next Round: Claim Territories"
+		phase_overlay.visible = true
+		phase_overlay.modulate.a = 0.0
+		# Block interaction while overlay is up
+		_update_territory_interaction()
+		
+		var tween := create_tween()
+		tween.tween_property(phase_overlay, "modulate:a", 1.0, 0.4)
+		tween.tween_interval(1.5)
+		tween.tween_property(phase_overlay, "modulate:a", 0.0, 0.4)
+		tween.tween_callback(func(): 
+			phase_overlay.visible = false
+			# Re-enable interaction after overlay is gone
+			_update_territory_interaction()
+		)
 
 func _start_delayed_battle_transition() -> void:
-	## Wait a few seconds on the map, then show "Choose Your Battles" and enter battle phase
+	## Wait a few seconds on the map, then transition to next round (Claiming)
 	_is_delayed_battle_transition_active = true
 	_update_territory_interaction()
 	await get_tree().create_timer(DELAY_BEFORE_BATTLE_TRANSITION_SEC).timeout
 	_is_delayed_battle_transition_active = false
-	map_sub_phase = MapSubPhase.BATTLE_READY
-	App.enter_battle_phase()
-	_show_phase_transition_overlay()
+	_transition_to_next_round()
 
 func _on_claim_play_minigame_pressed() -> void:
 	if current_claim_territory_id < 0 or not territory_manager or not territory_manager.territory_data.has(current_claim_territory_id):
@@ -871,6 +1120,13 @@ func _on_claim_territory_clicked() -> void:
 	territory.set_owner(local_id)
 	if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
 		_territory_claim_state.set_claim(current_claim_territory_id, local_id, claim_slot_cards)
+	# Report defending slots to BattleStateManager for this territory
+	if BattleStateManager:
+		var defending_dict: Dictionary = {}
+		for slot_idx in range(3):
+			if claim_slot_cards[slot_idx] != null and claim_slot_cards[slot_idx] is Dictionary:
+				defending_dict[slot_idx] = claim_slot_cards[slot_idx]
+		BattleStateManager.set_defending_slots(str(current_claim_territory_id), defending_dict)
 	var placed_slots: Dictionary = {}
 	for slot_idx in range(3):
 		if claim_slot_cards[slot_idx] != null:
@@ -878,6 +1134,40 @@ func _on_claim_territory_clicked() -> void:
 	App.remove_placed_cards_from_collection_for_slots(placed_slots)
 	_refresh_territory_claimed_visuals()
 	_close_claim_panel()
+
+func _on_attack_territory_clicked() -> void:
+	if current_claim_territory_id < 0:
+		_close_claim_panel()
+		return
+
+	# Require at least 1 attacking card
+	var has_any_card: bool = false
+	for slot_idx in range(3):
+		if claim_slot_cards[slot_idx] != null:
+			has_any_card = true
+			break
+	if not has_any_card:
+		#_show_message("You must place at least one attacking card!")
+		return
+
+	# Register attacking cards in BattleStateManager
+	if BattleStateManager:
+		var attacking_dict: Dictionary = {}
+		for slot_idx in range(3):
+			if claim_slot_cards[slot_idx] != null and claim_slot_cards[slot_idx] is Dictionary:
+				attacking_dict[slot_idx] = claim_slot_cards[slot_idx]
+		BattleStateManager.set_attacking_slots(str(current_claim_territory_id), attacking_dict)
+
+	# Remove placed cards from player's hand
+	var placed_slots: Dictionary = {}
+	for slot_idx in range(3):
+		if claim_slot_cards[slot_idx] != null:
+			placed_slots[slot_idx] = claim_slot_cards[slot_idx]
+	App.remove_placed_cards_from_collection_for_slots(placed_slots)
+
+	#_show_message("Attack declared!")
+	_close_claim_panel()
+	_update_territory_interaction()
 
 func _on_claim_cancel_clicked() -> void:
 	_close_claim_panel()
@@ -905,6 +1195,8 @@ func _apply_saved_territory_claims() -> void:
 			continue
 		var territory: Territory = territory_manager.territory_data[tid]
 		territory.set_owner(owner_id)
+		# Clear existing cards before applying (battle may have removed some)
+		territory.clear_player_cards(int(owner_id))
 		for slot_idx in range(min(3, cards.size())):
 			if cards[slot_idx] != null:
 				territory.place_card(owner_id, cards[slot_idx], slot_idx)
@@ -1433,25 +1725,63 @@ func _skip_to_game_ready() -> void:
 	# Mark intro as complete BEFORE applying phase UI
 	current_phase = Phase.GAME_READY
 
-	# Restore map sub-phase when returning from territory minigame
-	var returning_from_minigame := App.returning_from_territory_minigame
-	if returning_from_minigame:
+	# Check if we're returning from a territory minigame
+	# Note: This block was previously duplicated. Consolidating here.
+	if App.returning_from_territory_minigame:
 		App.returning_from_territory_minigame = false
-		if App.pending_return_map_sub_phase >= 0:
+		if App.pending_return_map_sub_phase != -1:
 			map_sub_phase = App.pending_return_map_sub_phase
 			App.pending_return_map_sub_phase = -1
-		# Minigame already called on_minigame_completed() before returning - do NOT call again (would double-count)
-		# If 2 minigames done, start delayed transition to "Choose Your Battles"
+		App.on_minigame_completed()
+		
+		# If 2 minigames done, start delayed transition to "Choose Your Battles" (or Next Round logic)
 		if not App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == MapSubPhase.RESOURCE_COLLECTION and App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
 			_start_delayed_battle_transition()
+			
+		# Skip overlay when returning from minigame
+		App.show_phase_transition = false
 
 	# Ensure we're in Claim & Conquer for single-player when returning (so map_sub_phase UI applies)
-	if not App.is_multiplayer and App.current_game_phase != App.GamePhase.CLAIM_CONQUER:
-		App.enter_claim_conquer_phase()
-
-	# When returning from minigame, skip "Claim & Conquer" overlay - just apply UI (overlay already shown at start of phase)
-	if returning_from_minigame:
-		App.show_phase_transition = false
+	if not App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER:
+		pass # Already set above or correct.
+		
+	# Check if we're returning from territory battles (Finish Claiming sequence)
+	if App.returning_from_territory_battles:
+		print("[DEBUG] GameIntro: Returning from territory battles. Processing logic.")
+		App.returning_from_territory_battles = false
+		
+		if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+			print("[DEBUG] Multiplayer: Requesting end claiming turn after battles.")
+			# In multiplayer, we just tell the server we are done. 
+			# The server will advance the turn and sync the new state.
+			Net.request_end_claiming_turn()
+		else:
+			# Single Player Logic
+			print("[DEBUG] Current Turn Index: ", App.current_turn_index, " Turn Order Size: ", App.turn_order.size())
+			
+		if App.current_turn_index < App.turn_order.size():
+			# Next Player's Turn
+			var current_id = App.current_turn_player_id
+			print("[DEBUG] Next player turn. Index: ", App.current_turn_index, " Name: ", _get_player_name_by_id(current_id))
+			print("[GameIntro] Starting turn for player index: ", App.current_turn_index)
+			
+			current_phase = Phase.GAME_READY
+			App.current_game_phase = App.GamePhase.CARD_COMMAND # Logic implies Card Command follows
+			map_sub_phase = MapSubPhase.CLAIMING 
+			
+			_apply_phase_ui()
+			_show_phase_transition_overlay()
+			if phase_label: 
+				phase_label.text = "Card Command: " + _get_player_name_by_id(current_id)
+		else:
+			# All players done -> Resource Collection
+			print("[DEBUG] Loop finished. All players done. Going to Resource Collection.")
+			print("[GameIntro] All players finished claiming. Proceeding to Resource Collection.")
+			App.current_turn_index = 0
+			App.current_turn_player_id = App.turn_order[0].get("id", -1) if App.turn_order else -1
+			
+			App.enter_resource_collection_phase()
+			_show_collect_resources_overlay()
 
 	# Check if we need to show phase transition overlay
 	if App.show_phase_transition:
@@ -1693,12 +2023,7 @@ func _apply_phase_ui() -> void:
 							# If ALL players are done, transition to BATTLE_READY immediately - don't show waiting.
 							# Critical for last player who returns from minigame (may miss done_counts_updated signal).
 							if _total > 0 and _done >= _total:
-								map_sub_phase = MapSubPhase.BATTLE_READY
-								is_waiting_for_others = false
-								waiting_overlay.visible = false
-								_set_overlay_state(OverlayState.NONE)
-								App.enter_battle_phase()
-								_show_phase_transition_overlay()
+								_transition_to_next_round()
 							else:
 								_set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [_done, _total])
 								is_waiting_for_others = true
@@ -2136,12 +2461,7 @@ func _on_done_counts_updated(done: int, total: int) -> void:
 	# When ALL players are done (done >= total), transition to BATTLE_READY immediately - for BOTH host and client.
 	# Do this regardless of is_waiting_for_others so the last player (who just returned from minigame) also transitions.
 	if total > 0 and done >= total and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == MapSubPhase.RESOURCE_COLLECTION:
-		map_sub_phase = MapSubPhase.BATTLE_READY
-		is_waiting_for_others = false
-		waiting_overlay.visible = false
-		_set_overlay_state(OverlayState.NONE)
-		App.enter_battle_phase()
-		_show_phase_transition_overlay()
+		_transition_to_next_round()
 		return
 
 	if is_waiting_for_others and _overlay_state == OverlayState.WAITING:
@@ -2217,6 +2537,13 @@ func _on_net_territory_claimed(territory_id: int, owner_id: int, cards: Array) -
 	# Persist to TerritoryClaimState
 	if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
 		_territory_claim_state.set_claim(territory_id, owner_id, cards)
+	# Report defending slots to BattleStateManager
+	if BattleStateManager:
+		var defending_dict: Dictionary = {}
+		for slot_idx in range(min(3, cards.size())):
+			if cards[slot_idx] != null and cards[slot_idx] is Dictionary:
+				defending_dict[slot_idx] = cards[slot_idx]
+		BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
 	# If we're the owner, remove placed cards from our collection
 	if local_id != null and int(owner_id) == int(local_id):
 		var placed_slots: Dictionary = {}
@@ -2252,12 +2579,7 @@ func _on_net_map_sub_phase_changed(sub_phase: int) -> void:
 		is_waiting_for_others = false
 		_show_collect_resources_overlay()
 	elif sub_phase == 2:  # BATTLE_READY
-		map_sub_phase = MapSubPhase.BATTLE_READY
-		is_waiting_for_others = false
-		waiting_overlay.visible = false
-		_set_overlay_state(OverlayState.NONE)
-		App.enter_battle_phase()
-		_show_phase_transition_overlay()
+		_transition_to_next_round()
 
 func _on_left_battle_pressed() -> void:
 	## Handle left battle button press

@@ -21,7 +21,8 @@ enum GamePhase { CARD_COMMAND, CLAIM_CONQUER, CARD_COLLECTION }
 
 signal game_phase_changed(new_phase: GamePhase)
 signal minigame_completed_signal  # Emitted when a minigame is won
-signal turn_changed(player_id: int)  # Emitted when turn changes
+@warning_ignore("unused_signal")
+signal turn_changed(player_id: int)  # Emitted when turn changes (reserved for future use)
 
 var current_game_phase: GamePhase = GamePhase.CARD_COMMAND
 var minigames_completed_this_phase: int = 0
@@ -35,10 +36,15 @@ var phase_transition_text: String = ""
 var pending_return_map_sub_phase: int = -1
 ## True when we left for a minigame from territory; GameIntro will call on_minigame_completed() when it loads.
 var returning_from_territory_minigame: bool = false
+## True when we just finished the territory battle sequence (Finish Claiming); GameIntro shows collect resources.
+var returning_from_territory_battles: bool = false
 
 ## Turn tracking (host-authoritative in multiplayer)
 var current_turn_player_id: int = -1
 var current_turn_index: int = 0
+
+## Reference to the active TerritoryManager instance
+var territory_manager: TerritoryManager = null
 
 ## ---------- BATTLE QUEUE SYSTEM ----------
 ## Stores selected battles for multi-battle progression
@@ -48,6 +54,11 @@ var battle_queue: Array = []
 var current_battle_queue_index: int = -1
 ## Metadata for current battle: {index, opponent_id, opponent_name, opponent_race}
 var current_battle_metadata: Dictionary = {}
+
+## ---------- TERRITORY BATTLE SEQUENCE (Finish Claiming) ----------
+## After "Finish Claiming", territories with both defending and attacking cards are battled in ascending id order.
+## This array holds territory_id strings; when non-empty, on_battle_completed loads the next.
+var pending_territory_battle_ids: Array = []
 
 func enter_card_command_phase() -> void:
 	current_game_phase = GamePhase.CARD_COMMAND
@@ -98,8 +109,74 @@ func on_minigame_completed() -> void:
 		# If in CLAIM_CONQUER, GameIntro handles BATTLE_READY transition (delayed overlay)
 
 func on_battle_completed() -> void:
-	## Called when a single battle ends - handles multi-battle queue progression
-	print("[Phase] Battle completed")
+	## Called when a single battle ends - handles territory battle sequence or multi-battle queue
+	print("[DEBUG] App.on_battle_completed() called. Pending IDs: ", pending_territory_battle_ids)
+	
+	# Territory battle sequence (Finish Claiming): run next territory battle or return to map
+	if pending_territory_battle_ids.size() > 0:
+		var next_id_str = pending_territory_battle_ids.pop_front()
+		var next_id = int(next_id_str)
+		
+		# If Multiplayer, trigger via Net
+		if is_multiplayer and multiplayer.has_multiplayer_peer():
+			print("[DEBUG] Requesting Multi-Player Territory Battle: ", next_id)
+			Net.request_start_territory_battle(next_id)
+			return # Wait for RPC to call enter_territory_battle
+			
+		# Single Player (Local)
+		print("[DEBUG] Starting Single-Player Territory Battle: ", next_id)
+		enter_territory_battle(next_id, -1, -2)
+		return
+
+	# ALL BATTLES COMPLETED (if we get here, pending list is empty)
+	# But we need to distinguish between "Card Battle Queue exhausted" and "Territory Battle Sequence finished"
+	# We use returning_from_territory_battles flag or just checking if we were IN that mode.
+	# Actually, since we are falling through from above, we might be done.
+	
+	# However, we must be careful not to trigger this if we weren't even IN territory battle mode.
+	# But `pending_territory_battle_ids` being empty is the default state.
+	
+	# We need a check.
+	# The flag `returning_from_territory_battles` is what triggers the *next* step (in GameIntro).
+	# But we set it HERE.
+	# How do we know to set it?
+	# We can check if `BattleStateManager.current_territory_id` implies a territory battle was just finished?
+	# Or, relying on the fact that `_on_finish_claiming_pressed` POPULATED the list.
+	# If the list is empty, we don't know if it *was* populated.
+	
+	# FIX: `GameIntro` sets `App.returning_from_territory_battles = true`? No.
+	# We need a state variable `in_territory_battle_sequence`.
+	
+	# Alternative: We always check returning logic if we are in CLAIM_CONQUER phase and just finished a battle?
+	# `on_battle_completed` is called after EVERY battle.
+	
+	# Use `BattleStateManager.current_territory_id`. If it is a valid ID (numeric string), it was a territory battle.
+	# If it was "battle_X" ID from queue, it's not.
+	var just_finished_territory_battle = (BattleStateManager and BattleStateManager.current_territory_id != "" and not BattleStateManager.current_territory_id.begins_with("battle_"))
+	
+	if just_finished_territory_battle and pending_territory_battle_ids.size() == 0:
+		print("[DEBUG] All territory battles completed. Returning to GameIntro with flag set.")
+		pending_territory_battle_ids.clear()
+		returning_from_territory_battles = true
+		
+		# If Multiplayer, we need to notify the server we are done with battles/claiming
+		if is_multiplayer and multiplayer.has_multiplayer_peer():
+			print("[DEBUG] Multiplayer: Requesting end claiming turn after battles.")
+			pass # Logic will be handled in GameIntro._ready()
+		else:
+			# SINGLE PLAYER LOGIC
+			# Current turn player finished claiming & battles.
+			current_turn_index += 1
+			print("[DEBUG] Advanced turn index locally to: ", current_turn_index)
+			if current_turn_index < turn_order.size():
+				# Next player's turn
+				current_turn_player_id = turn_order[current_turn_index].get("id", -1)
+				print("[DEBUG] Next player ID: ", current_turn_player_id)
+				go("res://scenes/ui/GameIntro.tscn")
+				return
+
+		go("res://scenes/ui/GameIntro.tscn")
+		return
 	
 	# Check if more battles in queue
 	if battle_queue.size() > 0 and current_battle_queue_index < battle_queue.size() - 1:
@@ -639,3 +716,40 @@ func _setup_audio_buses() -> void:
 		AudioServer.set_bus_name(new_bus_idx, "UI")
 		AudioServer.set_bus_send(new_bus_idx, "Master")
 		print("Created UI audio bus")
+
+## Called by Net via RPC start_territory_battle
+func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: int) -> void:
+	print("[App] Entering Territory Battle: ", territory_id)
+	
+	if not BattleStateManager:
+		return
+		
+	var tid_str: String = str(territory_id)
+	BattleStateManager.set_current_territory(tid_str)
+	BattleStateManager.clear_local_slots(tid_str)
+	
+	var my_id: int = multiplayer.get_unique_id() if (is_multiplayer and multiplayer.has_multiplayer_peer()) else -1
+	
+	# Determine if I am participating
+	var is_attacker = (my_id == attacker_id)
+	var is_defender = (my_id == defender_id)
+	
+	if is_attacker:
+		print("[App] I am the ATTACKER. Loading attacking slots.")
+		var atts: Dictionary = BattleStateManager._get_state(tid_str).get("attacking_slots", {})
+		for idx in atts:
+			var c: Dictionary = atts[idx]
+			BattleStateManager.set_local_slot(int(idx), c.get("path", ""), int(c.get("frame", 0)), tid_str)
+		go("res://scenes/card_battle.tscn")
+			
+	elif is_defender:
+		print("[App] I am the DEFENDER. Loading defending slots.")
+		var defs: Dictionary = BattleStateManager.get_defending_slots(tid_str)
+		for idx in defs:
+			var c: Dictionary = defs[idx]
+			BattleStateManager.set_local_slot(int(idx), c.get("path", ""), int(c.get("frame", 0)), tid_str)
+		go("res://scenes/card_battle.tscn")
+			
+	else:
+		print("[App] I am a SPECTATOR (not attacker or defender). Staying in current scene.")
+		# Optionally show an overlay "Battle in Progress: Player X vs Player Y"

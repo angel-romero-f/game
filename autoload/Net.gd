@@ -86,7 +86,7 @@ func join_game(code: String) -> void:
 	
 	var ip := ""
 	var port := PORT
-
+	
 	# Parse code: handle both IPv4 and IPv6 formats
 	code = code.strip_edges()
 	
@@ -116,14 +116,14 @@ func join_game(code: String) -> void:
 	else:
 		# Plain IPv4: 192.168.1.12
 		ip = code
-
+	
 	_debug_log("Parsed IP: '%s', Port: %d" % [ip, port])
 	_debug_log("IP type: %s" % ("IPv6" if ":" in ip else "IPv4"))
 
 	if ip.is_empty():
 		push_error("Invalid host code: empty IP")
 		return
-
+	
 	# Clean up any existing connection first
 	if multiplayer.multiplayer_peer:
 		_debug_log("Cleaning up existing peer connection")
@@ -151,7 +151,7 @@ func join_game(code: String) -> void:
 ## Returns IP only, no port. For IPv6, returns bracketed format like [2607:fb91::1]
 func get_host_code() -> String:
 	var addresses := IP.get_local_addresses()
-
+	
 	_debug_log("get_host_code() - Scanning for network IP...")
 	_debug_log("All addresses found: %s" % str(addresses))
 
@@ -239,7 +239,7 @@ func get_host_code() -> String:
 		_debug_log("  SELECTED IPv6: %s (%s)" % [best["ip"], best["reason"]])
 		_debug_log("  NOTE: IPv6-only network detected. Both devices must support IPv6.")
 		return best["ip"]
-
+	
 	# Fallback to localhost
 	_debug_log("  WARNING: No network IP found! Falling back to 127.0.0.1")
 	_debug_log("  This means networking will ONLY work on the same machine!")
@@ -298,8 +298,8 @@ func disconnect_from_game() -> void:
 	left_game.emit()
 
 ## Submit local player's name to the host
-func submit_player_name(name: String) -> void:
-	var cleaned := name.strip_edges()
+func submit_player_name(player_name: String) -> void:
+	var cleaned := player_name.strip_edges()
 	if cleaned.is_empty():
 		return
 	
@@ -320,11 +320,11 @@ func submit_player_race(race: String) -> void:
 		set_player_race.rpc_id(1, cleaned)
 
 @rpc("any_peer", "reliable")
-func set_player_name(name: String) -> void:
+func set_player_name(player_name: String) -> void:
 	if not multiplayer.is_server():
 		return
 	
-	var cleaned := name.strip_edges()
+	var cleaned := player_name.strip_edges()
 	if cleaned.is_empty():
 		return
 	
@@ -339,8 +339,8 @@ func sync_player_names(names: Dictionary) -> void:
 	player_names = names.duplicate(true)
 	player_names_updated.emit()
 
-func _set_player_name(id: int, name: String) -> void:
-	player_names[id] = name
+func _set_player_name(id: int, player_name: String) -> void:
+	player_names[id] = player_name
 
 func _sync_player_names() -> void:
 	sync_player_names.rpc(player_names)
@@ -603,6 +603,55 @@ func request_remove_battle_card(slot_index: int) -> void:
 		_server_remove_battle_card(multiplayer.get_unique_id(), slot_index)
 	else:
 		remove_battle_card.rpc_id(1, slot_index)
+
+## Request to start a territory battle (Attacker -> Server)
+## Server will notify participants via start_territory_battle
+func request_start_territory_battle(territory_id: int) -> void:
+	if multiplayer.is_server():
+		_server_handle_start_territory_battle(multiplayer.get_unique_id(), territory_id)
+	else:
+		server_handle_start_territory_battle.rpc_id(1, territory_id)
+
+@rpc("any_peer", "reliable")
+func server_handle_start_territory_battle(territory_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_handle_start_territory_battle(id, territory_id)
+
+func _server_handle_start_territory_battle(attacker_id: int, territory_id: int) -> void:
+	# 1. Validate territory existence
+	# Use App.territory_manager instance
+	if not App.territory_manager:
+		print("[Net] request_start_territory_battle: App.territory_manager is missing!")
+		return
+		
+	var t_data = App.territory_manager.get_territory_data(territory_id)
+	if not t_data:
+		print("[Net] request_start_territory_battle: Invalid territory ID ", territory_id)
+		return
+		
+	# 2. Identify Defender (Owner)
+	var defender_id: int = -1
+	if t_data.owner_player_id != null:
+		defender_id = int(t_data.owner_player_id)
+	else:
+		print("[Net] request_start_territory_battle: Territory ", territory_id, " has no owner!")
+		# If unowned, maybe fight neutral? But user implied 2 players.
+		# For now, proceed with defender_id = -1 (Neutral/AI)
+	
+	print("[Net] Starting Territory Battle: ID=", territory_id, " Attacker=", attacker_id, " Defender=", defender_id)
+	
+	# 3. Broadcast Start
+	start_territory_battle.rpc(territory_id, attacker_id, defender_id)
+
+@rpc("authority", "call_local", "reliable")
+func start_territory_battle(territory_id: int, attacker_id: int, defender_id: int) -> void:
+	print("[Net] Received start_territory_battle: ", territory_id)
+	App.enter_territory_battle(territory_id, attacker_id, defender_id)
+
 
 @rpc("any_peer", "reliable")
 func place_battle_card(slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
@@ -1213,5 +1262,5 @@ func _server_battle_finished_report(peer_id: int) -> void:
 		_advance_decider_to_next_eligible()
 
 @rpc("authority", "call_local", "reliable")
-func rpc_battle_finished(p1_id: int, p2_id: int, side: String) -> void:
+func rpc_battle_finished(_p1_id: int, _p2_id: int, _side: String) -> void:
 	battle_finished_broadcast.emit()

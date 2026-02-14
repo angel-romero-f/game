@@ -23,6 +23,13 @@ signal territory_selected(territory_id: int)
 signal card_placed(territory_id: int, player_id: int)
 
 
+func _enter_tree() -> void:
+	App.territory_manager = self
+
+func _exit_tree() -> void:
+	if App.territory_manager == self:
+		App.territory_manager = null
+
 func _ready() -> void:
 	# Territories will be initialized when map loads
 	pass
