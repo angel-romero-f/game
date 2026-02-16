@@ -66,13 +66,13 @@ func _ready() -> void:
 		if BattleStateManager:
 			has_local_slots = not BattleStateManager.get_local_slots().is_empty()
 		if not has_local_slots:
-			Net.clear_battle_state()
-		if Net.battle_cards_updated.is_connected(_on_battle_cards_updated):
-			Net.battle_cards_updated.disconnect(_on_battle_cards_updated)
-		Net.battle_cards_updated.connect(_on_battle_cards_updated)
-		if Net.battle_start_requested.is_connected(_on_battle_start_requested):
-			Net.battle_start_requested.disconnect(_on_battle_start_requested)
-		Net.battle_start_requested.connect(_on_battle_start_requested)
+			BattleSync.clear_battle_state()
+		if BattleSync.battle_cards_updated.is_connected(_on_battle_cards_updated):
+			BattleSync.battle_cards_updated.disconnect(_on_battle_cards_updated)
+		BattleSync.battle_cards_updated.connect(_on_battle_cards_updated)
+		if BattleSync.battle_start_requested.is_connected(_on_battle_start_requested):
+			BattleSync.battle_start_requested.disconnect(_on_battle_start_requested)
+		BattleSync.battle_start_requested.connect(_on_battle_start_requested)
 	_setup_ui()
 
 	# Wait a couple frames so CardManager has time to initialize
@@ -171,7 +171,7 @@ func _restore_and_sync_placed_cards() -> void:
 				var path: String = data.get("path", "")
 				var frame: int = int(data.get("frame", 0))
 				if not path.is_empty():
-					Net.request_place_battle_card(slot_idx, path, frame)
+					BattleSync.request_place_battle_card(slot_idx, path, frame)
 
 
 func _restore_cards_to_slots(placed: Dictionary) -> void:
@@ -259,18 +259,18 @@ func _on_battle_start_requested() -> void:
 
 
 func _update_opponent_cards_from_net() -> void:
-	## Place/update face-down cards in opponent slots from Net.battle_placed_cards.
+	## Place/update face-down cards in opponent slots from BattleSync.battle_placed_cards.
 	if not multiplayer.has_multiplayer_peer():
 		return
 	var my_id := multiplayer.get_unique_id()
 	var other_peer_id: int = -1
-	for pid in Net.battle_placed_cards:
+	for pid in BattleSync.battle_placed_cards:
 		if int(pid) != my_id:
 			other_peer_id = int(pid)
 			break
 	if other_peer_id < 0:
 		return
-	var other_cards: Dictionary = Net.battle_placed_cards.get(other_peer_id, {})
+	var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
 	if not _deck_o:
 		return
 	var back_frames: SpriteFrames = _deck_o.get("deck_sprite_frames")
@@ -357,7 +357,7 @@ func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
 
 		# Sync in multiplayer
 		if _is_multiplayer:
-			Net.request_place_battle_card(slot_idx, frames.resource_path, fidx)
+			BattleSync.request_place_battle_card(slot_idx, frames.resource_path, fidx)
 		else:
 			_persist_local_placed_cards()
 
@@ -377,7 +377,7 @@ func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
 
 	# Sync in multiplayer
 	if _is_multiplayer:
-		Net.request_remove_battle_card(slot_idx)
+		BattleSync.request_remove_battle_card(slot_idx)
 	else:
 		_persist_local_placed_cards()
 
@@ -461,7 +461,7 @@ func _on_start_battle_pressed() -> void:
 		return
 
 	if _is_multiplayer:
-		Net.request_battle_ready()
+		BattleSync.request_battle_ready()
 		if _start_button:
 			_start_button.visible = false
 		state = State.WAITING_FOR_ALL_READY
@@ -484,17 +484,17 @@ func _flip_opponent_cards_from_pool() -> void:
 	var chosen: Dictionary = {} # slot -> {frames, frame_index}
 
 	if _is_multiplayer:
-		# Reveal actual opponent cards based on Net.battle_placed_cards.
+		# Reveal actual opponent cards based on BattleSync.battle_placed_cards.
 		if not multiplayer.has_multiplayer_peer():
 			return
 		var my_id := multiplayer.get_unique_id()
 		var other_peer_id: int = -1
-		for pid in Net.battle_placed_cards:
+		for pid in BattleSync.battle_placed_cards:
 			if int(pid) != my_id:
 				other_peer_id = int(pid)
 				break
 		if other_peer_id >= 0:
-			var other_cards: Dictionary = Net.battle_placed_cards.get(other_peer_id, {})
+			var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
 			for slot_idx in range(_opponent_slot_nodes.size()):
 				var slot = _opponent_slot_nodes[slot_idx]
 				if not slot or not other_cards.has(slot_idx):
@@ -678,10 +678,10 @@ func _clear_player_slots() -> void:
 
 func _on_leave_pressed() -> void:
 	if _is_multiplayer:
-		Net.notify_battle_left()
+		BattleSync.notify_battle_left()
 		# Added (minimal): only report finished when leaving a resolved battle (paired tracking)
 		if state == State.RESOLVED and not _reported_battle_finished:
-			Net.notify_battle_finished()
+			BattleSync.notify_battle_finished()
 			_reported_battle_finished = true
 
 	# Handle card persistence based on battle state
@@ -735,7 +735,7 @@ func _on_leave_pressed() -> void:
 									cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame", 0))}
 							tcs.call("set_claim", int(tid_str), int(owner_id), cards)
 		# Clear battle state when leaving resolved battle
-		Net.clear_battle_state()
+		BattleSync.clear_battle_state()
 	else:
 		# Leaving unresolved battle: persist cards for restoration
 		_persist_local_placed_cards()
@@ -919,10 +919,10 @@ func _unhandled_input(event: InputEvent) -> void:
 			# Report finished in multiplayer for paired battle tracking.
 			if _is_multiplayer and not _reported_battle_finished:
 				# Note: Don't report here - on_battle_completed handles it for multi-battle queue
-				Net.notify_battle_left()
+				BattleSync.notify_battle_left()
 				_reported_battle_finished = true
 
-			Net.clear_battle_state()
+			BattleSync.clear_battle_state()
 			App.switch_to_main_music()
 			# App.on_battle_completed() handles scene transition (next battle or GameIntro)
 			App.on_battle_completed()
