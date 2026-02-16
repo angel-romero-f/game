@@ -159,7 +159,7 @@ func _restore_and_sync_placed_cards() -> void:
 					
 					# Store face data as metadata for flip logic
 					card.set_meta("territory_face_path", card_data.get("path", ""))
-					card.set_meta("territory_face_frame", card_data.get("frame", 0))
+					card.set_meta("territory_face_frame", card_data.get("frame"))
 
 	# 2. Restore Player (Defending) Cards
 	var placed: Dictionary = BattleStateManager.get_local_slots()
@@ -169,7 +169,7 @@ func _restore_and_sync_placed_cards() -> void:
 			for slot_idx in placed:
 				var data: Dictionary = placed[slot_idx]
 				var path: String = data.get("path", "")
-				var frame: int = int(data.get("frame", 0))
+				var frame: int = int(data.get("frame"))
 				if not path.is_empty():
 					BattleSync.request_place_battle_card(slot_idx, path, frame)
 
@@ -191,7 +191,7 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 			continue
 		var data: Dictionary = placed[slot_idx]
 		var path: String = data.get("path", "")
-		var frame: int = int(data.get("frame", 0))
+		var frame: int = int(data.get("frame"))
 		if path.is_empty():
 			continue
 		var frames: SpriteFrames = load(path) as SpriteFrames
@@ -501,7 +501,7 @@ func _flip_opponent_cards_from_pool() -> void:
 					continue
 				var data: Dictionary = other_cards[slot_idx]
 				var path: String = data.get("path", "")
-				var fidx: int = int(data.get("frame", 0))
+				var fidx: int = int(data.get("frame"))
 				if not path.is_empty():
 					var frames: SpriteFrames = load(path) as SpriteFrames
 					if frames:
@@ -563,8 +563,8 @@ func _flip_opponent_cards_from_pool() -> void:
 			var def = chosen.get(slot, null)
 			if def == null:
 				continue
-			var frames: SpriteFrames = def.get("frames", null)
-			var fidx: int = int(def.get("frame_index", 0))
+			var frames: SpriteFrames = def.get("frames")
+			var fidx: int = int(def.get("frame_index"))
 			if frames:
 				card.card_sprite_frames = frames
 				card.frame_index = fidx
@@ -605,11 +605,11 @@ func _resolve_battle() -> void:
 		var o_power: float = 0.0
 		
 		if pcard:
-			var p_frame_idx: int = int(pcard.get("frame_index", 0))
+			var p_frame_idx: int = int(pcard.get("frame_index"))
 			p_power = float(p_frame_idx + 1)
 		
 		if ocard:
-			var o_frame_idx: int = int(ocard.get("frame_index", 0))
+			var o_frame_idx: int = int(ocard.get("frame_index"))
 			o_power = float(o_frame_idx + 1)
 
 		# Get attributes
@@ -786,7 +786,7 @@ func _on_leave_pressed() -> void:
 							for idx in remaining:
 								var c: Dictionary = remaining[idx]
 								if int(idx) < 3 and c.get("path", "") != "":
-									cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame", 0))}
+									cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
 							tcs.call("set_claim", int(tid_str), int(owner_id), cards)
 		# Clear battle state when leaving resolved battle
 		BattleSync.clear_battle_state()
@@ -813,7 +813,7 @@ func _on_debug_add_card_pressed() -> void:
 		return
 	var card_data: Dictionary = App.player_card_collection[App.player_card_collection.size() - 1]
 	var card_path: String = card_data.get("path", "")
-	var frame: int = int(card_data.get("frame", 0))
+	var frame: int = int(card_data.get("frame"))
 	if card_path.is_empty():
 		return
 	var frames: SpriteFrames = ResourceLoader.load(card_path, "SpriteFrames", ResourceLoader.CACHE_MODE_REUSE) as SpriteFrames
