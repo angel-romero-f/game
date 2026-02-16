@@ -584,8 +584,8 @@ func _flip_opponent_cards_from_pool() -> void:
 func _resolve_battle() -> void:
 	# Pairing is fixed by array ordering:
 	# PL vs OR, PM vs OM, PR vs OL
-	# Determine per-pair results, then best-of-3 overall.
-	if attribute_config == null or not attribute_config.has_method("compare"):
+	# Determine per-pair results using power values with attribute modifiers, then best-of-3 overall.
+	if attribute_config == null or not attribute_config.has_method("get_attribute"):
 		push_warning("BattleManager: attribute_config not set; battle will tie.")
 		return
 
@@ -600,17 +600,71 @@ func _resolve_battle() -> void:
 		var pcard = pslot.snapped_card if pslot else null
 		var ocard = oslot.snapped_card if oslot else null
 
+		# Get power values (frame_index + 1)
+		var p_power: float = 0.0
+		var o_power: float = 0.0
+		
+		if pcard:
+			var p_frame_idx: int = int(pcard.get("frame_index", 0))
+			p_power = float(p_frame_idx + 1)
+		
+		if ocard:
+			var o_frame_idx: int = int(ocard.get("frame_index", 0))
+			o_power = float(o_frame_idx + 1)
+
+		# Get attributes
 		var pa := _get_card_attribute(pcard)
 		var oa := _get_card_attribute(ocard)
 
-		var outcome: String = String(attribute_config.call("compare", pa, oa))
-		match outcome:
-			"player":
-				player_wins += 1
-			"opponent":
-				opponent_wins += 1
-			_:
-				ties += 1
+		# Calculate attribute modifier for player card
+		var p_modifier: float = 0.0
+		if pa != "unknown" and oa != "unknown":
+			if pa == oa:
+				# Neutral (same attribute)
+				p_modifier = 0.0
+			else:
+				# Check if player card beats opponent card (advantageous)
+				var pa_beats = attribute_config.beats.get(pa, null)
+				if pa_beats == oa:
+					p_modifier = 0.5
+				else:
+					# Check if opponent card beats player card (disadvantageous)
+					var oa_beats = attribute_config.beats.get(oa, null)
+					if oa_beats == pa:
+						p_modifier = -0.5
+					else:
+						p_modifier = 0.0
+
+		# Calculate attribute modifier for opponent card
+		var o_modifier: float = 0.0
+		if pa != "unknown" and oa != "unknown":
+			if pa == oa:
+				# Neutral (same attribute)
+				o_modifier = 0.0
+			else:
+				# Check if opponent card beats player card (advantageous)
+				var oa_beats = attribute_config.beats.get(oa, null)
+				if oa_beats == pa:
+					o_modifier = 0.5
+				else:
+					# Check if player card beats opponent card (disadvantageous)
+					var pa_beats = attribute_config.beats.get(pa, null)
+					if pa_beats == oa:
+						o_modifier = -0.5
+					else:
+						o_modifier = 0.0
+
+		# Calculate final power values
+		var p_final_power: float = p_power + p_modifier
+		var o_final_power: float = o_power + o_modifier
+
+		# Determine winner based on final power values
+		if p_final_power > o_final_power:
+			player_wins += 1
+		elif o_final_power > p_final_power:
+			opponent_wins += 1
+		else:
+			ties += 1
 
 	# Store summary on labels (simple for now).
 	var result_text := ""
