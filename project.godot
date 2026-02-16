@@ -18,9 +18,15 @@ config/icon="res://icon.svg"
 [autoload]
 
 App="*res://autoload/App.gd"
-Net="*res://autoload/Net.gd"
+NetworkManager="*res://autoload/net/NetworkManager.gd"
+PlayerDataSync="*res://autoload/net/PlayerDataSync.gd"
+PhaseController="*res://autoload/net/PhaseController.gd"
+PhaseSync="*res://autoload/net/PhaseSync.gd"
+BattleSync="*res://autoload/net/BattleSync.gd"
+TerritorySync="*res://autoload/net/TerritorySync.gd"
 BattleStateManager="*res://autoload/BattleStateManager.gd"
 TerritoryClaimState="*res://autoload/TerritoryClaimState.gd"
+Net="*res://autoload/Net.gd"
 
 [display]
 
