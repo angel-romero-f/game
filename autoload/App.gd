@@ -34,7 +34,7 @@ var phase_transition_text: String = ""
 
 ## When returning from a territory minigame: restore GameIntro map sub-phase. Use CLAIMING, RESOURCE_COLLECTION, or BATTLE_READY. Use -1 when not returning.
 var pending_return_map_sub_phase: int = -1
-## True when we left for a minigame from territory; GameIntro will call on_minigame_completed() when it loads.
+## True when we left for a minigame from territory; minigame scripts call App.on_minigame_completed() before returning.
 var returning_from_territory_minigame: bool = false
 ## True when we just finished the territory battle sequence (Finish Claiming); GameIntro shows collect resources.
 var returning_from_territory_battles: bool = false

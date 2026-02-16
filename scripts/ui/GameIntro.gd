@@ -1566,7 +1566,6 @@ func _skip_to_game_ready() -> void:
 		if App.pending_return_map_sub_phase != -1:
 			map_sub_phase = App.pending_return_map_sub_phase
 			App.pending_return_map_sub_phase = -1
-		App.on_minigame_completed()
 		
 		# If 2 minigames done, start delayed transition to "Choose Your Battles" (or Next Round logic)
 		if not App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION and App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
