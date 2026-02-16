@@ -959,7 +959,7 @@ func _on_finish_claiming_pressed() -> void:
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 		skip_to_battle_button.visible = false
 		print("[DEBUG] No battles, requesting end claiming turn (Multiplayer)")
-		Net.request_end_claiming_turn()
+		PhaseSync.request_end_claiming_turn()
 	else:
 		print("[DEBUG] No battles found. Showing collect resources overlay (Single Player).")
 		_show_collect_resources_overlay()
@@ -1110,7 +1110,7 @@ func _on_claim_territory_clicked() -> void:
 			return
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 		# Multiplayer: request claim via Net; server validates and broadcasts; we apply in _on_net_territory_claimed
-		Net.request_claim_territory(current_claim_territory_id, local_id, claim_slot_cards)
+		TerritorySync.request_claim_territory(current_claim_territory_id, local_id, claim_slot_cards)
 		return
 	# Single-player: apply claim locally
 	var territory: Territory = territory_manager.territory_data[current_claim_territory_id]
@@ -1258,19 +1258,19 @@ func _begin_rolling_sequence() -> void:
 		roll_result_label.visible = false
 
 		# Connect to roll sync signal
-		if not Net.player_rolls_updated.is_connected(_on_rolls_synced):
-			Net.player_rolls_updated.connect(_on_rolls_synced)
+		if not PlayerDataSync.player_rolls_updated.is_connected(_on_rolls_synced):
+			PlayerDataSync.player_rolls_updated.connect(_on_rolls_synced)
 
 		# Request roll generation (host will generate and sync)
-		Net.request_roll_generation()
+		PlayerDataSync.request_roll_generation()
 	else:
 		# Single player: use animated rolling sequence
 		_roll_for_player(current_rolling_player_idx)
 
 func _on_rolls_synced() -> void:
 	# Disconnect the signal to avoid duplicate calls
-	if Net.player_rolls_updated.is_connected(_on_rolls_synced):
-		Net.player_rolls_updated.disconnect(_on_rolls_synced)
+	if PlayerDataSync.player_rolls_updated.is_connected(_on_rolls_synced):
+		PlayerDataSync.player_rolls_updated.disconnect(_on_rolls_synced)
 
 	print("Rolls synced, displaying results...")
 
@@ -1592,20 +1592,20 @@ func _show_corner_order() -> void:
 	current_phase = Phase.GAME_READY
 
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		# Multiplayer host: only init Card Command when starting fresh (phase 0). When returning from battle, sync from Net.
-		if Net.current_phase == 0:
-			Net.host_init_card_command_phase()
+		# Multiplayer host: only init Card Command when starting fresh (phase 0). When returning from battle, sync from PhaseController.
+		if PhaseController.current_phase == 0:
+			PhaseSync.host_init_card_command_phase()
 			App.phase_transition_text = "Card Command"
 		else:
-			# Returning from battle/minigame - sync from our own Net state
-			match Net.current_phase:
+			# Returning from battle/minigame - sync from PhaseController state
+			match PhaseController.current_phase:
 				0:
 					App.current_game_phase = App.GamePhase.CARD_COMMAND
 					App.phase_transition_text = "Card Command"
 				1:
 					App.current_game_phase = App.GamePhase.CLAIM_CONQUER
 					App.phase_transition_text = "Claim & Conquer"
-					map_sub_phase = Net.map_sub_phase
+					map_sub_phase = PhaseController.map_sub_phase
 				2:
 					App.current_game_phase = App.GamePhase.CARD_COLLECTION
 					App.phase_transition_text = "Card Collection"
@@ -1615,10 +1615,10 @@ func _show_corner_order() -> void:
 		App.show_phase_transition = true
 		_show_phase_transition_overlay()
 	elif App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		# Multiplayer client: sync from Net (phase may already be set by rpc_set_phase)
+		# Multiplayer client: sync from PhaseController (phase may already be set by rpc_set_phase)
 		# Critical when returning from battle - we may have missed RPCs while in battle scene
-		# Net.current_phase: 0=CARD_COMMAND, 1=CLAIM_CONQUER, 2=CARD_COLLECTION
-		match Net.current_phase:
+		# PhaseController.current_phase: 0=CARD_COMMAND, 1=CLAIM_CONQUER, 2=CARD_COLLECTION
+		match PhaseController.current_phase:
 			0:
 				App.current_game_phase = App.GamePhase.CARD_COMMAND
 				App.phase_transition_text = "Card Command"
@@ -1626,7 +1626,7 @@ func _show_corner_order() -> void:
 				App.current_game_phase = App.GamePhase.CLAIM_CONQUER
 				App.phase_transition_text = "Claim & Conquer"
 				# Sync map_sub_phase too (CLAIMING=0, RESOURCE_COLLECTION=1, BATTLE_READY=2)
-				map_sub_phase = Net.map_sub_phase
+				map_sub_phase = PhaseController.map_sub_phase
 			2:
 				App.current_game_phase = App.GamePhase.CARD_COLLECTION
 				App.phase_transition_text = "Card Collection"
@@ -1754,7 +1754,7 @@ func _skip_to_game_ready() -> void:
 			print("[DEBUG] Multiplayer: Requesting end claiming turn after battles.")
 			# In multiplayer, we just tell the server we are done. 
 			# The server will advance the turn and sync the new state.
-			Net.request_end_claiming_turn()
+			PhaseSync.request_end_claiming_turn()
 		else:
 			# Single Player Logic
 			print("[DEBUG] Current Turn Index: ", App.current_turn_index, " Turn Order Size: ", App.turn_order.size())
@@ -1940,10 +1940,10 @@ func _apply_phase_ui() -> void:
 			# Check if it's our turn (host-authoritative)
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 				var my_id := multiplayer.get_unique_id()
-				if Net.current_turn_peer_id != my_id:
+				if PhaseController.current_turn_peer_id != my_id:
 					# Not our turn - show waiting overlay
 					skip_to_battle_button.visible = false
-					var turn_name := _get_player_name_for_peer(Net.current_turn_peer_id)
+					var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
 					_set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
 					is_waiting_for_others = true
 				else:
@@ -1981,9 +1981,9 @@ func _apply_phase_ui() -> void:
 					minigames_counter_label.visible = false
 					if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 						var my_id := multiplayer.get_unique_id()
-						if Net.current_turn_peer_id != my_id:
+						if PhaseController.current_turn_peer_id != my_id:
 							skip_to_battle_button.visible = false
-							var turn_name := _get_player_name_for_peer(Net.current_turn_peer_id)
+							var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
 							_set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
 							is_waiting_for_others = true
 						else:
@@ -2009,17 +2009,17 @@ func _apply_phase_ui() -> void:
 						var should_disable_minigames := false
 						if multiplayer.has_multiplayer_peer():
 							var my_id := multiplayer.get_unique_id()
-							if Net.player_done_state.get(my_id, false):
+							if PhaseController.player_done_state.get(my_id, false):
 								should_disable_minigames = true
-							var count: int = Net.player_minigame_counts.get(my_id, 0)
+							var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
 							if count >= App.MAX_MINIGAMES_PER_PHASE:
 								should_disable_minigames = true
 						if should_disable_minigames:
 							var _done := 0
-							for _pid in Net.player_done_state:
-								if Net.player_done_state.get(_pid, false):
+							for _pid in PhaseController.player_done_state:
+								if PhaseController.player_done_state.get(_pid, false):
 									_done += 1
-							var _total := maxi(Net.player_done_state.size(), 1)
+							var _total := maxi(PhaseController.player_done_state.size(), 1)
 							# If ALL players are done, transition to BATTLE_READY immediately - don't show waiting.
 							# Critical for last player who returns from minigame (may miss done_counts_updated signal).
 							if _total > 0 and _done >= _total:
@@ -2063,10 +2063,10 @@ func _apply_phase_ui() -> void:
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 				var my_id := multiplayer.get_unique_id()
 				# Check if host marked us as done
-				if Net.player_done_state.get(my_id, false):
+				if PhaseController.player_done_state.get(my_id, false):
 					should_disable_minigames = true
 				# Also check minigame count from host
-				var count: int = Net.player_minigame_counts.get(my_id, 0)
+				var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
 				if count >= App.MAX_MINIGAMES_PER_PHASE:
 					should_disable_minigames = true
 			
@@ -2077,8 +2077,8 @@ func _apply_phase_ui() -> void:
 				play_minigames_button.disabled = true
 				skip_to_battle_button.disabled = true
 				var _done_c := 0
-				for _pid in Net.player_done_state:
-					if Net.player_done_state.get(_pid, false):
+				for _pid in PhaseController.player_done_state:
+					if PhaseController.player_done_state.get(_pid, false):
 						_done_c += 1
 				var _total_c := maxi(App.turn_order.size(), 1)
 				_set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [_done_c, _total_c])
@@ -2102,8 +2102,8 @@ func _apply_phase_ui() -> void:
 
 func _get_player_name_for_peer(peer_id: int) -> String:
 	## Helper to get player name from peer ID
-	if Net.player_names.has(peer_id):
-		return Net.player_names[peer_id]
+	if PlayerDataSync.player_names.has(peer_id):
+		return PlayerDataSync.player_names[peer_id]
 	for player in App.turn_order:
 		if player.get("id", -1) == peer_id:
 			return player.get("name", "Player")
@@ -2181,7 +2181,7 @@ func _update_minigames_counter() -> void:
 		return
 	var count: int
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		count = Net.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
+		count = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
 	else:
 		count = App.minigames_completed_this_phase
 	minigames_counter_label.text = "Minigames: %d/%d" % [count, App.MAX_MINIGAMES_PER_PHASE]
@@ -2202,7 +2202,7 @@ func _on_skip_to_battle_pressed() -> void:
 				# Capture current phase before RPC (RPC may trigger phase change)
 				var prev_phase := App.current_game_phase
 				# Use turn-based advancement (not done counting)
-				Net.request_end_card_command_turn()
+				PhaseSync.request_end_card_command_turn()
 				# Only show waiting overlay if phase didn't change (more turns to go)
 				# If phase changed, the RPC handler already showed the phase overlay
 				if App.current_game_phase == prev_phase:
@@ -2374,27 +2374,27 @@ func _advance_d20_anim(delta: float) -> void:
 # ---------- MULTIPLAYER BATTLE SELECTION SYSTEM ----------
 
 func _connect_net_signals() -> void:
-	## Connect to Net signals for multiplayer phase/battle sync
-	if not Net.phase_changed.is_connected(_on_net_phase_changed):
-		Net.phase_changed.connect(_on_net_phase_changed)
-	if not Net.done_counts_updated.is_connected(_on_done_counts_updated):
-		Net.done_counts_updated.connect(_on_done_counts_updated)
-	if not Net.turn_changed.is_connected(_on_turn_changed):
-		Net.turn_changed.connect(_on_turn_changed)
-	if not Net.battle_decider_changed.is_connected(_on_battle_decider_changed):
-		Net.battle_decider_changed.connect(_on_battle_decider_changed)
-	if not Net.battle_choices_updated.is_connected(_on_battle_choices_updated):
-		Net.battle_choices_updated.connect(_on_battle_choices_updated)
-	if not Net.battle_started.is_connected(_on_battle_started):
-		Net.battle_started.connect(_on_battle_started)
-	if not Net.battle_finished_broadcast.is_connected(_on_battle_finished):
-		Net.battle_finished_broadcast.connect(_on_battle_finished)
-	if not Net.territory_claimed.is_connected(_on_net_territory_claimed):
-		Net.territory_claimed.connect(_on_net_territory_claimed)
-	if not Net.territory_claim_rejected.is_connected(_on_net_territory_claim_rejected):
-		Net.territory_claim_rejected.connect(_on_net_territory_claim_rejected)
-	if not Net.map_sub_phase_changed.is_connected(_on_net_map_sub_phase_changed):
-		Net.map_sub_phase_changed.connect(_on_net_map_sub_phase_changed)
+	## Connect to decoupled module signals for multiplayer phase/battle sync
+	if not PhaseController.phase_changed.is_connected(_on_net_phase_changed):
+		PhaseController.phase_changed.connect(_on_net_phase_changed)
+	if not PhaseController.done_counts_updated.is_connected(_on_done_counts_updated):
+		PhaseController.done_counts_updated.connect(_on_done_counts_updated)
+	if not PhaseController.turn_changed.is_connected(_on_turn_changed):
+		PhaseController.turn_changed.connect(_on_turn_changed)
+	if not BattleSync.battle_decider_changed.is_connected(_on_battle_decider_changed):
+		BattleSync.battle_decider_changed.connect(_on_battle_decider_changed)
+	if not BattleSync.battle_choices_updated.is_connected(_on_battle_choices_updated):
+		BattleSync.battle_choices_updated.connect(_on_battle_choices_updated)
+	if not BattleSync.battle_started.is_connected(_on_battle_started):
+		BattleSync.battle_started.connect(_on_battle_started)
+	if not BattleSync.battle_finished_broadcast.is_connected(_on_battle_finished):
+		BattleSync.battle_finished_broadcast.connect(_on_battle_finished)
+	if not TerritorySync.territory_claimed.is_connected(_on_net_territory_claimed):
+		TerritorySync.territory_claimed.connect(_on_net_territory_claimed)
+	if not TerritorySync.territory_claim_rejected.is_connected(_on_net_territory_claim_rejected):
+		TerritorySync.territory_claim_rejected.connect(_on_net_territory_claim_rejected)
+	if not PhaseController.map_sub_phase_changed.is_connected(_on_net_map_sub_phase_changed):
+		PhaseController.map_sub_phase_changed.connect(_on_net_map_sub_phase_changed)
 
 func _on_net_phase_changed(phase_id: int) -> void:
 	print("[GameIntro] Phase changed to: ", phase_id)
@@ -2469,18 +2469,18 @@ func _on_done_counts_updated(done: int, total: int) -> void:
 	
 	# ROBUSTNESS: Check if Net phase has advanced but App phase hasn't
 	var net_phase_as_enum: App.GamePhase
-	match Net.current_phase:
+	match PhaseController.current_phase:
 		0: net_phase_as_enum = App.GamePhase.CARD_COMMAND
 		1: net_phase_as_enum = App.GamePhase.CLAIM_CONQUER
 		2: net_phase_as_enum = App.GamePhase.CARD_COLLECTION
 		_: net_phase_as_enum = App.GamePhase.CARD_COMMAND
 	if net_phase_as_enum != App.current_game_phase:
-		print("[GameIntro] Phase mismatch detected (Net: %d, App: %d). Forcing sync." % [Net.current_phase, App.current_game_phase])
-		_on_net_phase_changed(Net.current_phase)
+		print("[GameIntro] Phase mismatch detected (Net: %d, App: %d). Forcing sync." % [PhaseController.current_phase, App.current_game_phase])
+		_on_net_phase_changed(PhaseController.current_phase)
 	# Also sync map_sub_phase when in CLAIM_CONQUER and we're behind (Net has advanced)
-	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase < Net.map_sub_phase:
-		print("[GameIntro] Map sub-phase behind (local: %d, Net: %d). Forcing sync." % [map_sub_phase, Net.map_sub_phase])
-		_on_net_map_sub_phase_changed(Net.map_sub_phase)
+	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase < PhaseController.map_sub_phase:
+		print("[GameIntro] Map sub-phase behind (local: %d, Net: %d). Forcing sync." % [map_sub_phase, PhaseController.map_sub_phase])
+		_on_net_map_sub_phase_changed(PhaseController.map_sub_phase)
 
 func _on_battle_decider_changed(peer_id: int) -> void:
 	## Update UI when battle decider changes
@@ -2585,7 +2585,7 @@ func _on_left_battle_pressed() -> void:
 	## Handle left battle button press
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 		# In multiplayer, submit choice to host
-		Net.request_battle_choice("LEFT")
+		BattleSync.request_battle_choice("LEFT")
 	else:
 		# Single player - go directly to battle
 		if BattleStateManager:
@@ -2595,12 +2595,12 @@ func _on_left_battle_pressed() -> void:
 func _on_right_battle_pressed() -> void:
 	## Handle right battle button press (multiplayer only)
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		Net.request_battle_choice("RIGHT")
+		BattleSync.request_battle_choice("RIGHT")
 
 func _on_skip_battle_decision_pressed() -> void:
 	## Handle skip battle decision button press (multiplayer only)
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		Net.request_battle_choice("SKIP")
+		BattleSync.request_battle_choice("SKIP")
 
 func _update_battle_selection_ui() -> void:
 	## Update battle selection UI based on current state
@@ -2621,7 +2621,7 @@ func _update_battle_selection_ui() -> void:
 		return
 
 	# Check if battle is in progress
-	if Net.battle_in_progress:
+	if BattleSync.battle_in_progress:
 		_set_overlay_state(OverlayState.WAITING, "Battle in progress... waiting")
 		is_waiting_for_others = true
 		return
@@ -2629,10 +2629,10 @@ func _update_battle_selection_ui() -> void:
 	if not multiplayer.has_multiplayer_peer():
 		return
 	var my_id := multiplayer.get_unique_id()
-	var is_my_turn := (my_id == Net.battle_decider_peer_id)
+	var is_my_turn := (my_id == BattleSync.battle_decider_peer_id)
 
 	# Update current decider label
-	var decider_name := _get_player_name_by_id(Net.battle_decider_peer_id)
+	var decider_name := _get_player_name_by_id(BattleSync.battle_decider_peer_id)
 	current_decider_label.text = "Current decider: %s" % decider_name
 	current_decider_label.visible = true
 
@@ -2643,12 +2643,12 @@ func _update_battle_selection_ui() -> void:
 	right_battle_selectors.visible = true
 
 	# Update selector lists
-	_update_battle_selector_list(left_battle_selectors, Net.left_queue)
-	_update_battle_selector_list(right_battle_selectors, Net.right_queue)
+	_update_battle_selector_list(left_battle_selectors, BattleSync.left_queue)
+	_update_battle_selector_list(right_battle_selectors, BattleSync.right_queue)
 
 	# Check if queues are full
-	var left_full := Net.left_queue.size() >= 2
-	var right_full := Net.right_queue.size() >= 2
+	var left_full := BattleSync.left_queue.size() >= 2
+	var right_full := BattleSync.right_queue.size() >= 2
 
 	if is_my_turn:
 		# Enable buttons for decider (unless full)
@@ -2737,9 +2737,9 @@ func _show_waiting_for_others_overlay() -> void:
 	
 	# Compute done counts directly from Net state (not cached values which may be 0/0)
 	var done := 0
-	var total := Net.player_done_state.size()
-	for pid in Net.player_done_state.keys():
-		if Net.player_done_state.get(pid, false):
+	var total := PhaseController.player_done_state.size()
+	for pid in PhaseController.player_done_state.keys():
+		if PhaseController.player_done_state.get(pid, false):
 			done += 1
 	if total == 0:
 		# Fallback: use game_players count if Net state not initialized

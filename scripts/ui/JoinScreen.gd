@@ -47,12 +47,12 @@ func _on_join_pressed() -> void:
 	if status_label:
 		status_label.text = "Joining %s..." % code
 	
-	Net.join_game(code)
+	NetworkManager.join_game(code)
 	
 	# Wait a moment then transition
 	await get_tree().create_timer(0.5).timeout
 	if multiplayer.has_multiplayer_peer():
-		Net.submit_player_name(App.player_name)
+		PlayerDataSync.submit_player_name(App.player_name)
 		App.go("res://scenes/ui/WaitingRoom.tscn")
 	else:
 		if status_label:
