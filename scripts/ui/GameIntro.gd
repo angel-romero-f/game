@@ -10,9 +10,8 @@ const D20_FPS := 24.0
 const UI_FONT := preload("res://fonts/m5x7.ttf")
 
 enum Phase { SHOWCASE, ROLLING, SHOW_PLAYER_ROLL, SHOW_ORDER, GAME_READY }
-enum MapSubPhase { CLAIMING, RESOURCE_COLLECTION, BATTLE_READY }
 var current_phase: Phase = Phase.SHOWCASE
-var map_sub_phase: int = MapSubPhase.CLAIMING
+var map_sub_phase: int = PhaseController.MapSubPhase.CLAIMING
 
 ## Unified overlay state to prevent stacking
 enum OverlayState { NONE, PHASE_TRANSITION, WAITING, D20_ROLLING }
@@ -123,16 +122,6 @@ const DELAY_BEFORE_BATTLE_TRANSITION_SEC := 1.0
 
 ## True during the delayed battle transition (wait before "Choose Your Battles"); blocks territory interaction
 var _is_delayed_battle_transition_active := false
-
-## Region ID (1-6) -> minigame. Each TerritoryNode's region_id_override picks which minigame runs when you click "Play [name]". Add more territories in the scene and set their Region Id Override to 1/2/3 (or 4-6 once you add scenes here).
-const REGION_MINIGAMES: Dictionary = {
-	1: { "name": "Bridge", "scene": "res://scenes/BridgeGame.tscn" },
-	6: { "name": "Ice fishing", "scene": "res://scenes/IceFishingGame.tscn" },
-	5: { "name": "River crossing", "scene": "res://scenes/Game.tscn" },  # Replace with your river crossing scene when ready
-	4: { "name": "", "scene": "" },
-	3: { "name": "", "scene": "" },
-	2: { "name": "", "scene": "" }
-}
 
 func _ready() -> void:
 	# Build path without literal autoload name to avoid parse errors in some Godot setups
@@ -330,6 +319,14 @@ func _ready() -> void:
 	# Initialize territory system (registers TerritoryNodes, connects territory_selected -> claim panel)
 	_initialize_territory_system()
 
+	# Connect PhaseController signals (used in both single-player and multiplayer)
+	if not PhaseController.claiming_turn_finished.is_connected(_on_claiming_turn_finished):
+		PhaseController.claiming_turn_finished.connect(_on_claiming_turn_finished)
+
+	# Connect TerritoryClaimManager signals
+	if not TerritoryClaimManager.claim_failed.is_connected(_on_claim_failed):
+		TerritoryClaimManager.claim_failed.connect(_on_claim_failed)
+
 	# Connect Net signals for multiplayer phase/battle sync
 	if App.is_multiplayer:
 		_connect_net_signals()
@@ -500,7 +497,7 @@ func _on_territory_selected(territory_id: int) -> void:
 	if not _are_territories_interactable() or not claim_territory_panel:
 		return
 	# RESOURCE_COLLECTION: only claimed territories can play minigame; open play-only panel or show message.
-	if map_sub_phase == MapSubPhase.RESOURCE_COLLECTION:
+	if map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
 		# Check if player has already completed 2 minigames
 		if App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
 			_show_unclaimed_territory_message()
@@ -544,7 +541,7 @@ func _open_play_only_panel(territory_id: int) -> void:
 	var region_id: int = 1
 	if territory_manager and territory_manager.territory_data.has(territory_id):
 		region_id = territory_manager.territory_data[territory_id].region_id
-	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "name": "", "scene": "" })
+	var region_info: Dictionary = TerritoryClaimManager.REGION_MINIGAMES.get(region_id, { "name": "", "scene": "" })
 	var scene_path: String = region_info.get("scene", "")
 	var region_name: String = region_info.get("name", "")
 	if claim_play_minigame_button:
@@ -620,7 +617,7 @@ func _open_claim_panel(territory_id: int) -> void:
 		var is_owner: bool = owner_id != null and int(local_id) == int(owner_id)
 		if claim_attack_button:
 			# Attack button only visible in Card Command phase (CLAIMING), not Resource Collection
-			claim_attack_button.visible = not is_owner and (map_sub_phase == MapSubPhase.CLAIMING)
+			claim_attack_button.visible = not is_owner and (map_sub_phase == PhaseController.MapSubPhase.CLAIMING)
 	else:
 		claim_attacking_slot_cards = [null, null, null]
 		if is_claimed:
@@ -643,15 +640,15 @@ func _open_claim_panel(territory_id: int) -> void:
 	_update_claim_button_state()
 	_update_attack_button_state()
 	# Play minigame button: only in BATTLE_READY; during CLAIMING show Attack button, not Play minigame
-	var show_play_minigame: bool = (map_sub_phase == MapSubPhase.BATTLE_READY)
+	var show_play_minigame: bool = (map_sub_phase == PhaseController.MapSubPhase.BATTLE_READY)
 	var region_id: int = 1
 	if territory_manager and territory_manager.territory_data.has(territory_id):
 		region_id = territory_manager.territory_data[territory_id].region_id
-	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "name": "", "scene": "" })
+	var region_info: Dictionary = TerritoryClaimManager.REGION_MINIGAMES.get(region_id, { "name": "", "scene": "" })
 	var scene_path: String = region_info.get("scene", "")
 	var region_name: String = region_info.get("name", "")
 	# Explicitly enforce: during CLAIMING show Attack (for non-owner in attack mode), never Play minigame
-	if map_sub_phase == MapSubPhase.CLAIMING:
+	if map_sub_phase == PhaseController.MapSubPhase.CLAIMING:
 		if claim_play_minigame_button:
 			claim_play_minigame_button.visible = false
 		if claim_attack_button:
@@ -940,29 +937,16 @@ func _on_claim_hand_card_clicked(hand_index: int) -> void:
 func _on_finish_claiming_pressed() -> void:
 	## Called when "Done claiming" is clicked (skip_to_battle_button in CLAIMING sub-phase)
 	_close_claim_panel()
-	
-	# Common Logic: Check for battles first
-	# If battles exist, we run them locally (synced via Net in BattleManager).
-	# After battles are done, we End Turn (Multiplayer) or Advance Turn (Single Player) in App.on_battle_completed
-	
-	if BattleStateManager:
-		App.pending_territory_battle_ids = BattleStateManager.get_territory_ids_with_battle()
-		print("[DEBUG] Finish Claiming Pressed. Pending Battle IDs: ", App.pending_territory_battle_ids)
+	PhaseController.finish_claiming_turn()
 
-	if App.pending_territory_battle_ids.size() > 0:
-		# Kickstart the battle sequence
-		print("[DEBUG] Battles found! calling App.on_battle_completed() to start first battle.")
-		App.on_battle_completed()
-		return
-		
-	# No battles - proceed to end turn / resource collection immediately
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		skip_to_battle_button.visible = false
-		print("[DEBUG] No battles, requesting end claiming turn (Multiplayer)")
-		PhaseSync.request_end_claiming_turn()
-	else:
-		print("[DEBUG] No battles found. Showing collect resources overlay (Single Player).")
+func _on_claiming_turn_finished(has_battles: bool) -> void:
+	## UI response to finish_claiming_turn result
+	if has_battles:
+		return  # Battle scene will load
+	if not App.is_multiplayer or not multiplayer.has_multiplayer_peer():
 		_show_collect_resources_overlay()
+	else:
+		skip_to_battle_button.visible = false
 
 func _show_collect_resources_overlay() -> void:
 	# Ensure both Finish claiming buttons are hidden when entering resource collection
@@ -1026,8 +1010,8 @@ func _on_message_close_pressed() -> void:
 	tween.tween_callback(func(): message_panel.visible = false)
 
 func _enter_resource_collection() -> void:
-	map_sub_phase = MapSubPhase.RESOURCE_COLLECTION
-	App.minigames_completed_this_phase = 0
+	PhaseController.enter_resource_collection()
+	map_sub_phase = PhaseController.map_sub_phase
 	_apply_phase_ui()
 	_animate_phase_buttons()
 
@@ -1036,8 +1020,8 @@ func _on_ready_for_battle_pressed() -> void:
 
 func _transition_to_next_round() -> void:
 	## Transition back to Claiming phase for the next round
-	map_sub_phase = MapSubPhase.CLAIMING
-	App.minigames_completed_this_phase = 0
+	PhaseController.enter_next_claiming_round()
+	map_sub_phase = PhaseController.map_sub_phase
 	_apply_phase_ui()
 	_animate_phase_buttons()
 	
@@ -1072,14 +1056,8 @@ func _on_claim_play_minigame_pressed() -> void:
 		return
 	var territory: Territory = territory_manager.territory_data[current_claim_territory_id]
 	var region_id: int = territory.region_id
-	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "scene": "" })
-	var scene_path: String = region_info.get("scene", "")
-	if scene_path != "" and ResourceLoader.exists(scene_path):
-		_close_claim_panel()
-		# So when we return, GameIntro restores RESOURCE_COLLECTION and increments minigame count
-		App.pending_return_map_sub_phase = MapSubPhase.RESOURCE_COLLECTION
-		App.returning_from_territory_minigame = true
-		App.go(scene_path)
+	_close_claim_panel()
+	TerritoryClaimManager.launch_territory_minigame(current_claim_territory_id, region_id)
 
 func _on_claim_territory_clicked() -> void:
 	if current_claim_territory_id < 0 or not territory_manager.territory_data.has(current_claim_territory_id):
@@ -1097,49 +1075,15 @@ func _on_claim_territory_clicked() -> void:
 	if local_id == null:
 		_close_claim_panel()
 		return
-	# Check if already claimed by another player
-	if _territory_claim_state and _territory_claim_state.has_method("is_claimed") and _territory_claim_state.call("is_claimed", current_claim_territory_id):
-		var owner_id: Variant = _territory_claim_state.call("get_owner_id", current_claim_territory_id)
-		if owner_id != null and int(owner_id) != int(local_id):
-			var claimer_name: String = "Player"
-			for p in App.game_players:
-				if int(p.get("id", -1)) == int(owner_id):
-					claimer_name = str(p.get("name", "Player"))
-					break
-			_show_already_claimed_message(claimer_name)
-			return
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		# Multiplayer: request claim via Net; server validates and broadcasts; we apply in _on_net_territory_claimed
-		TerritorySync.request_claim_territory(current_claim_territory_id, local_id, claim_slot_cards)
-		return
-	# Single-player: apply claim locally
-	var territory: Territory = territory_manager.territory_data[current_claim_territory_id]
-	for slot_idx in range(3):
-		if claim_slot_cards[slot_idx] != null:
-			territory.place_card(local_id, claim_slot_cards[slot_idx], slot_idx)
-	territory.set_owner(local_id)
-	if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
-		_territory_claim_state.set_claim(current_claim_territory_id, local_id, claim_slot_cards)
-	# Report defending slots to BattleStateManager for this territory
-	if BattleStateManager:
-		var defending_dict: Dictionary = {}
-		for slot_idx in range(3):
-			if claim_slot_cards[slot_idx] != null and claim_slot_cards[slot_idx] is Dictionary:
-				defending_dict[slot_idx] = claim_slot_cards[slot_idx]
-		BattleStateManager.set_defending_slots(str(current_claim_territory_id), defending_dict)
-	var placed_slots: Dictionary = {}
-	for slot_idx in range(3):
-		if claim_slot_cards[slot_idx] != null:
-			placed_slots[slot_idx] = claim_slot_cards[slot_idx]
-	App.remove_placed_cards_from_collection_for_slots(placed_slots)
-	_refresh_territory_claimed_visuals()
-	_close_claim_panel()
+	var success := TerritoryClaimManager.claim_territory(current_claim_territory_id, local_id, claim_slot_cards, territory_manager)
+	if success:
+		_refresh_territory_claimed_visuals()
+		_close_claim_panel()
 
 func _on_attack_territory_clicked() -> void:
 	if current_claim_territory_id < 0:
 		_close_claim_panel()
 		return
-
 	# Require at least 1 attacking card
 	var has_any_card: bool = false
 	for slot_idx in range(3):
@@ -1147,27 +1091,15 @@ func _on_attack_territory_clicked() -> void:
 			has_any_card = true
 			break
 	if not has_any_card:
-		#_show_message("You must place at least one attacking card!")
 		return
-
-	# Register attacking cards in BattleStateManager
-	if BattleStateManager:
-		var attacking_dict: Dictionary = {}
-		for slot_idx in range(3):
-			if claim_slot_cards[slot_idx] != null and claim_slot_cards[slot_idx] is Dictionary:
-				attacking_dict[slot_idx] = claim_slot_cards[slot_idx]
-		BattleStateManager.set_attacking_slots(str(current_claim_territory_id), attacking_dict)
-
-	# Remove placed cards from player's hand
-	var placed_slots: Dictionary = {}
-	for slot_idx in range(3):
-		if claim_slot_cards[slot_idx] != null:
-			placed_slots[slot_idx] = claim_slot_cards[slot_idx]
-	App.remove_placed_cards_from_collection_for_slots(placed_slots)
-
-	#_show_message("Attack declared!")
+	TerritoryClaimManager.register_attack(current_claim_territory_id, claim_slot_cards)
 	_close_claim_panel()
 	_update_territory_interaction()
+
+func _on_claim_failed(_territory_id: int, reason: String) -> void:
+	## Handle claim failure from TerritoryClaimManager (e.g. already claimed)
+	if reason != "invalid_territory":
+		_show_already_claimed_message(reason)
 
 func _on_claim_cancel_clicked() -> void:
 	_close_claim_panel()
@@ -1179,27 +1111,7 @@ func _get_local_player_id() -> Variant:
 	return 1
 
 func _apply_saved_territory_claims() -> void:
-	if not territory_manager:
-		return
-	if not _territory_claim_state:
-		return
-	var claims_dict: Variant = _territory_claim_state.get("claims")
-	if not (claims_dict is Dictionary):
-		return
-	for tid_key in claims_dict:
-		var tid: int = int(tid_key)
-		var claim_data: Dictionary = (claims_dict as Dictionary)[tid_key]
-		var owner_id: Variant = claim_data.get("owner_player_id", null)
-		var cards: Array = claim_data.get("cards", [])
-		if owner_id == null or not territory_manager.territory_data.has(tid):
-			continue
-		var territory: Territory = territory_manager.territory_data[tid]
-		territory.set_owner(owner_id)
-		# Clear existing cards before applying (battle may have removed some)
-		territory.clear_player_cards(int(owner_id))
-		for slot_idx in range(min(3, cards.size())):
-			if cards[slot_idx] != null:
-				territory.place_card(owner_id, cards[slot_idx], slot_idx)
+	TerritoryClaimManager.apply_saved_claims(territory_manager)
 	_refresh_territory_claimed_visuals()
 
 func _refresh_territory_claimed_visuals() -> void:
@@ -1376,21 +1288,7 @@ func _finish_current_roll() -> void:
 		_finalize_turn_order()
 
 func _finalize_turn_order() -> void:
-	# In single player, handle ties locally. In multiplayer, host already resolved ties.
-	if not App.is_multiplayer:
-		_resolve_ties()
-
-	# Sort players by roll (highest first)
-	var sorted_players := App.game_players.duplicate()
-	sorted_players.sort_custom(func(a, b): return a.get("roll", 0) > b.get("roll", 0))
-	App.turn_order = sorted_players
-
-	print("Turn order finalized:")
-	for i in range(App.turn_order.size()):
-		var p = App.turn_order[i]
-		print("  ", i + 1, ". ", p.get("name", "Unknown"), " - Roll: ", p.get("roll", 0))
-
-	# First show the player's roll by itself
+	PlayerDataSync.finalize_turn_order()
 	current_phase = Phase.SHOW_PLAYER_ROLL
 	_display_player_roll()
 
@@ -1434,46 +1332,6 @@ func _show_turn_order_after_player_roll() -> void:
 	player_roll_container.visible = false
 	current_phase = Phase.SHOW_ORDER
 	_display_center_order()
-
-func _resolve_ties() -> void:
-	var max_attempts := 10  # Prevent infinite loops
-	var attempts := 0
-
-	# First, ensure all players have valid rolls (no zeros)
-	for i in range(App.game_players.size()):
-		var current_roll: int = int(App.game_players[i].get("roll", 0))
-		if current_roll <= 0:
-			App.game_players[i]["roll"] = randi_range(1, 20)
-			print("Fixed invalid roll for player: ", App.game_players[i].get("name", "Unknown"))
-
-	while attempts < max_attempts:
-		var has_ties := false
-		var rolls_count := {}
-
-		# Count rolls by value, storing player indices
-		for i in range(App.game_players.size()):
-			var roll: int = int(App.game_players[i].get("roll", 0))
-			if not rolls_count.has(roll):
-				rolls_count[roll] = []
-			rolls_count[roll].append(i)  # Store index instead of reference
-
-		# Check for ties and re-roll
-		for roll in rolls_count.keys():
-			if rolls_count[roll].size() > 1:
-				has_ties = true
-				print("Tie detected at roll ", roll, " - rerolling for tied players")
-				# Re-roll for tied players
-				for idx in rolls_count[roll]:
-					var new_roll := randi_range(1, 20)
-					App.game_players[idx]["roll"] = new_roll
-					print("  ", App.game_players[idx].get("name", "Unknown"), " rerolled: ", new_roll)
-
-		if not has_ties:
-			break
-		attempts += 1
-
-	if attempts >= max_attempts:
-		push_warning("Reached max tie resolution attempts - some ties may remain")
 
 func _display_center_order() -> void:
 	rolling_label.visible = false
@@ -1598,47 +1456,23 @@ func _show_corner_order() -> void:
 			App.phase_transition_text = "Card Command"
 		else:
 			# Returning from battle/minigame - sync from PhaseController state
-			match PhaseController.current_phase:
-				0:
-					App.current_game_phase = App.GamePhase.CARD_COMMAND
-					App.phase_transition_text = "Card Command"
-				1:
-					App.current_game_phase = App.GamePhase.CLAIM_CONQUER
-					App.phase_transition_text = "Claim & Conquer"
-					map_sub_phase = PhaseController.map_sub_phase
-				2:
-					App.current_game_phase = App.GamePhase.CARD_COLLECTION
-					App.phase_transition_text = "Card Collection"
-				_:
-					App.current_game_phase = App.GamePhase.CARD_COMMAND
-					App.phase_transition_text = "Card Command"
+			PhaseController.sync_app_game_phase()
+			if PhaseController.current_phase == 1:
+				map_sub_phase = PhaseController.map_sub_phase
 		App.show_phase_transition = true
 		_show_phase_transition_overlay()
 	elif App.is_multiplayer and multiplayer.has_multiplayer_peer():
 		# Multiplayer client: sync from PhaseController (phase may already be set by rpc_set_phase)
 		# Critical when returning from battle - we may have missed RPCs while in battle scene
-		# PhaseController.current_phase: 0=CARD_COMMAND, 1=CLAIM_CONQUER, 2=CARD_COLLECTION
-		match PhaseController.current_phase:
-			0:
-				App.current_game_phase = App.GamePhase.CARD_COMMAND
-				App.phase_transition_text = "Card Command"
-			1:
-				App.current_game_phase = App.GamePhase.CLAIM_CONQUER
-				App.phase_transition_text = "Claim & Conquer"
-				# Sync map_sub_phase too (CLAIMING=0, RESOURCE_COLLECTION=1, BATTLE_READY=2)
-				map_sub_phase = PhaseController.map_sub_phase
-			2:
-				App.current_game_phase = App.GamePhase.CARD_COLLECTION
-				App.phase_transition_text = "Card Collection"
-			_:  # default
-				App.current_game_phase = App.GamePhase.CARD_COMMAND
-				App.phase_transition_text = "Card Command"
+		PhaseController.sync_app_game_phase()
+		if PhaseController.current_phase == 1:
+			map_sub_phase = PhaseController.map_sub_phase
 		App.show_phase_transition = true
 		_show_phase_transition_overlay()
 	else:
 		# Single-player: go directly to Claim & Conquer with claiming sub-phase
 		App.enter_claim_conquer_phase()
-		map_sub_phase = MapSubPhase.CLAIMING
+		map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		App.phase_transition_text = "Claim & Conquer"
 		App.show_phase_transition = true
 		_show_phase_transition_overlay()
@@ -1735,7 +1569,7 @@ func _skip_to_game_ready() -> void:
 		App.on_minigame_completed()
 		
 		# If 2 minigames done, start delayed transition to "Choose Your Battles" (or Next Round logic)
-		if not App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == MapSubPhase.RESOURCE_COLLECTION and App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
+		if not App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION and App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
 			_start_delayed_battle_transition()
 			
 		# Skip overlay when returning from minigame
@@ -1767,7 +1601,7 @@ func _skip_to_game_ready() -> void:
 			
 			current_phase = Phase.GAME_READY
 			App.current_game_phase = App.GamePhase.CARD_COMMAND # Logic implies Card Command follows
-			map_sub_phase = MapSubPhase.CLAIMING 
+			map_sub_phase = PhaseController.MapSubPhase.CLAIMING 
 			
 			_apply_phase_ui()
 			_show_phase_transition_overlay()
@@ -1780,7 +1614,8 @@ func _skip_to_game_ready() -> void:
 			App.current_turn_index = 0
 			App.current_turn_player_id = App.turn_order[0].get("id", -1) if App.turn_order else -1
 			
-			App.enter_resource_collection_phase()
+			PhaseController.enter_resource_collection()
+			map_sub_phase = PhaseController.map_sub_phase
 			_show_collect_resources_overlay()
 
 	# Check if we need to show phase transition overlay
@@ -1910,188 +1745,14 @@ func _apply_phase_ui() -> void:
 		return
 	if is_phase_overlay_animating:
 		return
-	
+
 	match App.current_game_phase:
 		App.GamePhase.CARD_COMMAND:
-			# Card Command phase - placeholder UI
-			# Hide all minigame buttons
-			minigame_button.visible = false
-			bridge_minigame_button.visible = false
-			ice_fishing_button.visible = false
-			play_minigames_button.visible = false
-			skip_to_battle_button.visible = false
-			minigames_counter_label.visible = false
-			
-			# Hide battle selection UI
-			battle_button.visible = false
-			battle_button_right.visible = false
-			left_battle_selectors.visible = false
-			right_battle_selectors.visible = false
-			current_decider_label.visible = false
-			skip_battle_decision_button.visible = false
-			
-			# TODO: Add "Place Cards" button UI here
-			# NOTE: On first turn, player must place at least 1 card
-			
-			# For now, use skip_to_battle_button as placeholder "Done" button
-			skip_to_battle_button.visible = true
-			skip_to_battle_button.text = "Done Placing Cards"
-			
-			# Check if it's our turn (host-authoritative)
-			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-				var my_id := multiplayer.get_unique_id()
-				if PhaseController.current_turn_peer_id != my_id:
-					# Not our turn - show waiting overlay
-					skip_to_battle_button.visible = false
-					var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
-					_set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
-					is_waiting_for_others = true
-				else:
-					# Our turn - hide overlay, show button
-					_set_overlay_state(OverlayState.NONE)
-					is_waiting_for_others = false
-			else:
-				_set_overlay_state(OverlayState.NONE)
-				is_waiting_for_others = false
-
+			_apply_card_command_ui()
 		App.GamePhase.CLAIM_CONQUER:
-			# Hide standalone minigame buttons (territory-based minigames used instead)
-			minigame_button.visible = false
-			bridge_minigame_button.visible = false
-			ice_fishing_button.visible = false
-			play_minigames_button.visible = false
-			skip_to_battle_button.visible = false
-			# Hide battle selection UI until BATTLE_READY
-			battle_button_right.visible = false
-			left_battle_selectors.visible = false
-			right_battle_selectors.visible = false
-			current_decider_label.visible = false
-			skip_battle_decision_button.visible = false
-
-			# Both single-player and multiplayer: use map sub-phases (CLAIMING -> RESOURCE_COLLECTION -> BATTLE_READY)
-			# Territory-based minigames during RESOURCE_COLLECTION, not bottom buttons
-			battle_button.visible = false
-			match map_sub_phase:
-				MapSubPhase.CLAIMING:
-					# Turn-based claiming (same as Card Command): "Done claiming" on your turn, "Waiting for [name]..." when not
-					if finish_claiming_button:
-						finish_claiming_button.visible = false
-					if ready_for_battle_button:
-						ready_for_battle_button.visible = false
-					minigames_counter_label.visible = false
-					if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-						var my_id := multiplayer.get_unique_id()
-						if PhaseController.current_turn_peer_id != my_id:
-							skip_to_battle_button.visible = false
-							var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
-							_set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
-							is_waiting_for_others = true
-						else:
-							skip_to_battle_button.visible = true
-							skip_to_battle_button.text = "Done claiming"
-							_set_overlay_state(OverlayState.NONE)
-							is_waiting_for_others = false
-					else:
-						skip_to_battle_button.visible = true
-						skip_to_battle_button.text = "Done claiming"
-						_set_overlay_state(OverlayState.NONE)
-						is_waiting_for_others = false
-				MapSubPhase.RESOURCE_COLLECTION:
-					if finish_claiming_button:
-						finish_claiming_button.visible = false
-					if ready_for_battle_button:
-						ready_for_battle_button.visible = false
-					skip_to_battle_button.visible = false
-					minigames_counter_label.visible = true
-					_update_minigames_counter()
-					if App.is_multiplayer:
-						# Multiplayer: check if we're done (host-authoritative)
-						var should_disable_minigames := false
-						if multiplayer.has_multiplayer_peer():
-							var my_id := multiplayer.get_unique_id()
-							if PhaseController.player_done_state.get(my_id, false):
-								should_disable_minigames = true
-							var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
-							if count >= App.MAX_MINIGAMES_PER_PHASE:
-								should_disable_minigames = true
-						if should_disable_minigames:
-							var _done := 0
-							for _pid in PhaseController.player_done_state:
-								if PhaseController.player_done_state.get(_pid, false):
-									_done += 1
-							var _total := maxi(PhaseController.player_done_state.size(), 1)
-							# If ALL players are done, transition to BATTLE_READY immediately - don't show waiting.
-							# Critical for last player who returns from minigame (may miss done_counts_updated signal).
-							if _total > 0 and _done >= _total:
-								_transition_to_next_round()
-							else:
-								_set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [_done, _total])
-								is_waiting_for_others = true
-						else:
-							_set_overlay_state(OverlayState.NONE)
-							is_waiting_for_others = false
-				MapSubPhase.BATTLE_READY:
-					if finish_claiming_button:
-						finish_claiming_button.visible = false
-					if ready_for_battle_button:
-						ready_for_battle_button.visible = false
-					if App.is_multiplayer:
-						_update_battle_selection_ui()
-					else:
-						battle_button.visible = true  # Single-player: auto-transition shows "Choose Your Battles" after delay
-					minigames_counter_label.visible = false
-			_update_territory_interaction()
-
+			_apply_claim_conquer_ui()
 		App.GamePhase.CARD_COLLECTION:
-			# Show all minigame buttons in a row (minigame counter only during RESOURCE_COLLECTION, not here)
-			minigame_button.visible = true
-			bridge_minigame_button.visible = true
-			ice_fishing_button.visible = true
-			play_minigames_button.visible = false  # Hide mock button
-			skip_to_battle_button.visible = true
-			skip_to_battle_button.text = "Skip to Next Round"
-			battle_button.visible = false
-			battle_button_right.visible = false
-			left_battle_selectors.visible = false
-			right_battle_selectors.visible = false
-			current_decider_label.visible = false
-			skip_battle_decision_button.visible = false
-			minigames_counter_label.visible = false
-
-			# Check host-authoritative done state for multiplayer
-			var should_disable_minigames := false
-			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-				var my_id := multiplayer.get_unique_id()
-				# Check if host marked us as done
-				if PhaseController.player_done_state.get(my_id, false):
-					should_disable_minigames = true
-				# Also check minigame count from host
-				var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
-				if count >= App.MAX_MINIGAMES_PER_PHASE:
-					should_disable_minigames = true
-			
-			if should_disable_minigames:
-				minigame_button.disabled = true
-				bridge_minigame_button.disabled = true
-				ice_fishing_button.disabled = true
-				play_minigames_button.disabled = true
-				skip_to_battle_button.disabled = true
-				var _done_c := 0
-				for _pid in PhaseController.player_done_state:
-					if PhaseController.player_done_state.get(_pid, false):
-						_done_c += 1
-				var _total_c := maxi(App.turn_order.size(), 1)
-				_set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [_done_c, _total_c])
-				is_waiting_for_others = true
-			else:
-				# Re-enable buttons
-				minigame_button.disabled = false
-				bridge_minigame_button.disabled = false
-				ice_fishing_button.disabled = false
-				play_minigames_button.disabled = false
-				skip_to_battle_button.disabled = false
-				_set_overlay_state(OverlayState.NONE)
-				is_waiting_for_others = false
+			_apply_card_collection_ui()
 
 	# Settings is always visible when game is ready
 	settings_button.visible = true
@@ -2099,6 +1760,189 @@ func _apply_phase_ui() -> void:
 	# Card icon button is always visible when game is ready (if player has cards)
 	if App.player_card_collection.size() > 0:
 		card_icon_button.visible = true
+
+func _hide_battle_selection_ui() -> void:
+	battle_button_right.visible = false
+	left_battle_selectors.visible = false
+	right_battle_selectors.visible = false
+	current_decider_label.visible = false
+	skip_battle_decision_button.visible = false
+
+func _apply_card_command_ui() -> void:
+	# Hide all minigame buttons
+	minigame_button.visible = false
+	bridge_minigame_button.visible = false
+	ice_fishing_button.visible = false
+	play_minigames_button.visible = false
+	skip_to_battle_button.visible = false
+	minigames_counter_label.visible = false
+
+	# Hide battle selection UI
+	battle_button.visible = false
+	_hide_battle_selection_ui()
+
+	# TODO: Add "Place Cards" button UI here
+	# NOTE: On first turn, player must place at least 1 card
+
+	# For now, use skip_to_battle_button as placeholder "Done" button
+	skip_to_battle_button.visible = true
+	skip_to_battle_button.text = "Done Placing Cards"
+
+	# Check if it's our turn (host-authoritative)
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		var my_id := multiplayer.get_unique_id()
+		if PhaseController.current_turn_peer_id != my_id:
+			# Not our turn - show waiting overlay
+			skip_to_battle_button.visible = false
+			var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
+			_set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
+			is_waiting_for_others = true
+		else:
+			# Our turn - hide overlay, show button
+			_set_overlay_state(OverlayState.NONE)
+			is_waiting_for_others = false
+	else:
+		_set_overlay_state(OverlayState.NONE)
+		is_waiting_for_others = false
+
+func _apply_claim_conquer_ui() -> void:
+	# Hide standalone minigame buttons (territory-based minigames used instead)
+	minigame_button.visible = false
+	bridge_minigame_button.visible = false
+	ice_fishing_button.visible = false
+	play_minigames_button.visible = false
+	skip_to_battle_button.visible = false
+	# Hide battle selection UI until BATTLE_READY
+	_hide_battle_selection_ui()
+
+	# Both single-player and multiplayer: use map sub-phases
+	battle_button.visible = false
+	match map_sub_phase:
+		PhaseController.MapSubPhase.CLAIMING:
+			_apply_claiming_ui()
+		PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+			_apply_resource_collection_ui()
+		PhaseController.MapSubPhase.BATTLE_READY:
+			_apply_battle_ready_ui()
+	_update_territory_interaction()
+
+func _apply_claiming_ui() -> void:
+	# Turn-based claiming: "Done claiming" on your turn, "Waiting for [name]..." when not
+	if finish_claiming_button:
+		finish_claiming_button.visible = false
+	if ready_for_battle_button:
+		ready_for_battle_button.visible = false
+	minigames_counter_label.visible = false
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		var my_id := multiplayer.get_unique_id()
+		if PhaseController.current_turn_peer_id != my_id:
+			skip_to_battle_button.visible = false
+			var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
+			_set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
+			is_waiting_for_others = true
+		else:
+			skip_to_battle_button.visible = true
+			skip_to_battle_button.text = "Done claiming"
+			_set_overlay_state(OverlayState.NONE)
+			is_waiting_for_others = false
+	else:
+		skip_to_battle_button.visible = true
+		skip_to_battle_button.text = "Done claiming"
+		_set_overlay_state(OverlayState.NONE)
+		is_waiting_for_others = false
+
+func _apply_resource_collection_ui() -> void:
+	if finish_claiming_button:
+		finish_claiming_button.visible = false
+	if ready_for_battle_button:
+		ready_for_battle_button.visible = false
+	skip_to_battle_button.visible = false
+	minigames_counter_label.visible = true
+	_update_minigames_counter()
+	if App.is_multiplayer:
+		# Multiplayer: check if we're done (host-authoritative)
+		var should_disable_minigames := false
+		if multiplayer.has_multiplayer_peer():
+			var my_id := multiplayer.get_unique_id()
+			if PhaseController.player_done_state.get(my_id, false):
+				should_disable_minigames = true
+			var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
+			if count >= App.MAX_MINIGAMES_PER_PHASE:
+				should_disable_minigames = true
+		if should_disable_minigames:
+			var _done := 0
+			for _pid in PhaseController.player_done_state:
+				if PhaseController.player_done_state.get(_pid, false):
+					_done += 1
+			var _total := maxi(PhaseController.player_done_state.size(), 1)
+			# If ALL players are done, transition to BATTLE_READY immediately - don't show waiting.
+			# Critical for last player who returns from minigame (may miss done_counts_updated signal).
+			if _total > 0 and _done >= _total:
+				_transition_to_next_round()
+			else:
+				_set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [_done, _total])
+				is_waiting_for_others = true
+		else:
+			_set_overlay_state(OverlayState.NONE)
+			is_waiting_for_others = false
+
+func _apply_battle_ready_ui() -> void:
+	if finish_claiming_button:
+		finish_claiming_button.visible = false
+	if ready_for_battle_button:
+		ready_for_battle_button.visible = false
+	if App.is_multiplayer:
+		_update_battle_selection_ui()
+	else:
+		battle_button.visible = true  # Single-player: auto-transition shows "Choose Your Battles" after delay
+	minigames_counter_label.visible = false
+
+func _apply_card_collection_ui() -> void:
+	# Show all minigame buttons in a row (minigame counter only during RESOURCE_COLLECTION, not here)
+	minigame_button.visible = true
+	bridge_minigame_button.visible = true
+	ice_fishing_button.visible = true
+	play_minigames_button.visible = false  # Hide mock button
+	skip_to_battle_button.visible = true
+	skip_to_battle_button.text = "Skip to Next Round"
+	battle_button.visible = false
+	_hide_battle_selection_ui()
+	minigames_counter_label.visible = false
+
+	# Check host-authoritative done state for multiplayer
+	var should_disable_minigames := false
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		var my_id := multiplayer.get_unique_id()
+		# Check if host marked us as done
+		if PhaseController.player_done_state.get(my_id, false):
+			should_disable_minigames = true
+		# Also check minigame count from host
+		var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
+		if count >= App.MAX_MINIGAMES_PER_PHASE:
+			should_disable_minigames = true
+
+	if should_disable_minigames:
+		minigame_button.disabled = true
+		bridge_minigame_button.disabled = true
+		ice_fishing_button.disabled = true
+		play_minigames_button.disabled = true
+		skip_to_battle_button.disabled = true
+		var _done_c := 0
+		for _pid in PhaseController.player_done_state:
+			if PhaseController.player_done_state.get(_pid, false):
+				_done_c += 1
+		var _total_c := maxi(App.turn_order.size(), 1)
+		_set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [_done_c, _total_c])
+		is_waiting_for_others = true
+	else:
+		# Re-enable buttons
+		minigame_button.disabled = false
+		bridge_minigame_button.disabled = false
+		ice_fishing_button.disabled = false
+		play_minigames_button.disabled = false
+		skip_to_battle_button.disabled = false
+		_set_overlay_state(OverlayState.NONE)
+		is_waiting_for_others = false
 
 func _get_player_name_for_peer(peer_id: int) -> String:
 	## Helper to get player name from peer ID
@@ -2189,7 +2033,7 @@ func _update_minigames_counter() -> void:
 func _on_skip_to_battle_pressed() -> void:
 	## Handle skip/done button press - behavior depends on phase
 	# In CLAIM_CONQUER CLAIMING, this button is "Finish claiming"
-	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == MapSubPhase.CLAIMING:
+	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == PhaseController.MapSubPhase.CLAIMING:
 		_on_finish_claiming_pressed()
 		return
 	match App.current_game_phase:
@@ -2400,20 +2244,10 @@ func _on_net_phase_changed(phase_id: int) -> void:
 	print("[GameIntro] Phase changed to: ", phase_id)
 
 	var prev_phase := App.current_game_phase
-
-	# Map phase_id to GamePhase enum: 0=CARD_COMMAND, 1=CLAIM_CONQUER, 2=CARD_COLLECTION
-	match phase_id:
-		0:
-			App.current_game_phase = App.GamePhase.CARD_COMMAND
-			App.phase_transition_text = "Card Command"
-		1:
-			App.current_game_phase = App.GamePhase.CLAIM_CONQUER
-			App.phase_transition_text = "Claim & Conquer"
-			# Don't set map_sub_phase here - let rpc_map_sub_phase set it (CLAIMING=0, RESOURCE_COLLECTION=1, BATTLE_READY=2)
-		2:
-			App.current_game_phase = App.GamePhase.CARD_COLLECTION
-			App.minigames_completed_this_phase = 0
-			App.phase_transition_text = "Card Collection"
+	PhaseController.sync_app_game_phase()
+	# Card Collection resets minigame count
+	if phase_id == 2:
+		App.minigames_completed_this_phase = 0
 
 	# Only update UI if intro sequence is complete
 	if current_phase != Phase.GAME_READY:
@@ -2422,7 +2256,7 @@ func _on_net_phase_changed(phase_id: int) -> void:
 
 	# Only show the overlay if the phase actually changed
 	App.show_phase_transition = (App.current_game_phase != prev_phase)
-	# In multiplayer, suppress Claim & Conquer overlay (we only show Card Command - Claim & Conquer is a seamless continuation)
+	# In multiplayer, suppress Claim & Conquer overlay (seamless continuation from Card Command)
 	if App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER:
 		App.show_phase_transition = false
 
@@ -2438,7 +2272,6 @@ func _on_net_phase_changed(phase_id: int) -> void:
 	if App.show_phase_transition:
 		_show_phase_transition_overlay()
 	else:
-		# No overlay; just apply UI immediately
 		_apply_phase_ui()
 
 func _on_turn_changed(peer_id: int) -> void:
@@ -2455,18 +2288,19 @@ func _on_done_counts_updated(done: int, total: int) -> void:
 	local_total_count = total
 
 	# Keep minigame counter correct when synced counts update (multiplayer)
-	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == MapSubPhase.RESOURCE_COLLECTION and minigames_counter_label.visible:
+	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION and minigames_counter_label.visible:
 		_update_minigames_counter()
 
 	# When ALL players are done (done >= total), transition to BATTLE_READY immediately - for BOTH host and client.
 	# Do this regardless of is_waiting_for_others so the last player (who just returned from minigame) also transitions.
-	if total > 0 and done >= total and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == MapSubPhase.RESOURCE_COLLECTION:
+	if total > 0 and done >= total and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
 		_transition_to_next_round()
 		return
 
 	if is_waiting_for_others and _overlay_state == OverlayState.WAITING:
 		waiting_label.text = "Waiting for other players... (%d/%d done)" % [done, total]
 	
+	# TODO: move phase mismatch repair to PhaseController (tightly coupled to UI callbacks for now)
 	# ROBUSTNESS: Check if Net phase has advanced but App phase hasn't
 	var net_phase_as_enum: App.GamePhase
 	match PhaseController.current_phase:
@@ -2525,32 +2359,8 @@ func _on_battle_finished() -> void:
 
 func _on_net_territory_claimed(territory_id: int, owner_id: int, cards: Array) -> void:
 	## Apply territory claim from Net sync (all peers receive this)
-	if not territory_manager or not territory_manager.territory_data.has(territory_id):
-		return
-	var territory: Territory = territory_manager.territory_data[territory_id]
 	var local_id: Variant = _get_local_player_id()
-	# Update Territory data
-	territory.set_owner(owner_id)
-	for slot_idx in range(min(3, cards.size())):
-		if cards[slot_idx] != null:
-			territory.place_card(owner_id, cards[slot_idx], slot_idx)
-	# Persist to TerritoryClaimState
-	if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
-		_territory_claim_state.set_claim(territory_id, owner_id, cards)
-	# Report defending slots to BattleStateManager
-	if BattleStateManager:
-		var defending_dict: Dictionary = {}
-		for slot_idx in range(min(3, cards.size())):
-			if cards[slot_idx] != null and cards[slot_idx] is Dictionary:
-				defending_dict[slot_idx] = cards[slot_idx]
-		BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
-	# If we're the owner, remove placed cards from our collection
-	if local_id != null and int(owner_id) == int(local_id):
-		var placed_slots: Dictionary = {}
-		for slot_idx in range(min(3, cards.size())):
-			if cards[slot_idx] != null:
-				placed_slots[slot_idx] = cards[slot_idx]
-		App.remove_placed_cards_from_collection_for_slots(placed_slots)
+	TerritoryClaimManager.apply_network_claim(territory_id, owner_id, cards, local_id, territory_manager)
 	_refresh_territory_claimed_visuals()
 	if current_claim_territory_id == territory_id:
 		_close_claim_panel()
@@ -2563,7 +2373,7 @@ func _on_net_territory_claim_rejected(territory_id: int, claimer_name: String) -
 func _on_net_map_sub_phase_changed(sub_phase: int) -> void:
 	## Sync map sub-phase (CLAIMING=0, RESOURCE_COLLECTION=1, BATTLE_READY=2)
 	if sub_phase == 0:  # CLAIMING
-		map_sub_phase = MapSubPhase.CLAIMING
+		map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		is_waiting_for_others = false
 		waiting_overlay.visible = false
 		_set_overlay_state(OverlayState.NONE)
@@ -2574,7 +2384,7 @@ func _on_net_map_sub_phase_changed(sub_phase: int) -> void:
 		skip_to_battle_button.visible = false
 		if finish_claiming_button:
 			finish_claiming_button.visible = false
-		map_sub_phase = MapSubPhase.RESOURCE_COLLECTION
+		map_sub_phase = PhaseController.MapSubPhase.RESOURCE_COLLECTION
 		App.minigames_completed_this_phase = 0
 		is_waiting_for_others = false
 		_show_collect_resources_overlay()

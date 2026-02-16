@@ -26,6 +26,7 @@ BattleSync="*res://autoload/net/BattleSync.gd"
 TerritorySync="*res://autoload/net/TerritorySync.gd"
 BattleStateManager="*res://autoload/BattleStateManager.gd"
 TerritoryClaimState="*res://autoload/TerritoryClaimState.gd"
+TerritoryClaimManager="*res://autoload/TerritoryClaimManager.gd"
 Net="*res://autoload/Net.gd"
 
 [display]

@@ -12,6 +12,7 @@ var player_rolls: Dictionary = {} # peer_id -> roll value (int)
 signal player_names_updated
 signal player_races_updated
 signal player_rolls_updated
+signal turn_order_finalized
 
 func _ready() -> void:
 	NetworkManager.connection_closing.connect(_on_connection_closing)
@@ -173,3 +174,49 @@ func request_roll_generation() -> void:
 func request_rolls_from_host() -> void:
 	if multiplayer.is_server():
 		host_generate_and_sync_rolls()
+
+# ---------- TURN ORDER ----------
+
+## Finalize turn order: resolve ties (single-player), sort players, write App.turn_order, emit signal.
+func finalize_turn_order() -> void:
+	if not App.is_multiplayer:
+		_resolve_single_player_ties()
+	var sorted_players := App.game_players.duplicate()
+	sorted_players.sort_custom(func(a, b): return a.get("roll", 0) > b.get("roll", 0))
+	App.turn_order = sorted_players
+	print("Turn order finalized:")
+	for i in range(App.turn_order.size()):
+		var p = App.turn_order[i]
+		print("  ", i + 1, ". ", p.get("name", "Unknown"), " - Roll: ", p.get("roll", 0))
+	turn_order_finalized.emit()
+
+func _resolve_single_player_ties() -> void:
+	var max_attempts := 10
+	var attempts := 0
+	# Ensure all players have valid rolls (no zeros)
+	for i in range(App.game_players.size()):
+		var current_roll: int = int(App.game_players[i].get("roll", 0))
+		if current_roll <= 0:
+			App.game_players[i]["roll"] = randi_range(1, 20)
+			print("Fixed invalid roll for player: ", App.game_players[i].get("name", "Unknown"))
+	while attempts < max_attempts:
+		var has_ties := false
+		var rolls_count := {}
+		for i in range(App.game_players.size()):
+			var roll: int = int(App.game_players[i].get("roll", 0))
+			if not rolls_count.has(roll):
+				rolls_count[roll] = []
+			rolls_count[roll].append(i)
+		for roll in rolls_count.keys():
+			if rolls_count[roll].size() > 1:
+				has_ties = true
+				print("Tie detected at roll ", roll, " - rerolling for tied players")
+				for idx in rolls_count[roll]:
+					var new_roll := randi_range(1, 20)
+					App.game_players[idx]["roll"] = new_roll
+					print("  ", App.game_players[idx].get("name", "Unknown"), " rerolled: ", new_roll)
+		if not has_ties:
+			break
+		attempts += 1
+	if attempts >= max_attempts:
+		push_warning("Reached max tie resolution attempts - some ties may remain")

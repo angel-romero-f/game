@@ -4,10 +4,12 @@ extends Node
 ## Holds phase/turn/done state and emits signals on changes.
 ## Contains NO networking logic — pure local state management.
 
+enum MapSubPhase { CLAIMING = 0, RESOURCE_COLLECTION = 1, BATTLE_READY = 2 }
+
 # Current game phase: 0 = CARD_COMMAND, 1 = CLAIM_CONQUER, 2 = CARD_COLLECTION
 var current_phase: int = 0
-# Map sub-phase within CLAIM_CONQUER: 0 = CLAIMING, 1 = RESOURCE_COLLECTION, 2 = BATTLE_READY
-var map_sub_phase: int = 0
+# Map sub-phase within CLAIM_CONQUER
+var map_sub_phase: int = MapSubPhase.CLAIMING
 # Per-player done state in current phase: {peer_id: bool}
 var player_done_state: Dictionary = {}
 # Per-player minigame counts for Card Collection phase: {peer_id: int}
@@ -22,6 +24,7 @@ signal turn_changed(peer_id: int)
 @warning_ignore("unused_signal")
 signal done_counts_updated(done_count: int, total: int)
 signal map_sub_phase_changed(sub_phase: int)
+signal claiming_turn_finished(has_battles: bool)
 
 ## Set phase and emit signal
 func set_phase(phase_id: int) -> void:
@@ -69,10 +72,57 @@ func count_done_players(peer_ids: Array) -> int:
 			count += 1
 	return count
 
+## Finish the claiming turn: check for pending battles, kick off battle sequence or request end-turn.
+## Emits claiming_turn_finished(has_battles) so the UI can react.
+func finish_claiming_turn() -> void:
+	var has_battles := false
+	if BattleStateManager:
+		App.pending_territory_battle_ids = BattleStateManager.get_territory_ids_with_battle()
+		print("[DEBUG] Finish Claiming. Pending Battle IDs: ", App.pending_territory_battle_ids)
+
+	if App.pending_territory_battle_ids.size() > 0:
+		has_battles = true
+		print("[DEBUG] Battles found! calling App.on_battle_completed() to start first battle.")
+		App.on_battle_completed()
+	else:
+		if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
+			print("[DEBUG] No battles, requesting end claiming turn (Multiplayer)")
+			PhaseSync.request_end_claiming_turn()
+		else:
+			print("[DEBUG] No battles found (Single Player).")
+	claiming_turn_finished.emit(has_battles)
+
+## Map PhaseController.current_phase to App.current_game_phase and App.phase_transition_text.
+## Called by UI when syncing phase state (e.g. on net phase change, or returning from battle).
+func sync_app_game_phase() -> void:
+	match current_phase:
+		0:
+			App.current_game_phase = App.GamePhase.CARD_COMMAND
+			App.phase_transition_text = "Card Command"
+		1:
+			App.current_game_phase = App.GamePhase.CLAIM_CONQUER
+			App.phase_transition_text = "Claim & Conquer"
+		2:
+			App.current_game_phase = App.GamePhase.CARD_COLLECTION
+			App.phase_transition_text = "Card Collection"
+		_:
+			App.current_game_phase = App.GamePhase.CARD_COMMAND
+			App.phase_transition_text = "Card Command"
+
+## Transition to RESOURCE_COLLECTION sub-phase (reset minigame count, update sub-phase)
+func enter_resource_collection() -> void:
+	App.minigames_completed_this_phase = 0
+	set_map_sub_phase(MapSubPhase.RESOURCE_COLLECTION)
+
+## Transition to the next CLAIMING round (reset minigame count, update sub-phase)
+func enter_next_claiming_round() -> void:
+	App.minigames_completed_this_phase = 0
+	set_map_sub_phase(MapSubPhase.CLAIMING)
+
 ## Reset all phase-related state for a new game
 func reset() -> void:
 	current_phase = 0
-	map_sub_phase = 0
+	map_sub_phase = MapSubPhase.CLAIMING
 	player_done_state.clear()
 	player_minigame_counts.clear()
 	current_turn_peer_id = -1
