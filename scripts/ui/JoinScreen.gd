@@ -49,14 +49,26 @@ func _on_join_pressed() -> void:
 	
 	NetworkManager.join_game(code)
 	
-	# Wait a moment then transition
-	await get_tree().create_timer(0.5).timeout
-	if multiplayer.has_multiplayer_peer():
-		PlayerDataSync.submit_player_name(App.player_name)
-		App.go("res://scenes/ui/WaitingRoom.tscn")
-	else:
+	# Wait for the connection to actually be established (ENet is asynchronous)
+	var mp := multiplayer.multiplayer_peer
+	if not mp:
 		if status_label:
 			status_label.text = "Failed to join %s" % code
+		return
+	var timeout_sec := 5.0
+	var step := 0.1
+	var waited := 0.0
+	while waited < timeout_sec:
+		await get_tree().create_timer(step).timeout
+		waited += step
+		if mp.get_connection_status() == ENetMultiplayerPeer.CONNECTION_CONNECTED:
+			break
+	if mp.get_connection_status() != ENetMultiplayerPeer.CONNECTION_CONNECTED:
+		if status_label:
+			status_label.text = "Failed to join %s" % code
+		return
+	PlayerDataSync.submit_player_name(App.player_name)
+	App.go("res://scenes/ui/WaitingRoom.tscn")
 
 func _on_back_pressed() -> void:
 	App.go("res://scenes/ui/PlayMenu.tscn")
