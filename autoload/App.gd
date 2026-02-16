@@ -43,8 +43,8 @@ var returning_from_territory_battles: bool = false
 var current_turn_player_id: int = -1
 var current_turn_index: int = 0
 
-## Reference to the active TerritoryManager instance
-var territory_manager: TerritoryManager = null
+## Reference to the active TerritoryManager instance (typed as Node to avoid circular parse dependency)
+var territory_manager: Node = null
 
 ## ---------- BATTLE QUEUE SYSTEM ----------
 ## Stores selected battles for multi-battle progression
@@ -97,7 +97,7 @@ func on_minigame_completed() -> void:
 	
 	# In multiplayer, notify host of minigame completion (host controls phase)
 	if is_multiplayer and multiplayer.has_multiplayer_peer():
-		Net.request_increment_minigame()
+		PhaseSync.request_increment_minigame()
 		# Don't auto-transition locally - host will broadcast phase change
 		return
 	
@@ -120,7 +120,7 @@ func on_battle_completed() -> void:
 		# If Multiplayer, trigger via Net
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
 			print("[DEBUG] Requesting Multi-Player Territory Battle: ", next_id)
-			Net.request_start_territory_battle(next_id)
+			BattleSync.request_start_territory_battle(next_id)
 			return # Wait for RPC to call enter_territory_battle
 			
 		# Single Player (Local)
@@ -192,7 +192,7 @@ func on_battle_completed() -> void:
 		
 		# In multiplayer, notify host we finished our battles
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
-			Net.notify_battle_finished()
+			BattleSync.notify_battle_finished()
 		
 		go("res://scenes/ui/GameIntro.tscn")
 
@@ -248,7 +248,7 @@ func skip_to_done() -> void:
 	
 	# In multiplayer, request host to mark us as done
 	if is_multiplayer and multiplayer.has_multiplayer_peer():
-		Net.request_skip_to_done()
+		PhaseSync.request_skip_to_done()
 		return
 	
 	# Single player: transition immediately to next round
@@ -262,10 +262,10 @@ func can_play_minigame() -> bool:
 	if is_multiplayer and multiplayer.has_multiplayer_peer():
 		var my_id := multiplayer.get_unique_id()
 		# If host marked us as done, we cannot play
-		if Net.player_done_state.get(my_id, false):
+		if PhaseController.player_done_state.get(my_id, false):
 			return false
 		# Also check minigame count from host
-		var count: int = Net.player_minigame_counts.get(my_id, 0)
+		var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
 		if count >= MAX_MINIGAMES_PER_PHASE:
 			return false
 	return minigames_completed_this_phase < MAX_MINIGAMES_PER_PHASE
@@ -600,14 +600,14 @@ func setup_multiplayer_game() -> void:
 	if tcs and tcs.has_method("clear_all"):
 		tcs.clear_all()
 	
-	# Build player list from Net.player_names and Net.player_races
+	# Build player list from PlayerDataSync.player_names and PlayerDataSync.player_races
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 	
-	for pid in Net.player_races.keys():
+	for pid in PlayerDataSync.player_races.keys():
 		var p := {
 			"id": int(pid),
-			"name": String(Net.player_names.get(pid, "Player")),
-			"race": String(Net.player_races[pid]),
+			"name": String(PlayerDataSync.player_names.get(pid, "Player")),
+			"race": String(PlayerDataSync.player_races[pid]),
 			"roll": 0,
 			"is_local": int(pid) == my_id
 		}
