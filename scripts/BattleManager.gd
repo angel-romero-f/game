@@ -55,6 +55,7 @@ var _is_multiplayer: bool = false
 
 # --- Added (minimal): prevent double-reporting finish in multiplayer (SPACE + Leave, etc.)
 var _reported_battle_finished: bool = false
+var _round_results: Array = [] # "win", "lose", "tie" from player perspective
 
 
 func _ready() -> void:
@@ -592,6 +593,7 @@ func _resolve_battle() -> void:
 	var player_wins := 0
 	var opponent_wins := 0
 	var ties := 0
+	_round_results.clear()
 
 	for i in range(min(_player_slot_nodes.size(), _opponent_slot_nodes.size())):
 		var pslot = _player_slot_nodes[i]
@@ -661,10 +663,13 @@ func _resolve_battle() -> void:
 		# Determine winner based on final power values
 		if p_final_power > o_final_power:
 			player_wins += 1
+			_round_results.append("win")
 		elif o_final_power > p_final_power:
 			opponent_wins += 1
+			_round_results.append("lose")
 		else:
 			ties += 1
+			_round_results.append("tie")
 
 	# Store summary on labels (simple for now).
 	var result_text := ""
@@ -743,51 +748,48 @@ func _on_leave_pressed() -> void:
 		# Battle is resolved
 		var result := _get_battle_result()
 		var player_wins := result == "win"
-		# Record outcome in BattleStateManager (from local perspective)
+		
+		# Record outcome and round results in BattleStateManager
 		if BattleStateManager:
 			BattleStateManager.record_battle_result(result, player_wins)
+			BattleStateManager.record_round_results(_round_results)
+			
 		# Report card losses to BSM and TCS for territory battles
 		if BattleStateManager and App.pending_territory_battle_ids.size() > 0:
 			var tid_str: String = BattleStateManager.current_territory_id
 			if not tid_str.is_empty():
 				# In territory battle: local = defender, opponent = attacker
-				if not player_wins:
-					# Defender lost: clear defending slots, update TCS
-					BattleStateManager.set_defending_slots(tid_str, {})
-					var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
-					if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
-						var owner_id: Variant = tcs.call("get_owner_id", int(tid_str))
-						if owner_id != null:
-							tcs.call("set_claim", int(tid_str), int(owner_id), [null, null, null])
-				else:
-					# Attacker lost: clear attacking slots for this territory
-					BattleStateManager.set_attacking_slots(tid_str, {})
-		if not player_wins:
-			# Loser: clear placed cards from collection and slots
-			_clear_player_slots()
-			if BattleStateManager:
-				var placed := BattleStateManager.get_local_slots()
-				App.remove_placed_cards_from_collection_for_slots(placed)
-				BattleStateManager.clear_local_slots()
-		else:
-			# Winner/tie: persist cards in slots
-			_persist_local_placed_cards()
-			# Territory battle: update defending_slots and TCS with remaining cards
-			if BattleStateManager and App.pending_territory_battle_ids.size() > 0:
-				var tid_str: String = BattleStateManager.current_territory_id
-				if not tid_str.is_empty():
-					var remaining: Dictionary = BattleStateManager.get_local_slots()
-					BattleStateManager.set_defending_slots(tid_str, remaining)
-					var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
-					if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
-						var owner_id: Variant = tcs.call("get_owner_id", int(tid_str))
-						if owner_id != null:
-							var cards: Array = [null, null, null]
-							for idx in remaining:
-								var c: Dictionary = remaining[idx]
-								if int(idx) < 3 and c.get("path", "") != "":
-									cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
-							tcs.call("set_claim", int(tid_str), int(owner_id), cards)
+				# Note: we need to determine if we are defender or attacker.
+				# In the current flow (from App.enter_territory_battle), 
+				# local player has their cards in local_slots.
+				
+				# We'll check if we are defending this territory in TCS
+				var is_defender := false
+				var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+				if tcs and tcs.has_method("get_owner_id"):
+					var owner_id = tcs.call("get_owner_id", int(tid_str))
+					var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+					is_defender = (int(owner_id) == int(my_id))
+				
+				# Process battle resolution and get lost cards
+				var lost_cards := BattleStateManager.process_battle_resolution(result, player_wins, is_defender, tid_str)
+				
+				# Remove lost cards from collection
+				if not lost_cards.is_empty():
+					App.remove_placed_cards_from_collection_for_slots(lost_cards)
+				
+				# Update TCS with remaining cards
+				if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
+					var owner_id = tcs.call("get_owner_id", int(tid_str))
+					if owner_id != null:
+						var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str)
+						var cards: Array = [null, null, null]
+						for idx in remaining:
+							var c: Dictionary = remaining[idx]
+							if int(idx) < 3 and c.get("path", "") != "":
+								cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
+						tcs.call("set_claim", int(tid_str), int(owner_id), cards)
+
 		# Clear battle state when leaving resolved battle
 		BattleSync.clear_battle_state()
 	else:

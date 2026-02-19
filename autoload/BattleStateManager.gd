@@ -16,8 +16,8 @@ var current_territory_id: String = ""
 ##   "local_slots": Dictionary,  # slot_index (int) -> { "path": String, "frame": int }
 ##   "defending_slots": Dictionary,  # slot_index -> { "path": String, "frame": int } (owner's cards on territory)
 ##   "attacking_slots": Dictionary,  # slot_index -> { "path": String, "frame": int } (attacker's cards)
-##   "last_result": String,      # "win", "lose", "tie", or ""
 ##   "last_winner_is_local": bool,
+##   "round_results": Array,       # Array of "win", "lose", "tie" (per slot)
 ## }
 var _territories: Dictionary = {}
 
@@ -34,6 +34,7 @@ func _get_state(territory_id: String = "") -> Dictionary:
 			"attacking_slots": {},
 			"last_result": "",
 			"last_winner_is_local": false,
+			"round_results": [],
 		}
 	return _territories[territory_id]
 
@@ -55,6 +56,7 @@ func clear_territory(territory_id: String = "") -> void:
 			"attacking_slots": {},
 			"last_result": "",
 			"last_winner_is_local": false,
+			"round_results": [],
 		}
 
 
@@ -93,6 +95,60 @@ func record_battle_result(result: String, local_won: bool, territory_id: String 
 		return
 	state["last_result"] = result
 	state["last_winner_is_local"] = (result == "win") and local_won
+
+
+func record_round_results(results: Array, territory_id: String = "") -> void:
+	## Record individual round results ("win", "lose", "tie") for a territory.
+	var state := _get_state(territory_id)
+	if state.is_empty():
+		return
+	state["round_results"] = results
+
+
+func process_battle_resolution(overall_result: String, local_won: bool, is_defender: bool, territory_id: String = "") -> Dictionary:
+	## Implement new territory card loss rules and return lost slots.
+	## If player wins: they only lose their losing cards.
+	## If player loses: they lose all cards.
+	## If players tie: defending wins (Defender follows win rule, Attacker follows lose rule).
+	
+	var state := _get_state(territory_id)
+	if state.is_empty():
+		return {}
+	
+	var round_results: Array = state.get("round_results", [])
+	var local_slots: Dictionary = state.get("local_slots", {})
+	
+	var lost_slots: Dictionary = {}
+	
+	var is_winner := false
+	if overall_result == "win":
+		is_winner = local_won
+	elif overall_result == "lose":
+		is_winner = not local_won
+	else: # tie
+		is_winner = is_defender # defending wins ties
+	
+	if is_winner:
+		# Winner: only lose cards that lost their round
+		for i in range(round_results.size()):
+			if round_results[i] == "lose":
+				if local_slots.has(i):
+					lost_slots[i] = local_slots[i]
+	else:
+		# Loser: lose all cards
+		lost_slots = local_slots.duplicate()
+	
+	# Update local slots by removing lost ones
+	for idx in lost_slots:
+		local_slots.erase(idx)
+	
+	# Update territory-specific slot tracking
+	if is_defender:
+		state["defending_slots"] = local_slots.duplicate()
+	else:
+		state["attacking_slots"] = local_slots.duplicate()
+		
+	return lost_slots
 
 
 func get_last_result(territory_id: String = "") -> String:
