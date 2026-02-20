@@ -50,6 +50,32 @@ func _get_player_name(peer_id: int) -> String:
 			return str(p.get("name", "Player"))
 	return "Player"
 
+## Conquest: attacker takes territory from defender after winning battle. Server applies and broadcasts.
+func request_conquest_territory(territory_id: int, conqueror_id: int, cards: Array) -> void:
+	if multiplayer.is_server():
+		_server_process_conquest(multiplayer.get_unique_id(), territory_id, conqueror_id, cards)
+	else:
+		server_conquest_territory.rpc_id(1, territory_id, conqueror_id, cards)
+
+@rpc("any_peer", "reliable")
+func server_conquest_territory(territory_id: int, conqueror_id: int, cards: Array) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = multiplayer.get_unique_id()
+	_server_process_conquest(sender_id, territory_id, conqueror_id, cards)
+
+func _server_process_conquest(requester_id: int, territory_id: int, conqueror_id: int, cards: Array) -> void:
+	if not multiplayer.is_server():
+		return
+	if requester_id != conqueror_id:
+		return
+	var tcs := _get_territory_claim_state()
+	if tcs and tcs.has_method("set_claim"):
+		tcs.call("set_claim", territory_id, conqueror_id, cards)
+	rpc_territory_claimed.rpc(territory_id, conqueror_id, cards)
+
 @rpc("authority", "call_local", "reliable")
 func rpc_territory_claimed(territory_id: int, owner_id: int, cards: Array) -> void:
 	territory_claimed.emit(territory_id, owner_id, cards)

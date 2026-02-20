@@ -28,6 +28,7 @@ PhaseSync="*res://autoload/net/PhaseSync.gd"
 BattleSync="*res://autoload/net/BattleSync.gd"
 TerritorySync="*res://autoload/net/TerritorySync.gd"
 TerritoryClaimManager="*res://autoload/TerritoryClaimManager.gd"
+WinConditionManager="*res://autoload/WinConditionManager.gd"
 
 [display]
 

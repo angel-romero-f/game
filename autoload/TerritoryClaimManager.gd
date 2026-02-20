@@ -23,6 +23,31 @@ var _territory_claim_state: Node = null
 
 func _ready() -> void:
 	_territory_claim_state = get_node_or_null("/root/" + "Territory" + "Claim" + "State")
+	if TerritorySync and not TerritorySync.territory_claimed.is_connected(_on_territory_claimed_from_net):
+		TerritorySync.territory_claimed.connect(_on_territory_claimed_from_net)
+
+## Handle network-synced claims from TerritorySync (ensures TCS is updated on all peers, including during battle).
+func _on_territory_claimed_from_net(territory_id: int, owner_id: int, cards: Array) -> void:
+	if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
+		_territory_claim_state.set_claim(territory_id, owner_id, cards)
+	var tm = App.territory_manager as TerritoryManager if App else null
+	if tm and is_instance_valid(tm) and tm.territory_data.has(territory_id):
+		apply_network_claim(territory_id, owner_id, cards, _get_local_id(), tm)
+	else:
+		if BattleStateManager:
+			var defending_dict: Dictionary = {}
+			for slot_idx in range(min(3, cards.size())):
+				if slot_idx < cards.size() and cards[slot_idx] != null and cards[slot_idx] is Dictionary:
+					defending_dict[slot_idx] = cards[slot_idx]
+			BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
+		if WinConditionManager and WinConditionManager.check_player_wins(int(owner_id)):
+			WinConditionManager.player_won.emit(int(owner_id))
+
+func _get_local_id() -> Variant:
+	for p in App.game_players:
+		if p.get("is_local", false):
+			return p.get("id", 1)
+	return 1
 
 ## Claim a territory (single-player path). In multiplayer, routes through TerritorySync.
 ## Returns true if the claim was initiated (multiplayer) or applied (single-player).
@@ -69,6 +94,8 @@ func claim_territory(territory_id: int, local_id: Variant, slot_cards: Array, te
 			placed_slots[slot_idx] = slot_cards[slot_idx]
 	App.remove_placed_cards_from_collection_for_slots(placed_slots)
 	claim_succeeded.emit(territory_id, local_id, slot_cards)
+	if WinConditionManager and WinConditionManager.check_player_wins(int(local_id)):
+		WinConditionManager.player_won.emit(int(local_id))
 	return true
 
 ## Apply a network-synced territory claim (all peers receive this).
@@ -99,6 +126,23 @@ func apply_network_claim(territory_id: int, owner_id: int, cards: Array, local_i
 				placed_slots[slot_idx] = cards[slot_idx]
 		App.remove_placed_cards_from_collection_for_slots(placed_slots)
 	claim_succeeded.emit(territory_id, owner_id, cards)
+	if WinConditionManager and WinConditionManager.check_player_wins(int(owner_id)):
+		WinConditionManager.player_won.emit(int(owner_id))
+
+## Apply conquest without territory_manager (e.g. during battle when map scene is not loaded).
+## Updates TCS and emits claim_succeeded. Use when territory_manager may be invalid.
+func apply_conquest_claim(territory_id: int, conqueror_id: int, cards: Array) -> void:
+	if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
+		_territory_claim_state.set_claim(territory_id, conqueror_id, cards)
+	if BattleStateManager:
+		var defending_dict: Dictionary = {}
+		for slot_idx in range(min(3, cards.size())):
+			if slot_idx < cards.size() and cards[slot_idx] != null and cards[slot_idx] is Dictionary:
+				defending_dict[slot_idx] = cards[slot_idx]
+		BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
+	claim_succeeded.emit(territory_id, conqueror_id, cards)
+	if WinConditionManager and WinConditionManager.check_player_wins(int(conqueror_id)):
+		WinConditionManager.player_won.emit(int(conqueror_id))
 
 ## Register an attack on a territory. Stores attacking cards in BattleStateManager and removes from player hand.
 func register_attack(territory_id: int, attacking_slot_cards: Array) -> void:
