@@ -193,19 +193,22 @@ func _draw() -> void:
 				glow_points.append(point + direction * offset)
 			draw_colored_polygon(glow_points, glow_color)
 	
-	# Draw main polygon (claimed = race color; unclaimed = white transparent glow)
+	# Draw main polygon (claimed = race color; unclaimed = region color)
 	if is_claimed() and claimed_display_color.a > 0:
 		var fill := claimed_display_color
 		fill.a = 0.5
 		draw_colored_polygon(points_to_draw, fill)
 		draw_polyline(points_to_draw, claimed_display_color, 3.0, true)
 	elif debug_visible:
-		# Unclaimed: white transparent glow
-		var unclaimed_color := Color(1.0, 1.0, 1.0, 0.35)
-		draw_colored_polygon(points_to_draw, unclaimed_color)
-		draw_polyline(points_to_draw, Color(1.0, 1.0, 1.0, 0.7), 2.0, true)
+		var rid := get_region_id()
+		var region_col := App.get_region_color(rid) if rid > 0 else Color(1.0, 1.0, 1.0, 1.0)
+		var fill_col := region_col
+		fill_col.a = 0.35
+		draw_colored_polygon(points_to_draw, fill_col)
+		var outline_col := region_col
+		outline_col.a = 0.7
+		draw_polyline(points_to_draw, outline_col, 2.0, true)
 	elif current_color.a > 0:
-		# Normal drawing when not in debug mode
 		draw_colored_polygon(points_to_draw, current_color)
 		draw_polyline(points_to_draw, Color(0.5, 0.5, 0.5, 0.3), 2.0, true)
 

@@ -637,6 +637,22 @@ func get_race_color(race: String) -> Color:
 			return Color(0.9, 0.2, 0.2, 1)  # Red
 	return Color.WHITE
 
+func get_region_color(region_id: int) -> Color:
+	match region_id:
+		3:
+			return Color(1.0, 0.55, 0.15, 1.0)   # Orange
+		5:
+			return Color(0.25, 0.5, 1.0, 1.0)     # Blue
+		6:
+			return Color(1.0, 1.0, 1.0, 1.0)      # White
+		4:
+			return Color(0.6, 0.6, 0.6, 1.0)      # Gray
+		2:
+			return Color(0.2, 0.78, 0.7, 1.0)     # Teal
+		1:
+			return Color(0.82, 0.7, 0.45, 1.0)    # Tan / Beige
+	return Color(0.8, 0.8, 0.8, 1.0)
+
 func stop_main_music() -> void:
 	if main_music and main_music.playing:
 		main_music.stop()

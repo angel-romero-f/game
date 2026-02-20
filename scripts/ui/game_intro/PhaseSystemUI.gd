@@ -129,6 +129,7 @@ func _on_phase_transition_finished() -> void:
 func apply_phase_ui() -> void:
 	if not intro_complete or is_phase_overlay_animating:
 		return
+	map_sub_phase = PhaseController.map_sub_phase
 	match App.current_game_phase:
 		App.GamePhase.CARD_COMMAND:
 			_apply_card_command_ui()
