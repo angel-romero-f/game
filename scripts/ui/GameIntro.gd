@@ -75,11 +75,14 @@ func _ready() -> void:
 	for btn in [minigame_button, bridge_minigame_button, ice_fishing_button, play_minigames_button,
 				battle_button, skip_to_battle_button, battle_button_right]:
 		btn.visible = false
+	var victory_overlay := get_node_or_null("VictoryOverlay") as ColorRect
 	for node in [settings_button, settings_panel, player_roll_container, phase_overlay,
 				 minigames_counter_label, card_icon_button, hand_display_panel,
 				 left_battle_selectors, right_battle_selectors, waiting_overlay,
 				 current_decider_label, skip_battle_decision_button]:
 		node.visible = false
+	if victory_overlay:
+		victory_overlay.visible = false
 	if finish_claiming_button:
 		finish_claiming_button.visible = false
 	if ready_for_battle_button:
@@ -208,12 +211,25 @@ func _ready() -> void:
 	if ready_for_battle_button:
 		ready_for_battle_button.pressed.connect(territory_ui.on_ready_for_battle_pressed)
 
+	# Victory overlay
+	if victory_overlay:
+		var victory_btn := victory_overlay.get_node_or_null("MainMenuButton") as Button
+		if victory_btn:
+			victory_btn.pressed.connect(_on_victory_main_menu_pressed)
+		if App.game_victor_id >= 0:
+			_show_victory_overlay(App.game_victor_id)
+			App.game_victor_id = -1
+
 	# Settings
 	if settings_button:
 		settings_button.pressed.connect(_on_settings_pressed)
 	if settings_panel:
 		settings_panel.resume_pressed.connect(toggle_pause)
 		settings_panel.main_menu_pressed.connect(_on_main_menu_pressed)
+
+	# Win condition: show victory when returning with game_victor_id set
+	if WinConditionManager and not WinConditionManager.player_won.is_connected(_on_player_won):
+		WinConditionManager.player_won.connect(_on_player_won)
 
 	# Multiplayer net signals
 	if App.is_multiplayer:
@@ -276,8 +292,7 @@ func _on_phase_ui_applied() -> void:
 	territory_ui.update_territory_interaction()
 
 func _on_net_territory_claimed(territory_id: int, owner_id: int, cards: Array) -> void:
-	var local_id: Variant = _get_local_player_id()
-	TerritoryClaimManager.apply_network_claim(territory_id, owner_id, cards, local_id, territory_ui.get_territory_manager())
+	# TerritoryClaimManager applies via TerritorySync.territory_claimed; we just refresh visuals.
 	territory_ui.refresh_territory_claimed_visuals()
 
 func _on_enter_battle_scene(scene_path: String) -> void:
@@ -310,6 +325,29 @@ func toggle_pause() -> void:
 		settings_button.visible = !is_paused
 
 func _on_main_menu_pressed() -> void:
+	get_tree().paused = false
+	App.go("res://scenes/ui/MainMenu.tscn")
+
+func _on_player_won(player_id: int) -> void:
+	if is_inside_tree():
+		_show_victory_overlay(player_id)
+
+func _show_victory_overlay(player_id: int) -> void:
+	var victory_overlay := get_node_or_null("VictoryOverlay") as ColorRect
+	if not victory_overlay:
+		return
+	var victory_label := victory_overlay.get_node_or_null("VictoryLabel") as Label
+	var player_name: String = "Player"
+	for p in App.game_players:
+		if int(p.get("id", -1)) == player_id:
+			player_name = str(p.get("name", "Player"))
+			break
+	if victory_label:
+		victory_label.text = "%s Wins!" % player_name
+	victory_overlay.visible = true
+	App.game_victor_id = -1
+
+func _on_victory_main_menu_pressed() -> void:
 	get_tree().paused = false
 	App.go("res://scenes/ui/MainMenu.tscn")
 

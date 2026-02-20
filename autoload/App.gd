@@ -59,6 +59,12 @@ var current_battle_metadata: Dictionary = {}
 ## After "Finish Claiming", territories with both defending and attacking cards are battled in ascending id order.
 ## This array holds territory_id strings; when non-empty, on_battle_completed loads the next.
 var pending_territory_battle_ids: Array = []
+## Attacker and defender IDs for the current territory battle (set in enter_territory_battle).
+var pending_territory_battle_attacker_id: int = -1
+var pending_territory_battle_defender_id: int = -1
+
+## Set when a player wins (5/6 regions). GameIntro checks this to show victory overlay.
+var game_victor_id: int = -1
 
 func enter_card_command_phase() -> void:
 	current_game_phase = GamePhase.CARD_COMMAND
@@ -525,6 +531,10 @@ func _ready() -> void:
 		get_tree().node_added.connect(_on_node_added)
 	call_deferred("_hook_buttons_on_current_scene")
 
+	# Win condition: show victory when a player owns 5/6 regions
+	if WinConditionManager and not WinConditionManager.player_won.is_connected(_on_player_won):
+		WinConditionManager.player_won.connect(_on_player_won)
+
 func go(path: String) -> void:
 	get_tree().change_scene_to_file(path)
 	call_deferred("_hook_buttons_on_current_scene")
@@ -669,6 +679,9 @@ func play_blip_select() -> void:
 		ui_sfx.stop()
 	ui_sfx.play()
 
+func _on_player_won(player_id: int) -> void:
+	game_victor_id = player_id
+
 func _on_node_added(node: Node) -> void:
 	if node is BaseButton:
 		_connect_button_sfx(node)
@@ -719,6 +732,8 @@ func _setup_audio_buses() -> void:
 
 ## Called by Net via RPC start_territory_battle
 func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: int) -> void:
+	pending_territory_battle_attacker_id = attacker_id
+	pending_territory_battle_defender_id = defender_id
 	print("[App] Entering Territory Battle: ", territory_id)
 	
 	if not BattleStateManager:

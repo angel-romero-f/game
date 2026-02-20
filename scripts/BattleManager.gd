@@ -778,17 +778,34 @@ func _on_leave_pressed() -> void:
 				if not lost_cards.is_empty():
 					App.remove_placed_cards_from_collection_for_slots(lost_cards)
 				
-				# Update TCS with remaining cards
-				if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
-					var owner_id = tcs.call("get_owner_id", int(tid_str))
-					if owner_id != null:
-						var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str)
-						var cards: Array = [null, null, null]
-						for idx in remaining:
-							var c: Dictionary = remaining[idx]
-							if int(idx) < 3 and c.get("path", "") != "":
-								cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
-						tcs.call("set_claim", int(tid_str), int(owner_id), cards)
+				var attacker_id: int = App.pending_territory_battle_attacker_id
+				var defender_id: int = App.pending_territory_battle_defender_id
+				var attacker_won: bool = (is_defender and not player_wins) or (not is_defender and player_wins)
+
+				if attacker_won:
+					# Transfer ownership to attacker
+					var attacker_slots: Dictionary = BattleStateManager.get_attacking_slots(tid_str)
+					var cards: Array = [null, null, null]
+					for idx in attacker_slots:
+						var c: Dictionary = attacker_slots[idx]
+						if int(idx) < 3 and c.get("path", "") != "":
+							cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
+					if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
+						TerritorySync.request_conquest_territory(int(tid_str), attacker_id, cards)
+					else:
+						TerritoryClaimManager.apply_conquest_claim(int(tid_str), attacker_id, cards)
+				else:
+					# Defender won - update TCS with defender's remaining cards
+					if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
+						var owner_id = tcs.call("get_owner_id", int(tid_str))
+						if owner_id != null:
+							var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str)
+							var cards: Array = [null, null, null]
+							for idx in remaining:
+								var c: Dictionary = remaining[idx]
+								if int(idx) < 3 and c.get("path", "") != "":
+									cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
+							tcs.call("set_claim", int(tid_str), int(owner_id), cards)
 
 		# Clear battle state when leaving resolved battle
 		BattleSync.clear_battle_state()
