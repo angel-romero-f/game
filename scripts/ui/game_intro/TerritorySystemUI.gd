@@ -7,10 +7,12 @@ signal phase_ui_update_requested
 signal animate_buttons_requested
 
 const TerritoryMapConfigScript := preload("res://scripts/TerritoryMapConfig.gd")
+const TerritoryIndicatorManagerScript := preload("res://scripts/TerritoryIndicatorManager.gd")
 const DELAY_BEFORE_BATTLE_TRANSITION_SEC := 1.0
 
 var territory_manager: TerritoryManager = null
 var territories_container: Control = null
+var _territory_indicator_manager: Node = null
 var _territory_claim_state: Node = null
 var _is_delayed_battle_transition_active := false
 var intro_complete: bool = false
@@ -70,6 +72,9 @@ func initialize_territory_system() -> void:
 
 	_initialize_territories()
 
+	# Create territory indicators (one per territory, under the territory nodes, same id)
+	_setup_territory_indicators()
+
 	# Connect autoload signals
 	if not PhaseController.claiming_turn_finished.is_connected(_on_claiming_turn_finished):
 		PhaseController.claiming_turn_finished.connect(_on_claiming_turn_finished)
@@ -85,6 +90,18 @@ func initialize_territory_system() -> void:
 
 func get_territory_manager() -> TerritoryManager:
 	return territory_manager
+
+func get_territory_indicator_manager() -> Node:
+	return _territory_indicator_manager
+
+func _setup_territory_indicators() -> void:
+	if not territory_manager or not territories_container or territory_manager.territories.is_empty():
+		return
+	var manager := TerritoryIndicatorManagerScript.new()
+	manager.name = "TerritoryIndicatorManager"
+	parent_control.add_child(manager)
+	manager.create_indicators(territory_manager, territories_container)
+	_territory_indicator_manager = manager
 
 # ---------- TERRITORY INITIALIZATION ----------
 

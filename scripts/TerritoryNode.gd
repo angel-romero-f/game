@@ -274,6 +274,13 @@ func _calculate_center(points: PackedVector2Array) -> Vector2:
 	return sum / points.size()
 
 
+## Return the center of the territory polygon in this node's local coordinates.
+## Used by TerritoryIndicatorManager to place the indicator sprite.
+func get_center_local() -> Vector2:
+	var points := _polygon_points_backing if not _polygon_points_backing.is_empty() else original_polygon_points
+	return _calculate_center(points)
+
+
 func _gui_input(event: InputEvent) -> void:
 	if event is InputEventMouseButton:
 		var mouse_event := event as InputEventMouseButton
