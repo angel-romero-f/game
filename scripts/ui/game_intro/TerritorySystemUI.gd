@@ -73,6 +73,8 @@ func initialize_territory_system() -> void:
 	# Connect autoload signals
 	if not PhaseController.claiming_turn_finished.is_connected(_on_claiming_turn_finished):
 		PhaseController.claiming_turn_finished.connect(_on_claiming_turn_finished)
+	if not PhaseController.map_sub_phase_changed.is_connected(_on_map_sub_phase_changed):
+		PhaseController.map_sub_phase_changed.connect(_on_map_sub_phase_changed)
 	if not TerritoryClaimManager.claim_failed.is_connected(_on_claim_failed):
 		TerritoryClaimManager.claim_failed.connect(_on_claim_failed)
 
@@ -205,6 +207,9 @@ func _on_claim_failed(_territory_id: int, reason: String) -> void:
 		claim_ui.show_already_claimed_message(reason)
 
 # ---------- PHASE TRANSITIONS (TERRITORY-SIDE) ----------
+
+func _on_map_sub_phase_changed(sub_phase: int) -> void:
+	map_sub_phase = sub_phase
 
 func on_finish_claiming_pressed() -> void:
 	if claim_ui:

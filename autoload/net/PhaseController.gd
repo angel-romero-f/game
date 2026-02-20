@@ -39,6 +39,8 @@ func set_turn(peer_id: int) -> void:
 ## Set map sub-phase and emit signal
 func set_map_sub_phase(sub_phase: int) -> void:
 	map_sub_phase = sub_phase
+	if sub_phase == MapSubPhase.CLAIMING:
+		App.minigames_completed_this_phase = 0
 	map_sub_phase_changed.emit(sub_phase)
 
 ## Initialize done state for all players at phase start

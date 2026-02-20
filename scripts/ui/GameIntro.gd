@@ -243,6 +243,10 @@ func _ready() -> void:
 		territory_ui.intro_complete = true
 		phase_ui.intro_complete = true
 		var map_sub_phase: int = flow_ui.skip_to_game_ready()
+		# In multiplayer, the server may have already transitioned (e.g. RESOURCE_COLLECTION → CLAIMING)
+		# while we were in a minigame scene. Use the authoritative PhaseController state.
+		if App.is_multiplayer:
+			map_sub_phase = PhaseController.map_sub_phase
 		phase_ui.map_sub_phase = map_sub_phase
 		territory_ui.map_sub_phase = map_sub_phase
 		return
@@ -299,8 +303,11 @@ func _on_enter_battle_scene(scene_path: String) -> void:
 	App.go(scene_path)
 
 func _on_flow_phase_ui_refresh(map_sub_phase: int) -> void:
-	phase_ui.map_sub_phase = map_sub_phase
-	territory_ui.map_sub_phase = map_sub_phase
+	# In multiplayer, use the authoritative server state — the pending_return value
+	# from skip_to_game_ready() can be stale if the server already transitioned.
+	var resolved: int = PhaseController.map_sub_phase if App.is_multiplayer else map_sub_phase
+	phase_ui.map_sub_phase = resolved
+	territory_ui.map_sub_phase = resolved
 	phase_ui.apply_phase_ui()
 	phase_ui.animate_phase_buttons()
 
