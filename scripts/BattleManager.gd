@@ -660,7 +660,7 @@ func _resolve_battle() -> void:
 		var p_final_power: float = p_power + p_modifier
 		var o_final_power: float = o_power + o_modifier
 
-		# Determine winner based on final power values
+		# Determine winner based on final power values (per round)
 		if p_final_power > o_final_power:
 			player_wins += 1
 			_round_results.append("win")
@@ -671,14 +671,23 @@ func _resolve_battle() -> void:
 			ties += 1
 			_round_results.append("tie")
 
-	# Store summary on labels (simple for now).
+	# Overall result by point system: +1 win, -1 loss, 0 tie. Most points wins; equal = tie.
+	# On tie overall, defender wins for card-loss purposes (handled in process_battle_resolution).
+	var player_points := 0
+	for r in _round_results:
+		if r == "win":
+			player_points += 1
+		elif r == "lose":
+			player_points -= 1
+	# else tie: no change
+
 	var result_text := ""
-	if player_wins >= 2:
-		result_text = "You Win (%d-%d-%d)" % [player_wins, opponent_wins, ties]
-	elif opponent_wins >= 2:
-		result_text = "You Lose (%d-%d-%d)" % [player_wins, opponent_wins, ties]
+	if player_points > 0:
+		result_text = "You Win (+%d)" % player_points
+	elif player_points < 0:
+		result_text = "You Lose (%d)" % player_points
 	else:
-		result_text = "Tie (%d-%d-%d)" % [player_wins, opponent_wins, ties]
+		result_text = "Tie (0)"
 
 	if _result_label:
 		_result_label.text = result_text
