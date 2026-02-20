@@ -234,11 +234,9 @@ func _apply_resource_collection_ui() -> void:
 				if PhaseController.player_done_state.get(_pid, false):
 					_done += 1
 			var _total := maxi(PhaseController.player_done_state.size(), 1)
-			if _total > 0 and _done >= _total:
-				next_round_requested.emit()
-			else:
-				set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [_done, _total])
-				is_waiting_for_others = true
+			# Server handles the transition authoritatively; just show waiting overlay.
+			set_overlay_state(OverlayState.WAITING, "Waiting for other players... (%d/%d done)" % [_done, _total])
+			is_waiting_for_others = true
 		else:
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
@@ -357,6 +355,10 @@ func on_skip_to_battle_pressed() -> void:
 			else:
 				App.enter_claim_conquer_phase()
 				show_phase_transition_overlay()
+		App.GamePhase.CLAIM_CONQUER:
+			# Non-CLAIMING sub-phases (RESOURCE_COLLECTION, BATTLE_READY):
+			# server drives transitions, so do nothing here.
+			pass
 		App.GamePhase.CARD_COLLECTION:
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 				var prev_phase := App.current_game_phase
@@ -406,11 +408,8 @@ func _on_done_counts_updated(done: int, total: int) -> void:
 		and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION \
 		and minigames_counter_label.visible:
 		_update_minigames_counter()
-	if total > 0 and done >= total \
-		and App.current_game_phase == App.GamePhase.CLAIM_CONQUER \
-		and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
-		next_round_requested.emit()
-		return
+	# Server handles RESOURCE_COLLECTION -> CLAIMING transition authoritatively;
+	# no client-side next_round_requested here to avoid stale-turn deadlocks.
 	if is_waiting_for_others and _overlay_state == OverlayState.WAITING:
 		waiting_label.text = "Waiting for other players... (%d/%d done)" % [done, total]
 	# Phase mismatch repair
@@ -463,6 +462,7 @@ func _on_net_territory_claim_rejected(territory_id: int, claimer_name: String) -
 func _on_net_map_sub_phase_changed(sub_phase: int) -> void:
 	if sub_phase == 0:  # CLAIMING
 		map_sub_phase = PhaseController.MapSubPhase.CLAIMING
+		App.minigames_completed_this_phase = 0
 		is_waiting_for_others = false
 		waiting_overlay.visible = false
 		set_overlay_state(OverlayState.NONE)

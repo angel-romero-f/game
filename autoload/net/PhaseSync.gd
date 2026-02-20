@@ -219,9 +219,8 @@ func _check_all_done_and_advance() -> void:
 	if total > 0 and done_count >= total:
 		if PhaseController.current_phase == 0:  # CARD_COMMAND -> CLAIM_CONQUER
 			_server_enter_claim_conquer_phase()
-		elif PhaseController.current_phase == 1:  # CLAIM_CONQUER: all done -> BATTLE_READY
-			BattleSync._sync_battle_state()
-			rpc_map_sub_phase.rpc(2)
+		elif PhaseController.current_phase == 1:  # CLAIM_CONQUER: all done -> next claiming round
+			server_enter_claim_conquer_from_battles()
 		elif PhaseController.current_phase == 2:  # CARD_COLLECTION -> CARD_COMMAND (loop)
 			host_init_card_command_phase()
 
