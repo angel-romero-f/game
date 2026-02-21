@@ -311,6 +311,8 @@ func refresh_territory_claimed_visuals() -> void:
 	for tid_key in territory_manager.territories:
 		var node: TerritoryNode = territory_manager.territories[tid_key]
 		node.update_claimed_visual()
+	if _territory_indicator_manager and _territory_indicator_manager.has_method("refresh_all_indicator_textures"):
+		_territory_indicator_manager.refresh_all_indicator_textures()
 
 # ---------- HELPERS ----------
 
