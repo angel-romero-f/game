@@ -211,6 +211,7 @@ func _on_claim_submitted(territory_id: int, cards: Array) -> void:
 			claim_ui.close_panel()
 
 func _on_attack_submitted(territory_id: int, cards: Array) -> void:
+	## Attack only registers attacking cards; it does NOT start or resolve a battle. The battle runs in the card_battle scene after both players press Ready.
 	TerritoryClaimManager.register_attack(territory_id, cards)
 	if claim_ui:
 		claim_ui.close_panel()

@@ -130,39 +130,65 @@ func _restore_and_sync_placed_cards() -> void:
 
 	if is_territory_battle:
 		print("[BattleManager] Territory Battle detected for ID: ", tid)
-		# 1. Setup Opponent (Attacker) Cards
+		var defending_slots: Dictionary = BattleStateManager.get_defending_slots(tid)
 		var attacking_slots: Dictionary = BattleStateManager.get_attacking_slots(tid)
+		# Determine role: defender = territory owner, attacker = otherwise
+		var is_local_defender: bool = false
+		var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+		if tcs and tcs.has_method("get_owner_id"):
+			var owner_id: Variant = tcs.call("get_owner_id", int(tid))
+			var my_id: int = int(multiplayer.get_unique_id()) if multiplayer.has_multiplayer_peer() else 1
+			is_local_defender = (int(owner_id) == my_id)
+		# Player slots = our cards; opponent slots = other player's cards
+		var player_slots_data: Dictionary
+		var opponent_slots_data: Dictionary
+		if is_local_defender:
+			player_slots_data = defending_slots
+			opponent_slots_data = attacking_slots
+			print("[BattleManager] Local player is DEFENDER. Player side=defending, opponent side=attacking.")
+		else:
+			player_slots_data = attacking_slots
+			opponent_slots_data = defending_slots
+			print("[BattleManager] Local player is ATTACKER. Player side=attacking, opponent side=defending.")
+		print("[BattleManager] Player slots (our side) data: ", _debug_slots_summary(player_slots_data))
+		print("[BattleManager] Opponent slots (their side) data: ", _debug_slots_summary(opponent_slots_data))
+
+		# 1. Populate opponent slots (face-down) from opponent_slots_data
 		if _deck_o:
 			var back_frames: SpriteFrames = _deck_o.get("deck_sprite_frames")
 			var back_frame_index: int = int(_deck_o.get("frame_index"))
-			
 			for slot_idx in range(_opponent_slot_nodes.size()):
 				var slot = _opponent_slot_nodes[slot_idx]
 				if not slot: continue
-				
-				var card_data = attacking_slots.get(int(slot_idx))
-				if card_data == null: card_data = attacking_slots.get(str(slot_idx))
-				
+				var card_data = opponent_slots_data.get(int(slot_idx))
+				if card_data == null: card_data = opponent_slots_data.get(str(slot_idx))
 				if card_data:
-					# Create card in slot
 					var card := CARD_SCENE.instantiate()
 					get_tree().current_scene.add_child(card)
 					var area := card.get_node_or_null("Card_Collision") as Area2D
 					if area: area.input_pickable = false
-					
-					# Set to back
 					card.card_sprite_frames = back_frames
 					card.frame_index = back_frame_index
-					
 					_opponent_cards_by_slot[slot] = card
 					if slot.has_method("force_snap_card"):
 						slot.force_snap_card(card)
-					
-					# Store face data as metadata for flip logic
 					card.set_meta("territory_face_path", card_data.get("path", ""))
 					card.set_meta("territory_face_frame", card_data.get("frame"))
 
-	# 2. Restore Player (Defending) Cards
+		# 2. Populate player slots from player_slots_data (our cards for this battle)
+		var placed: Dictionary = player_slots_data
+		if not placed.is_empty():
+			_restore_cards_to_slots(placed)
+			if _is_multiplayer:
+				for slot_idx in placed:
+					var data: Dictionary = placed[slot_idx]
+					var path: String = data.get("path", "")
+					var frame: int = int(data.get("frame"))
+					if not path.is_empty():
+						BattleSync.request_place_battle_card(slot_idx, path, frame)
+		return
+
+	# Non-territory battle: use local_slots as before
 	var placed: Dictionary = BattleStateManager.get_local_slots()
 	if not placed.is_empty():
 		_restore_cards_to_slots(placed)
@@ -173,6 +199,20 @@ func _restore_and_sync_placed_cards() -> void:
 				var frame: int = int(data.get("frame"))
 				if not path.is_empty():
 					BattleSync.request_place_battle_card(slot_idx, path, frame)
+
+
+func _debug_slots_summary(slots: Dictionary) -> String:
+	## Returns a readable summary of slot_index -> { path, frame } for debug logs.
+	var parts: Array[String] = []
+	for idx in slots.keys():
+		var data: Variant = slots[idx]
+		if data is Dictionary:
+			var d: Dictionary = data
+			parts.append("%s: %s frame=%s" % [idx, d.get("path", ""), d.get("frame", -1)])
+		else:
+			parts.append("%s: %s" % [idx, str(data)])
+	parts.sort()
+	return "{" + ", ".join(parts) + "}" if not parts.is_empty() else "{}"
 
 
 func _restore_cards_to_slots(placed: Dictionary) -> void:
@@ -247,7 +287,7 @@ func _on_battle_cards_updated() -> void:
 
 
 func _on_battle_start_requested() -> void:
-	## All players pressed Start; begin flip and resolve.
+	## Battle runs only when both players have pressed Ready in the card battle scene (not when Attack is pressed in GameIntro).
 	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
 		return
 	if _start_button:
@@ -458,6 +498,7 @@ func _place_opponent_backs() -> void:
 
 
 func _on_start_battle_pressed() -> void:
+	## Ready button in card battle scene: in multiplayer we wait for all peers to press Ready; in single player we run battle immediately.
 	if state != State.WAITING_FOR_PLAYER:
 		return
 
@@ -583,6 +624,10 @@ func _flip_opponent_cards_from_pool() -> void:
 
 
 func _resolve_battle() -> void:
+	## Battle must only be resolved after both players press Ready in the card battle scene.
+	## Do not resolve when Attack is pressed in GameIntro; only resolve when we've transitioned to FLIPPING via Ready.
+	if state != State.FLIPPING:
+		return
 	# Pairing is fixed by array ordering:
 	# PL vs OR, PM vs OM, PR vs OL
 	# Determine per-pair results using power values with attribute modifiers, then best-of-3 overall.

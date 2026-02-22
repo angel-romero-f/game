@@ -794,13 +794,13 @@ text = "Settings"
 [node name="SettingsPanel" type="Panel" parent="."]
 process_mode = 3
 visible = false
-script = ExtResource("6_settings")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("6_settings")
 
 [node name="SettingsContainer" type="VBoxContainer" parent="SettingsPanel"]
 layout_mode = 1
@@ -984,7 +984,6 @@ alignment = 1
 
 [node name="ClaimTerritoryPanel" type="PanelContainer" parent="."]
 visible = false
-script = ExtResource("5_claim")
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -997,6 +996,7 @@ offset_right = 220.0
 offset_bottom = 180.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("5_claim")
 
 [node name="MarginContainer" type="MarginContainer" parent="ClaimTerritoryPanel"]
 layout_mode = 2

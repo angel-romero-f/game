@@ -110,13 +110,19 @@ func process_battle_resolution(overall_result: String, local_won: bool, is_defen
 	## If player wins: they only lose their losing cards.
 	## If player loses: they lose all cards.
 	## If players tie: defending wins (Defender follows win rule, Attacker follows lose rule).
+	## For territory battles, local player's cards come from defending_slots (if defender) or attacking_slots (if attacker).
 	
 	var state := _get_state(territory_id)
 	if state.is_empty():
 		return {}
 	
 	var round_results: Array = state.get("round_results", [])
-	var local_slots: Dictionary = state.get("local_slots", {})
+	# Use the correct slot set for the local player (defender's or attacker's cards)
+	var local_slots: Dictionary = {}
+	if is_defender:
+		local_slots = state.get("defending_slots", {}).duplicate(true)
+	else:
+		local_slots = state.get("attacking_slots", {}).duplicate(true)
 	
 	var lost_slots: Dictionary = {}
 	
@@ -161,6 +167,18 @@ func last_winner_is_local(territory_id: String = "") -> bool:
 	return bool(state.get("last_winner_is_local", false))
 
 
+func _slots_debug_string(slots_dict: Dictionary) -> String:
+	var parts: Array[String] = []
+	for idx in slots_dict.keys():
+		var card: Variant = slots_dict[idx]
+		if card is Dictionary:
+			parts.append("slot %s: %s frame=%s" % [idx, card.get("path", ""), card.get("frame", -1)])
+		else:
+			parts.append("slot %s: %s" % [idx, str(card)])
+	parts.sort()
+	return "{" + ", ".join(parts) + "}" if not parts.is_empty() else "{}"
+
+
 func set_defending_slots(territory_id: String, slots_dict: Dictionary) -> void:
 	## Set the defending (owner's) cards for a territory. slots_dict: slot_index -> { "path": String, "frame": int }
 	var state := _get_state(territory_id)
@@ -171,6 +189,7 @@ func set_defending_slots(territory_id: String, slots_dict: Dictionary) -> void:
 		var card: Variant = slots_dict[idx]
 		if card is Dictionary and card.get("path", "") != "":
 			state["defending_slots"][int(idx)] = {"path": str(card.get("path", "")), "frame": int(card.get("frame", 0))}
+	print("[BattleStateManager] Defending slots set for territory %s: %s" % [territory_id, _slots_debug_string(state["defending_slots"])])
 
 
 func set_attacking_slots(territory_id: String, slots_dict: Dictionary) -> void:
@@ -183,6 +202,7 @@ func set_attacking_slots(territory_id: String, slots_dict: Dictionary) -> void:
 		var card: Variant = slots_dict[idx]
 		if card is Dictionary and card.get("path", "") != "":
 			state["attacking_slots"][int(idx)] = {"path": str(card.get("path", "")), "frame": int(card.get("frame", 0))}
+	print("[BattleStateManager] Attacking slots set for territory %s: %s" % [territory_id, _slots_debug_string(state["attacking_slots"])])
 
 
 func get_defending_slots(territory_id: String = "") -> Dictionary:

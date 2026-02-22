@@ -382,12 +382,12 @@ func _on_attack_clicked() -> void:
 		return
 	var has_any_card: bool = false
 	for slot_idx in range(3):
-		if claim_slot_cards[slot_idx] != null:
+		if claim_attacking_slot_cards[slot_idx] != null:
 			has_any_card = true
 			break
 	if not has_any_card:
 		return
-	attack_submitted.emit(current_claim_territory_id, claim_slot_cards)
+	attack_submitted.emit(current_claim_territory_id, claim_attacking_slot_cards)
 
 func _on_play_minigame_pressed() -> void:
 	if current_claim_territory_id < 0 or not territory_manager or not territory_manager.territory_data.has(current_claim_territory_id):
