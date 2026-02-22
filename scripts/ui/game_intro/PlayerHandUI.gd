@@ -40,6 +40,14 @@ func _on_card_icon_pressed() -> void:
 		tween.tween_property(hand_display_panel, "modulate:a", 0.0, 0.15)
 		tween.tween_callback(func(): hand_display_panel.visible = false)
 
+func _on_hand_card_gui_input(event: InputEvent, card_path: String, frame_index: int) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and mb.double_click:
+			if not card_path.is_empty() and CardEnlargeOverlay:
+				CardEnlargeOverlay.show_enlarged_card(card_path, frame_index)
+			get_viewport().set_input_as_handled()
+
 func _populate_hand_display() -> void:
 	if not hand_container:
 		return
@@ -50,6 +58,7 @@ func _populate_hand_display() -> void:
 		card_visual.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
 		card_visual.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		card_visual.custom_minimum_size = Vector2(80, 120)
+		card_visual.mouse_filter = Control.MOUSE_FILTER_STOP
 		var sprite_frames_path: String = card_data.get("path", "")
 		var frame_index: int = int(card_data.get("frame", 0))
 		if not sprite_frames_path.is_empty():
@@ -58,6 +67,7 @@ func _populate_hand_display() -> void:
 				var frame_count := sprite_frames.get_frame_count("default")
 				if frame_count > frame_index:
 					card_visual.texture = sprite_frames.get_frame_texture("default", frame_index)
+		card_visual.gui_input.connect(_on_hand_card_gui_input.bind(sprite_frames_path, frame_index))
 		hand_container.add_child(card_visual)
 
 func show_card_icon_button() -> void:
