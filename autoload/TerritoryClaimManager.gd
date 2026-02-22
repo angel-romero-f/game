@@ -40,6 +40,7 @@ func _on_territory_claimed_from_net(territory_id: int, owner_id: int, cards: Arr
 				if slot_idx < cards.size() and cards[slot_idx] != null and cards[slot_idx] is Dictionary:
 					defending_dict[slot_idx] = cards[slot_idx]
 			BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
+			BattleStateManager.clear_attacking_slots(str(territory_id))
 		if WinConditionManager and WinConditionManager.check_player_wins(int(owner_id)):
 			WinConditionManager.player_won.emit(int(owner_id))
 
@@ -140,6 +141,7 @@ func apply_conquest_claim(territory_id: int, conqueror_id: int, cards: Array) ->
 			if slot_idx < cards.size() and cards[slot_idx] != null and cards[slot_idx] is Dictionary:
 				defending_dict[slot_idx] = cards[slot_idx]
 		BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
+		BattleStateManager.clear_attacking_slots(str(territory_id))
 	claim_succeeded.emit(territory_id, conqueror_id, cards)
 	if WinConditionManager and WinConditionManager.check_player_wins(int(conqueror_id)):
 		WinConditionManager.player_won.emit(int(conqueror_id))

@@ -153,7 +153,14 @@ func process_battle_resolution(overall_result: String, local_won: bool, is_defen
 		state["defending_slots"] = local_slots.duplicate()
 	else:
 		state["attacking_slots"] = local_slots.duplicate()
-		
+
+	# Debug: log updated state after battle resolution
+	print("[BattleStateManager] Battle resolution updated state for territory %s: defending_slots=%s attacking_slots=%s round_results=%s" % [
+		territory_id,
+		_slots_debug_string(state.get("defending_slots", {})),
+		_slots_debug_string(state.get("attacking_slots", {})),
+		str(state.get("round_results", []))
+	])
 	return lost_slots
 
 
@@ -189,7 +196,7 @@ func set_defending_slots(territory_id: String, slots_dict: Dictionary) -> void:
 		var card: Variant = slots_dict[idx]
 		if card is Dictionary and card.get("path", "") != "":
 			state["defending_slots"][int(idx)] = {"path": str(card.get("path", "")), "frame": int(card.get("frame", 0))}
-	print("[BattleStateManager] Defending slots set for territory %s: %s" % [territory_id, _slots_debug_string(state["defending_slots"])])
+	print("[BattleStateManager] Defending slots updated for territory %s: %s" % [territory_id, _slots_debug_string(state["defending_slots"])])
 
 
 func set_attacking_slots(territory_id: String, slots_dict: Dictionary) -> void:
@@ -202,7 +209,16 @@ func set_attacking_slots(territory_id: String, slots_dict: Dictionary) -> void:
 		var card: Variant = slots_dict[idx]
 		if card is Dictionary and card.get("path", "") != "":
 			state["attacking_slots"][int(idx)] = {"path": str(card.get("path", "")), "frame": int(card.get("frame", 0))}
-	print("[BattleStateManager] Attacking slots set for territory %s: %s" % [territory_id, _slots_debug_string(state["attacking_slots"])])
+	print("[BattleStateManager] Attacking slots updated for territory %s: %s" % [territory_id, _slots_debug_string(state["attacking_slots"])])
+
+
+func clear_attacking_slots(territory_id: String = "") -> void:
+	## Clear attacking slots for a territory (e.g. after conquest so they become defending).
+	var state := _get_state(territory_id)
+	if state.is_empty():
+		return
+	state["attacking_slots"] = {}
+	print("[BattleStateManager] Attacking slots cleared for territory %s" % territory_id)
 
 
 func get_defending_slots(territory_id: String = "") -> Dictionary:

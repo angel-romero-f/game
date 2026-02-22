@@ -297,6 +297,7 @@ func _on_battle_start_requested() -> void:
 	_resolve_battle()
 	_show_result()
 	state = State.RESOLVED
+	_apply_battle_resolution_state()
 
 
 func _update_opponent_cards_from_net() -> void:
@@ -517,6 +518,7 @@ func _on_start_battle_pressed() -> void:
 	_resolve_battle()
 	_show_result()
 	state = State.RESOLVED
+	_apply_battle_resolution_state()
 
 
 func _flip_opponent_cards_from_pool() -> void:
@@ -767,6 +769,73 @@ func _get_battle_result() -> String:
 	return "tie"
 
 
+func _apply_battle_resolution_state() -> void:
+	## Run immediately after cards flip and result is shown. Updates BSM, TCS, and collection.
+	## Called once per client when state becomes RESOLVED; Leave only handles transition/cleanup.
+	if state != State.RESOLVED:
+		return
+	print("[BattleManager] Battle RESOLVED — applying outcome and territory state (right after flip).")
+	var result := _get_battle_result()
+	var player_wins := result == "win"
+	var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+
+	if BattleStateManager:
+		BattleStateManager.record_battle_result(result, player_wins, tid_str)
+		BattleStateManager.record_round_results(_round_results, tid_str)
+
+	# Territory battle: current_territory_id is set when we entered; pending_territory_battle_ids is already popped, so don't require it.
+	var is_territory_battle: bool = not tid_str.is_empty() and not tid_str.begins_with("battle_")
+	if BattleStateManager and is_territory_battle:
+		var is_defender := false
+		var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+		if tcs and tcs.has_method("get_owner_id"):
+			var owner_id = tcs.call("get_owner_id", int(tid_str))
+			var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+			is_defender = (int(owner_id) == int(my_id))
+
+		var lost_cards := BattleStateManager.process_battle_resolution(result, player_wins, is_defender, tid_str)
+		if not lost_cards.is_empty():
+			App.remove_placed_cards_from_collection_for_slots(lost_cards)
+
+		var attacker_id: int = App.pending_territory_battle_attacker_id
+		var attacker_won: bool = (is_defender and not player_wins) or (not is_defender and player_wins)
+
+		if attacker_won:
+			var attacker_slots: Dictionary = BattleStateManager.get_attacking_slots(tid_str)
+			var cards: Array = [null, null, null]
+			for idx in attacker_slots:
+				var c: Dictionary = attacker_slots[idx]
+				if int(idx) < 3 and c.get("path", "") != "":
+					cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
+			if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
+				TerritorySync.request_conquest_territory(int(tid_str), attacker_id, cards)
+			else:
+				TerritoryClaimManager.apply_conquest_claim(int(tid_str), attacker_id, cards)
+			var claims_dict: Variant = tcs.get("claims") if tcs else null
+			if not (claims_dict is Dictionary):
+				claims_dict = {}
+			var owners_list: Array[String] = []
+			if claims_dict is Dictionary:
+				var keys: Array = (claims_dict as Dictionary).keys()
+				keys.sort()
+				for k in keys:
+					var claim_data: Dictionary = (claims_dict as Dictionary)[k]
+					var oid: Variant = claim_data.get("owner_player_id", null)
+					owners_list.append("T%s->owner %s" % [k, oid])
+			print("[BattleManager] Attacker wins: territory %s claimed by attacker (owner) %s. Current owners of all territories: %s" % [tid_str, attacker_id, ", ".join(owners_list)])
+		else:
+			if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
+				var owner_id = tcs.call("get_owner_id", int(tid_str))
+				if owner_id != null:
+					var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str)
+					var cards: Array = [null, null, null]
+					for idx in remaining:
+						var c: Dictionary = remaining[idx]
+						if int(idx) < 3 and c.get("path", "") != "":
+							cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
+					tcs.call("set_claim", int(tid_str), int(owner_id), cards)
+
+
 func _clear_player_slots() -> void:
 	## Clear all player slots: remove cards, reset slot state
 	var root := get_tree().current_scene
@@ -790,6 +859,9 @@ func _clear_player_slots() -> void:
 
 
 func _on_leave_pressed() -> void:
+	var state_name: String = ["SETUP", "WAITING_FOR_PLAYER", "WAITING_FOR_ALL_READY", "FLIPPING", "RESOLVED"][clampi(state, 0, 4)]
+	print("[BattleManager] Leave pressed. Current battle state: %s. Resolution runs only when state is RESOLVED (both players Ready, result shown)." % state_name)
+
 	if _is_multiplayer:
 		BattleSync.notify_battle_left()
 		# Added (minimal): only report finished when leaving a resolved battle (paired tracking)
@@ -797,71 +869,8 @@ func _on_leave_pressed() -> void:
 			BattleSync.notify_battle_finished()
 			_reported_battle_finished = true
 
-	# Handle card persistence based on battle state
+	# State was already applied at flip time (_apply_battle_resolution_state). Only cleanup and transition.
 	if state == State.RESOLVED:
-		# Battle is resolved
-		var result := _get_battle_result()
-		var player_wins := result == "win"
-		
-		# Record outcome and round results in BattleStateManager
-		if BattleStateManager:
-			BattleStateManager.record_battle_result(result, player_wins)
-			BattleStateManager.record_round_results(_round_results)
-			
-		# Report card losses to BSM and TCS for territory battles
-		if BattleStateManager and App.pending_territory_battle_ids.size() > 0:
-			var tid_str: String = BattleStateManager.current_territory_id
-			if not tid_str.is_empty():
-				# In territory battle: local = defender, opponent = attacker
-				# Note: we need to determine if we are defender or attacker.
-				# In the current flow (from App.enter_territory_battle), 
-				# local player has their cards in local_slots.
-				
-				# We'll check if we are defending this territory in TCS
-				var is_defender := false
-				var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
-				if tcs and tcs.has_method("get_owner_id"):
-					var owner_id = tcs.call("get_owner_id", int(tid_str))
-					var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
-					is_defender = (int(owner_id) == int(my_id))
-				
-				# Process battle resolution and get lost cards
-				var lost_cards := BattleStateManager.process_battle_resolution(result, player_wins, is_defender, tid_str)
-				
-				# Remove lost cards from collection
-				if not lost_cards.is_empty():
-					App.remove_placed_cards_from_collection_for_slots(lost_cards)
-				
-				var attacker_id: int = App.pending_territory_battle_attacker_id
-				var defender_id: int = App.pending_territory_battle_defender_id
-				var attacker_won: bool = (is_defender and not player_wins) or (not is_defender and player_wins)
-
-				if attacker_won:
-					# Transfer ownership to attacker
-					var attacker_slots: Dictionary = BattleStateManager.get_attacking_slots(tid_str)
-					var cards: Array = [null, null, null]
-					for idx in attacker_slots:
-						var c: Dictionary = attacker_slots[idx]
-						if int(idx) < 3 and c.get("path", "") != "":
-							cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
-					if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
-						TerritorySync.request_conquest_territory(int(tid_str), attacker_id, cards)
-					else:
-						TerritoryClaimManager.apply_conquest_claim(int(tid_str), attacker_id, cards)
-				else:
-					# Defender won - update TCS with defender's remaining cards
-					if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
-						var owner_id = tcs.call("get_owner_id", int(tid_str))
-						if owner_id != null:
-							var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str)
-							var cards: Array = [null, null, null]
-							for idx in remaining:
-								var c: Dictionary = remaining[idx]
-								if int(idx) < 3 and c.get("path", "") != "":
-									cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
-							tcs.call("set_claim", int(tid_str), int(owner_id), cards)
-
-		# Clear battle state when leaving resolved battle
 		BattleSync.clear_battle_state()
 	else:
 		# Leaving unresolved battle: persist cards for restoration
@@ -1029,27 +1038,26 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key := event as InputEventKey
 		if key.pressed and key.keycode == KEY_SPACE:
-			# Handle battle outcome
-			var result := _get_battle_result()
-			var player_wins := result == "win"
-			if BattleStateManager:
-				BattleStateManager.record_battle_result(result, player_wins)
-			if not player_wins:
-				# Loser: clear placed cards from collection
+			# Territory battles: state already applied at flip time. Queue battles: apply loser card removal here.
+			var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+			var is_territory_battle: bool = not tid_str.is_empty() and not tid_str.begins_with("battle_")
+			if not is_territory_battle:
+				var result := _get_battle_result()
+				var player_wins := result == "win"
 				if BattleStateManager:
-					var placed := BattleStateManager.get_local_slots()
-					App.remove_placed_cards_from_collection_for_slots(placed)
-					BattleStateManager.clear_local_slots()
-				_clear_player_slots()
-			# Winner/tie: cards persist in App.battle_placed_cards
+					BattleStateManager.record_battle_result(result, player_wins, tid_str)
+				if not player_wins:
+					if BattleStateManager:
+						var placed := BattleStateManager.get_local_slots()
+						App.remove_placed_cards_from_collection_for_slots(placed)
+						BattleStateManager.clear_local_slots()
+					_clear_player_slots()
 
-			# Report finished in multiplayer for paired battle tracking.
-			if _is_multiplayer and not _reported_battle_finished:
-				# Note: Don't report here - on_battle_completed handles it for multi-battle queue
+			if _is_multiplayer:
 				BattleSync.notify_battle_left()
-				_reported_battle_finished = true
-
+				if not _reported_battle_finished:
+					BattleSync.notify_battle_finished()
+					_reported_battle_finished = true
 			BattleSync.clear_battle_state()
 			App.switch_to_main_music()
-			# App.on_battle_completed() handles scene transition (next battle or GameIntro)
 			App.on_battle_completed()
