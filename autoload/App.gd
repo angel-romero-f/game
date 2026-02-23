@@ -69,7 +69,7 @@ var game_victor_id: int = -1
 func enter_card_command_phase() -> void:
 	current_game_phase = GamePhase.CARD_COMMAND
 	minigames_completed_this_phase = 0
-	phase_transition_text = "Card Command"
+	phase_transition_text = "Claim"
 	show_phase_transition = true
 	print("[Phase] Entering CARD_COMMAND")
 	game_phase_changed.emit(current_game_phase)
@@ -77,7 +77,7 @@ func enter_card_command_phase() -> void:
 func enter_claim_conquer_phase() -> void:
 	current_game_phase = GamePhase.CLAIM_CONQUER
 	minigames_completed_this_phase = 0
-	phase_transition_text = "Claim & Conquer"
+	phase_transition_text = "Collect"
 	show_phase_transition = true
 	print("[Phase] Entering CLAIM_CONQUER")
 	game_phase_changed.emit(current_game_phase)
@@ -85,14 +85,14 @@ func enter_claim_conquer_phase() -> void:
 func enter_card_collection_phase() -> void:
 	current_game_phase = GamePhase.CARD_COLLECTION
 	minigames_completed_this_phase = 0
-	phase_transition_text = "Card Collection"
+	phase_transition_text = "Contest"
 	show_phase_transition = true
 	print("[Phase] Entering CARD_COLLECTION")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_battle_phase() -> void:
 	## Show "Choose Your Battles" overlay when entering battle selection (single-player map flow)
-	phase_transition_text = "Choose Your Battles"
+	phase_transition_text = "Collect"
 	show_phase_transition = true
 
 func on_minigame_completed() -> void:

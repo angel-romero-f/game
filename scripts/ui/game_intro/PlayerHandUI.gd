@@ -6,12 +6,14 @@ extends Node
 var card_icon_button: Button
 var hand_display_panel: PanelContainer
 var hand_container: HBoxContainer
+var card_count_label: Label
 var is_hand_visible: bool = false
 
 func initialize(nodes: Dictionary) -> void:
 	card_icon_button = nodes.get("card_icon_button")
 	hand_display_panel = nodes.get("hand_display_panel")
 	hand_container = nodes.get("hand_container")
+	card_count_label = nodes.get("card_count_label")
 	_setup_card_icon_button()
 	if card_icon_button:
 		card_icon_button.pressed.connect(_on_card_icon_pressed)
@@ -29,6 +31,7 @@ func _setup_card_icon_button() -> void:
 
 func _on_card_icon_pressed() -> void:
 	is_hand_visible = !is_hand_visible
+	update_card_count()
 	if is_hand_visible:
 		_populate_hand_display()
 		hand_display_panel.visible = true
@@ -70,9 +73,17 @@ func _populate_hand_display() -> void:
 		card_visual.gui_input.connect(_on_hand_card_gui_input.bind(sprite_frames_path, frame_index))
 		hand_container.add_child(card_visual)
 
+func update_card_count() -> void:
+	if not card_count_label:
+		return
+	var count := App.player_card_collection.size()
+	card_count_label.text = str(count)
+	card_count_label.visible = card_icon_button != null and card_icon_button.visible
+
 func show_card_icon_button() -> void:
 	if card_icon_button and App.player_card_collection.size() > 0:
 		card_icon_button.visible = true
 		card_icon_button.modulate.a = 0.0
 		var tween := create_tween()
 		tween.tween_property(card_icon_button, "modulate:a", 1.0, 0.3)
+		update_card_count()

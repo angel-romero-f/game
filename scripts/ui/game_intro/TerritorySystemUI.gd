@@ -249,7 +249,7 @@ func show_collect_resources_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		_enter_resource_collection()
 		return
-	phase_label.text = "Collect your resources!"
+	phase_label.text = "Collect"
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
 	update_territory_interaction()
