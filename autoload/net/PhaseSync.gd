@@ -17,7 +17,7 @@ func start_race_select() -> void:
 @rpc("authority", "call_local", "reliable")
 func start_game() -> void:
 	App.setup_multiplayer_game()
-	App.go("res://scenes/ui/GameIntro.tscn")
+	App.go("res://scenes/ui/game_intro.tscn")
 
 # ---------- CARD COMMAND PHASE ----------
 

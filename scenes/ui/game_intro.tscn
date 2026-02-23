@@ -1,8 +1,10 @@
-[gd_scene load_steps=7 format=3 uid="uid://c4f2c1607m3nt"]
+[gd_scene load_steps=9 format=3 uid="uid://c4f2c1607m3nt"]
 
 [ext_resource type="Script" uid="uid://boc3ncb3lcip" path="res://scripts/ui/GameIntro.gd" id="1_c8f5n"]
 [ext_resource type="Script" uid="uid://nry7roh0gj2b" path="res://scripts/TerritoryNode.gd" id="3_vp4a4"]
 [ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="4_84bnw"]
+[ext_resource type="Script" uid="uid://cna46rt126dqk" path="res://scripts/ui/game_intro/ClaimTerritoryUI.gd" id="5_claim"]
+[ext_resource type="Script" uid="uid://doenqsxx8bdlc" path="res://scripts/ui/game_intro/SettingsPanelUI.gd" id="6_settings"]
 
 [sub_resource type="CompressedTexture2D" id="CompressedTexture2D_sgnbp"]
 load_path = "res://.godot/imported/map.png-7524e54a536cbdb24a8446a9d96ec5f0.ctex"
@@ -61,11 +63,14 @@ mouse_filter = 2
 
 [node name="TerritoryNode" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
-anchors_preset = 0
-offset_left = 252.0
-offset_top = 194.0
-offset_right = 386.0
-offset_bottom = 291.0
+anchor_left = 0.21900001
+anchor_top = 0.29900002
+anchor_right = 0.335
+anchor_bottom = 0.44900003
+offset_left = -0.28800964
+offset_top = 0.24798584
+offset_right = 0.07998657
+offset_bottom = 0.047973633
 script = ExtResource("3_vp4a4")
 polygon_points = PackedVector2Array(0, 0, 134, 0, 134, 97, 0, 97)
 territory_id_override = 1
@@ -87,11 +92,14 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode3" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
-anchors_preset = 0
-offset_left = 947.0
-offset_top = 139.0
-offset_right = 1057.4614
-offset_bottom = 231.15894
+anchor_left = 0.73800004
+anchor_top = 0.072000004
+anchor_right = 0.836
+anchor_bottom = 0.24200001
+offset_left = 96.823975
+offset_top = 92.343994
+offset_right = 94.389404
+offset_bottom = 74.342926
 rotation = -3.1415927
 script = ExtResource("3_vp4a4")
 polygon_points = PackedVector2Array(0, 0, 110.461426, 0, 110.461426, 92.158936, 0, 92.158936)
@@ -210,14 +218,17 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode12" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
-anchors_preset = 0
-offset_left = 1005.0
-offset_top = 279.0
-offset_right = 1115.4614
-offset_bottom = 371.15897
+anchor_left = 0.777
+anchor_top = 0.28800002
+anchor_right = 0.87200004
+anchor_bottom = 0.43100002
+offset_left = 109.895996
+offset_top = 92.37599
+offset_right = 110.91736
+offset_bottom = 91.87094
 rotation = -3.1415927
 script = ExtResource("3_vp4a4")
-polygon_points = PackedVector2Array(0, 0, 110.461426, 0, 110.461426, 92.158966, 0, 92.158966, 0, 0)
+polygon_points = PackedVector2Array(0, 0, 110.461426, 0, 110.461426, 92.158966, 0, 92.158966)
 territory_id_override = 12
 region_id_override = 5
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
@@ -749,6 +760,7 @@ text = "Settings"
 [node name="SettingsPanel" type="Panel" parent="."]
 process_mode = 3
 visible = false
+script = ExtResource("6_settings")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -938,6 +950,7 @@ alignment = 1
 
 [node name="ClaimTerritoryPanel" type="PanelContainer" parent="."]
 visible = false
+script = ExtResource("5_claim")
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5

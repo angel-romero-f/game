@@ -12,7 +12,7 @@ func _run() -> void:
 	print("Exporting territories from GameIntro scene...")
 	
 	# Find GameIntro scene
-	var game_intro_path := "res://scenes/ui/GameIntro.tscn"
+	var game_intro_path := "res://scenes/ui/game_intro.tscn"
 	if not ResourceLoader.exists(game_intro_path):
 		push_error("GameIntro scene not found at: " + game_intro_path)
 		return

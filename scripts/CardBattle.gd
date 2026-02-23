@@ -11,4 +11,4 @@ func _ready() -> void:
 
 func _on_return_pressed() -> void:
 	App.switch_to_main_music()
-	App.go("res://scenes/ui/GameIntro.tscn")
+	App.go("res://scenes/ui/game_intro.tscn")

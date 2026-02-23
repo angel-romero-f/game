@@ -63,7 +63,7 @@ func _on_start_pressed() -> void:
 		return
 	App.set_selected_race(selected_race)
 	App.setup_single_player_game()
-	App.go("res://scenes/ui/GameIntro.tscn")
+	App.go("res://scenes/ui/game_intro.tscn")
 
 func _on_back_pressed() -> void:
 	App.go("res://scenes/ui/PlayMenu.tscn")

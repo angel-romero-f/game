@@ -182,10 +182,10 @@ func on_battle_completed() -> void:
 				# Next player's turn
 				current_turn_player_id = turn_order[current_turn_index].get("id", -1)
 				print("[DEBUG] Next player ID: ", current_turn_player_id)
-				go("res://scenes/ui/GameIntro.tscn")
+				go("res://scenes/ui/game_intro.tscn")
 				return
 
-		go("res://scenes/ui/GameIntro.tscn")
+		go("res://scenes/ui/game_intro.tscn")
 		return
 	
 	# Check if more battles in queue
@@ -204,7 +204,7 @@ func on_battle_completed() -> void:
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
 			BattleSync.notify_battle_finished()
 		
-		go("res://scenes/ui/GameIntro.tscn")
+		go("res://scenes/ui/game_intro.tscn")
 
 func _load_next_queued_battle() -> void:
 	## Load the next battle from the queue

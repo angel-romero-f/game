@@ -68,4 +68,4 @@ func _return_to_map():
 	# Ensure main music is playing when returning to map
 	# (Battle music only plays in the actual battle scene, not on the map)
 	App.play_main_music()
-	App.go("res://scenes/ui/GameIntro.tscn")
+	App.go("res://scenes/ui/game_intro.tscn")
