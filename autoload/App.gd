@@ -38,6 +38,9 @@ var pending_return_map_sub_phase: int = -1
 var returning_from_territory_minigame: bool = false
 ## True when we just finished the territory battle sequence (Finish Claiming); GameIntro shows collect resources.
 var returning_from_territory_battles: bool = false
+## True only on the attacker's machine (set in PhaseController.finish_claiming_turn).
+## Prevents the defender from setting returning_from_territory_battles and sending a stale end-turn RPC.
+var is_territory_battle_attacker: bool = false
 
 ## Turn tracking (host-authoritative in multiplayer)
 var current_turn_player_id: int = -1
@@ -163,7 +166,8 @@ func on_battle_completed() -> void:
 	if just_finished_territory_battle and pending_territory_battle_ids.size() == 0:
 		print("[DEBUG] All territory battles completed. Returning to GameIntro with flag set.")
 		pending_territory_battle_ids.clear()
-		returning_from_territory_battles = true
+		if is_territory_battle_attacker:
+			returning_from_territory_battles = true
 		
 		# If Multiplayer, we need to notify the server we are done with battles/claiming
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
@@ -287,6 +291,7 @@ func reset_phase_state() -> void:
 	battle_queue.clear()
 	current_battle_queue_index = -1
 	current_battle_metadata.clear()
+	is_territory_battle_attacker = false
 ## ---------- END PHASE SYSTEM ----------
 
 ## ---------- PLAYER HAND SYSTEM ----------

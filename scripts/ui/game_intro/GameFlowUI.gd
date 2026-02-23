@@ -40,6 +40,7 @@ func skip_to_game_ready() -> int:
 	# Check returning from territory battles
 	if App.returning_from_territory_battles:
 		App.returning_from_territory_battles = false
+		App.is_territory_battle_attacker = false
 
 		if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 			PhaseSync.request_end_claiming_turn()
