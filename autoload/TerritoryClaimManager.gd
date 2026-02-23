@@ -40,6 +40,7 @@ func _on_territory_claimed_from_net(territory_id: int, owner_id: int, cards: Arr
 				if slot_idx < cards.size() and cards[slot_idx] != null and cards[slot_idx] is Dictionary:
 					defending_dict[slot_idx] = cards[slot_idx]
 			BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
+			BattleStateManager.clear_attacking_slots(str(territory_id))
 		if WinConditionManager and WinConditionManager.check_player_wins(int(owner_id)):
 			WinConditionManager.player_won.emit(int(owner_id))
 
@@ -92,7 +93,7 @@ func claim_territory(territory_id: int, local_id: Variant, slot_cards: Array, te
 	for slot_idx in range(3):
 		if slot_cards[slot_idx] != null:
 			placed_slots[slot_idx] = slot_cards[slot_idx]
-	App.remove_placed_cards_from_collection_for_slots(placed_slots)
+	App.remove_placed_cards_from_collection_for_slots(placed_slots, "placed_defending")
 	claim_succeeded.emit(territory_id, local_id, slot_cards)
 	if WinConditionManager and WinConditionManager.check_player_wins(int(local_id)):
 		WinConditionManager.player_won.emit(int(local_id))
@@ -124,7 +125,7 @@ func apply_network_claim(territory_id: int, owner_id: int, cards: Array, local_i
 		for slot_idx in range(min(3, cards.size())):
 			if cards[slot_idx] != null:
 				placed_slots[slot_idx] = cards[slot_idx]
-		App.remove_placed_cards_from_collection_for_slots(placed_slots)
+		App.remove_placed_cards_from_collection_for_slots(placed_slots, "placed_defending")
 	claim_succeeded.emit(territory_id, owner_id, cards)
 	if WinConditionManager and WinConditionManager.check_player_wins(int(owner_id)):
 		WinConditionManager.player_won.emit(int(owner_id))
@@ -140,6 +141,7 @@ func apply_conquest_claim(territory_id: int, conqueror_id: int, cards: Array) ->
 			if slot_idx < cards.size() and cards[slot_idx] != null and cards[slot_idx] is Dictionary:
 				defending_dict[slot_idx] = cards[slot_idx]
 		BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
+		BattleStateManager.clear_attacking_slots(str(territory_id))
 	claim_succeeded.emit(territory_id, conqueror_id, cards)
 	if WinConditionManager and WinConditionManager.check_player_wins(int(conqueror_id)):
 		WinConditionManager.player_won.emit(int(conqueror_id))
@@ -156,7 +158,7 @@ func register_attack(territory_id: int, attacking_slot_cards: Array) -> void:
 	for slot_idx in range(3):
 		if attacking_slot_cards[slot_idx] != null:
 			placed_slots[slot_idx] = attacking_slot_cards[slot_idx]
-	App.remove_placed_cards_from_collection_for_slots(placed_slots)
+	App.remove_placed_cards_from_collection_for_slots(placed_slots, "placed_attacking")
 	attack_registered.emit(territory_id, attacking_slot_cards)
 
 ## Apply saved claims from TerritoryClaimState onto the territory manager (used when returning from battle/minigame).

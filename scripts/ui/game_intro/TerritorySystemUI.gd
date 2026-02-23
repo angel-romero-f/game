@@ -211,6 +211,7 @@ func _on_claim_submitted(territory_id: int, cards: Array) -> void:
 			claim_ui.close_panel()
 
 func _on_attack_submitted(territory_id: int, cards: Array) -> void:
+	## Attack only registers attacking cards; it does NOT start or resolve a battle. The battle runs in the card_battle scene after both players press Ready.
 	TerritoryClaimManager.register_attack(territory_id, cards)
 	if claim_ui:
 		claim_ui.close_panel()
@@ -248,7 +249,7 @@ func show_collect_resources_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		_enter_resource_collection()
 		return
-	phase_label.text = "Collect your resources!"
+	phase_label.text = "Collect"
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
 	update_territory_interaction()
@@ -311,6 +312,8 @@ func refresh_territory_claimed_visuals() -> void:
 	for tid_key in territory_manager.territories:
 		var node: TerritoryNode = territory_manager.territories[tid_key]
 		node.update_claimed_visual()
+	if _territory_indicator_manager and _territory_indicator_manager.has_method("refresh_all_indicator_textures"):
+		_territory_indicator_manager.refresh_all_indicator_textures()
 
 # ---------- HELPERS ----------
 

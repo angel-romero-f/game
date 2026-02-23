@@ -36,6 +36,7 @@ var finish_claiming_button: Button
 var ready_for_battle_button: Button
 var settings_button: Button
 var card_icon_button: Button
+var current_phase_label: Label
 
 # Component references
 var battle_ui: Node  # BattleSelectionUI
@@ -57,6 +58,7 @@ func initialize(nodes: Dictionary, refs: Dictionary) -> void:
 	ready_for_battle_button = nodes.get("ready_for_battle_button")
 	settings_button = nodes.get("settings_button")
 	card_icon_button = nodes.get("card_icon_button")
+	current_phase_label = nodes.get("current_phase_label")
 	battle_ui = refs.get("battle_ui")
 	claim_ui = refs.get("claim_ui")
 
@@ -101,12 +103,28 @@ func set_overlay_state(state: OverlayState, text: String = "") -> void:
 			phase_label.text = ""
 			phase_overlay.visible = true
 
+# ---------- CURRENT PHASE LABEL ----------
+
+func _update_current_phase_label() -> void:
+	if not current_phase_label:
+		return
+	match App.current_game_phase:
+		App.GamePhase.CARD_COMMAND:
+			current_phase_label.text = "Claim"
+		App.GamePhase.CLAIM_CONQUER:
+			current_phase_label.text = "Collect"
+		App.GamePhase.CARD_COLLECTION:
+			current_phase_label.text = "Contest"
+	current_phase_label.visible = true
+
 # ---------- PHASE TRANSITION OVERLAY ----------
 
 func show_phase_transition_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		apply_phase_ui()
 		return
+	if current_phase_label:
+		current_phase_label.visible = false
 	phase_label.text = App.phase_transition_text
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
@@ -130,6 +148,7 @@ func apply_phase_ui() -> void:
 	if not intro_complete or is_phase_overlay_animating:
 		return
 	map_sub_phase = PhaseController.map_sub_phase
+	_update_current_phase_label()
 	match App.current_game_phase:
 		App.GamePhase.CARD_COMMAND:
 			_apply_card_command_ui()

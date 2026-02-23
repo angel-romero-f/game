@@ -47,11 +47,13 @@ func _ready() -> void:
 	var battle_button := $BattleButton as Button
 	var skip_to_battle_button := $SkipToBattleButton as Button
 	settings_button = $SettingsButton as Button
+	var current_phase_label := $CurrentPhaseLabel as Label
 	settings_panel = $SettingsPanel as Panel
 	var phase_overlay := $PhaseOverlay as ColorRect
 	var phase_label := $PhaseOverlay/PhaseLabel as Label
 	var minigames_counter_label := $MinigamesCounterLabel as Label
 	var card_icon_button := $CardIconButton as Button
+	var card_count_label := $CardCountLabel as Label
 	var hand_display_panel := $HandDisplayPanel as PanelContainer
 	var hand_container := $HandDisplayPanel/MarginContainer/VBoxContainer/HandContainer as HBoxContainer
 	claim_ui = $ClaimTerritoryPanel as PanelContainer
@@ -97,6 +99,7 @@ func _ready() -> void:
 		"card_icon_button": card_icon_button,
 		"hand_display_panel": hand_display_panel,
 		"hand_container": hand_container,
+		"card_count_label": card_count_label,
 	})
 
 	intro_ui = IntroSequenceUIScript.new()
@@ -171,6 +174,7 @@ func _ready() -> void:
 		"ready_for_battle_button": ready_for_battle_button,
 		"settings_button": settings_button,
 		"card_icon_button": card_icon_button,
+		"current_phase_label": current_phase_label,
 	}, {
 		"battle_ui": battle_ui,
 		"claim_ui": claim_ui,
@@ -269,7 +273,7 @@ func _on_intro_completed() -> void:
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		if PhaseController.current_phase == 0:
 			PhaseSync.host_init_card_command_phase()
-			App.phase_transition_text = "Card Command"
+			App.phase_transition_text = "Claim"
 		else:
 			PhaseController.sync_app_game_phase()
 			if PhaseController.current_phase == 1:
@@ -284,7 +288,7 @@ func _on_intro_completed() -> void:
 		App.enter_claim_conquer_phase()
 		phase_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		territory_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
-		App.phase_transition_text = "Claim & Conquer"
+		App.phase_transition_text = "Collect"
 
 	App.show_phase_transition = true
 	phase_ui.show_phase_transition_overlay()
@@ -294,6 +298,7 @@ func _on_intro_completed() -> void:
 
 func _on_phase_ui_applied() -> void:
 	territory_ui.update_territory_interaction()
+	hand_ui.update_card_count()
 
 func _on_net_territory_claimed(territory_id: int, owner_id: int, cards: Array) -> void:
 	# TerritoryClaimManager applies via TerritorySync.territory_claimed; we just refresh visuals.
@@ -314,7 +319,7 @@ func _on_flow_phase_ui_refresh(map_sub_phase: int) -> void:
 func _on_show_next_player_turn(player_name: String) -> void:
 	phase_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 	territory_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
-	App.phase_transition_text = "Card Command: " + player_name
+	App.phase_transition_text = "Claim: " + player_name
 	phase_ui.apply_phase_ui()
 	phase_ui.show_phase_transition_overlay()
 

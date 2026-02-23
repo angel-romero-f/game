@@ -69,7 +69,7 @@ var game_victor_id: int = -1
 func enter_card_command_phase() -> void:
 	current_game_phase = GamePhase.CARD_COMMAND
 	minigames_completed_this_phase = 0
-	phase_transition_text = "Card Command"
+	phase_transition_text = "Claim"
 	show_phase_transition = true
 	print("[Phase] Entering CARD_COMMAND")
 	game_phase_changed.emit(current_game_phase)
@@ -77,7 +77,7 @@ func enter_card_command_phase() -> void:
 func enter_claim_conquer_phase() -> void:
 	current_game_phase = GamePhase.CLAIM_CONQUER
 	minigames_completed_this_phase = 0
-	phase_transition_text = "Claim & Conquer"
+	phase_transition_text = "Collect"
 	show_phase_transition = true
 	print("[Phase] Entering CLAIM_CONQUER")
 	game_phase_changed.emit(current_game_phase)
@@ -85,14 +85,14 @@ func enter_claim_conquer_phase() -> void:
 func enter_card_collection_phase() -> void:
 	current_game_phase = GamePhase.CARD_COLLECTION
 	minigames_completed_this_phase = 0
-	phase_transition_text = "Card Collection"
+	phase_transition_text = "Contest"
 	show_phase_transition = true
 	print("[Phase] Entering CARD_COLLECTION")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_battle_phase() -> void:
 	## Show "Choose Your Battles" overlay when entering battle selection (single-player map flow)
-	phase_transition_text = "Choose Your Battles"
+	phase_transition_text = "Collect"
 	show_phase_transition = true
 
 func on_minigame_completed() -> void:
@@ -314,17 +314,12 @@ const FAIRY_CARDS: Array = [
 	{"sprite_frames": "res://assets/fairy_air_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/fairy_water_card.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
-	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
-	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
-	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
-	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
 ]
 
 const ORC_CARDS: Array = [
-	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
-	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
-	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
-	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
 ]
 
 ## Mixed pool for races without specific cards (Orc, Fairy)
@@ -333,10 +328,20 @@ const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 2},
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/elf_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/infernal_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_water_card.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
 ]
 
 ## Player's current hand - array of card data dictionaries (legacy, used for hand display)
@@ -411,7 +416,8 @@ func reset_player_hand() -> void:
 
 ## Remove cards described by a placed-slots dictionary from the player's collection.
 ## placed_slots: slot_index -> { "path": String, "frame": int }
-func remove_placed_cards_from_collection_for_slots(placed_slots: Dictionary) -> void:
+## reason: for logging only - "battle_lost" (default), "placed_attacking", "placed_defending", etc.
+func remove_placed_cards_from_collection_for_slots(placed_slots: Dictionary, reason: String = "battle_lost") -> void:
 	var removed := 0
 	for slot_idx in placed_slots:
 		var card_data: Dictionary = placed_slots[slot_idx]
@@ -424,7 +430,7 @@ func remove_placed_cards_from_collection_for_slots(placed_slots: Dictionary) -> 
 				removed += 1
 				break
 	if removed > 0:
-		print("[Cards] Removed ", removed, " placed cards from collection (battle lost)")
+		print("[Cards] Removed ", removed, " placed cards from collection (", reason, ")")
 
 
 ## Backwards-compatible helper using legacy battle_placed_cards.

@@ -382,12 +382,12 @@ func _on_attack_clicked() -> void:
 		return
 	var has_any_card: bool = false
 	for slot_idx in range(3):
-		if claim_slot_cards[slot_idx] != null:
+		if claim_attacking_slot_cards[slot_idx] != null:
 			has_any_card = true
 			break
 	if not has_any_card:
 		return
-	attack_submitted.emit(current_claim_territory_id, claim_slot_cards)
+	attack_submitted.emit(current_claim_territory_id, claim_attacking_slot_cards)
 
 func _on_play_minigame_pressed() -> void:
 	if current_claim_territory_id < 0 or not territory_manager or not territory_manager.territory_data.has(current_claim_territory_id):
@@ -515,6 +515,14 @@ func _is_territory_claimed_by_local(territory_id: int) -> bool:
 func _on_slot_gui_input(event: InputEvent, slot_index: int) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and mb.double_click:
+			if claim_slot_cards[slot_index] != null and claim_slot_cards[slot_index] is Dictionary:
+				var c: Dictionary = claim_slot_cards[slot_index]
+				var path: String = c.get("path", "")
+				var frame: int = int(c.get("frame", 0))
+				if not path.is_empty() and CardEnlargeOverlay:
+					CardEnlargeOverlay.show_enlarged_card(path, frame)
+				return
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 			if claim_selected_hand_index >= 0 and claim_selected_hand_index < claim_hand_cards.size():
 				var card: Dictionary = claim_hand_cards[claim_selected_hand_index]
@@ -544,6 +552,13 @@ func _on_slot_gui_input_attack(event: InputEvent, slot_type: String, slot_index:
 		if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
 			return
 		var arr: Array = claim_slot_cards if slot_type == "defending" else claim_attacking_slot_cards
+		if mb.double_click and slot_index >= 0 and slot_index < arr.size() and arr[slot_index] != null and arr[slot_index] is Dictionary:
+			var c: Dictionary = arr[slot_index]
+			var path: String = c.get("path", "")
+			var frame: int = int(c.get("frame", 0))
+			if not path.is_empty() and CardEnlargeOverlay:
+				CardEnlargeOverlay.show_enlarged_card(path, frame)
+			return
 		if claim_selected_hand_index >= 0 and claim_selected_hand_index < claim_hand_cards.size():
 			var card: Dictionary = claim_hand_cards[claim_selected_hand_index]
 			if slot_type == "attacking":
@@ -617,7 +632,20 @@ func _populate_claim_hand() -> void:
 				tex.texture = sf.get_frame_texture("default", frame)
 		btn.add_child(tex)
 		btn.pressed.connect(_on_hand_card_clicked.bind(i))
+		btn.gui_input.connect(_on_hand_card_gui_input.bind(i))
 		claim_hand_container.add_child(btn)
+
+func _on_hand_card_gui_input(event: InputEvent, hand_index: int) -> void:
+	if event is InputEventMouseButton:
+		var mb := event as InputEventMouseButton
+		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and mb.double_click:
+			if hand_index >= 0 and hand_index < claim_hand_cards.size():
+				var c: Dictionary = claim_hand_cards[hand_index]
+				var path: String = c.get("path", "")
+				var frame: int = int(c.get("frame", 0))
+				if not path.is_empty() and CardEnlargeOverlay:
+					CardEnlargeOverlay.show_enlarged_card(path, frame)
+				get_viewport().set_input_as_handled()
 
 func _on_hand_card_clicked(hand_index: int) -> void:
 	claim_selected_hand_index = hand_index

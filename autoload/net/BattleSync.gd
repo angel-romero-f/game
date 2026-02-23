@@ -125,6 +125,7 @@ func set_battle_ready() -> void:
 	_server_set_battle_ready(id)
 
 func _server_set_battle_ready(peer_id: int) -> void:
+	## Battle starts only when all players in the card battle scene have pressed Ready (not when Attack is pressed in GameIntro).
 	battle_ready_peers[peer_id] = true
 	var all_peers: Array = []
 	all_peers.append(multiplayer.get_unique_id())
