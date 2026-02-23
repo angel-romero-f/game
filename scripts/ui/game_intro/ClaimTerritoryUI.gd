@@ -246,9 +246,9 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 			claim_attack_button.visible = false
 	z_index = 100
 	visible = true
-	var node: TerritoryNode = territory_manager.get_territory_node(territory_id) if territory_manager else null
-	if node:
-		node.show_selection_glow()
+	var indicator: TerritoryIndicator = territory_manager.get_territory_node(territory_id) if territory_manager else null
+	if indicator:
+		indicator.show_selection_glow()
 
 func open_play_only_panel(territory_id: int) -> void:
 	_deselect_current()
@@ -289,9 +289,9 @@ func open_play_only_panel(territory_id: int) -> void:
 		claim_attack_button.visible = false
 	z_index = 100
 	visible = true
-	var play_node: TerritoryNode = territory_manager.get_territory_node(territory_id) if territory_manager else null
-	if play_node:
-		play_node.show_selection_glow()
+	var play_indicator: TerritoryIndicator = territory_manager.get_territory_node(territory_id) if territory_manager else null
+	if play_indicator:
+		play_indicator.show_selection_glow()
 
 func close_panel() -> void:
 	_deselect_current()
@@ -350,9 +350,9 @@ func show_already_claimed_message(claimer_name: String) -> void:
 
 func _deselect_current() -> void:
 	if territory_manager and current_claim_territory_id >= 0:
-		var node: TerritoryNode = territory_manager.get_territory_node(current_claim_territory_id)
-		if node:
-			node.deselect()
+		var indicator: TerritoryIndicator = territory_manager.get_territory_node(current_claim_territory_id)
+		if indicator:
+			indicator.deselect()
 
 func _on_cancel_clicked() -> void:
 	close_panel()
