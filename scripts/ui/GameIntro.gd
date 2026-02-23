@@ -90,6 +90,19 @@ func _ready() -> void:
 	if ready_for_battle_button:
 		ready_for_battle_button.visible = false
 
+	# ---------- TurnBannerLabel (non-modal turn indicator, pixel font) ----------
+	var turn_banner_label := Label.new()
+	turn_banner_label.name = "TurnBannerLabel"
+	turn_banner_label.visible = false
+	turn_banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	turn_banner_label.add_theme_font_override("font", load("res://fonts/m5x7.ttf"))
+	turn_banner_label.add_theme_font_size_override("font_size", 22)
+	turn_banner_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
+	turn_banner_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
+	turn_banner_label.offset_top = 36.0
+	turn_banner_label.offset_bottom = 64.0
+	add_child(turn_banner_label)
+
 	# ---------- Instantiate components ----------
 
 	hand_ui = PlayerHandUIScript.new()
@@ -163,6 +176,7 @@ func _ready() -> void:
 		"phase_label": phase_label,
 		"waiting_overlay": waiting_overlay,
 		"waiting_label": waiting_label,
+		"turn_banner_label": turn_banner_label,
 		"minigame_button": minigame_button,
 		"bridge_minigame_button": bridge_minigame_button,
 		"ice_fishing_button": ice_fishing_button,
@@ -273,7 +287,7 @@ func _on_intro_completed() -> void:
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		if PhaseController.current_phase == 0:
 			PhaseSync.host_init_card_command_phase()
-			App.phase_transition_text = "Claim"
+			App.phase_transition_text = "Command & Contest"
 		else:
 			PhaseController.sync_app_game_phase()
 			if PhaseController.current_phase == 1:

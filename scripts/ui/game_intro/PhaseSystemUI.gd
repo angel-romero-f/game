@@ -25,6 +25,7 @@ var phase_overlay: ColorRect
 var phase_label: Label
 var waiting_overlay: ColorRect
 var waiting_label: Label
+var turn_banner_label: Label  # Non-modal "(Name)'s Turn" text
 var minigame_button: Button
 var bridge_minigame_button: Button
 var ice_fishing_button: Button
@@ -47,6 +48,7 @@ func initialize(nodes: Dictionary, refs: Dictionary) -> void:
 	phase_label = nodes.get("phase_label")
 	waiting_overlay = nodes.get("waiting_overlay")
 	waiting_label = nodes.get("waiting_label")
+	turn_banner_label = nodes.get("turn_banner_label")
 	minigame_button = nodes.get("minigame_button")
 	bridge_minigame_button = nodes.get("bridge_minigame_button")
 	ice_fishing_button = nodes.get("ice_fishing_button")
@@ -103,6 +105,27 @@ func set_overlay_state(state: OverlayState, text: String = "") -> void:
 			phase_label.text = ""
 			phase_overlay.visible = true
 
+# ---------- TURN BANNER (non-modal, replaces waiting overlay for turn-based waits) ----------
+
+func _update_turn_banner() -> void:
+	if not turn_banner_label:
+		return
+	# Only show the turn banner during Command & Contest (CARD_COMMAND) phase.
+	# All other phases (Collect, etc.) are not strictly turn-based for this UI.
+	if App.current_game_phase != App.GamePhase.CARD_COMMAND:
+		turn_banner_label.visible = false
+		return
+	if not App.is_multiplayer or not multiplayer.has_multiplayer_peer():
+		turn_banner_label.visible = false
+		return
+	var my_id := multiplayer.get_unique_id()
+	if PhaseController.current_turn_peer_id == my_id or PhaseController.current_turn_peer_id == -1:
+		turn_banner_label.visible = false
+	else:
+		var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
+		turn_banner_label.text = "%s's Turn" % turn_name
+		turn_banner_label.visible = true
+
 # ---------- CURRENT PHASE LABEL ----------
 
 func _update_current_phase_label() -> void:
@@ -110,11 +133,11 @@ func _update_current_phase_label() -> void:
 		return
 	match App.current_game_phase:
 		App.GamePhase.CARD_COMMAND:
-			current_phase_label.text = "Claim"
+			current_phase_label.text = "Command & Contest"
 		App.GamePhase.CLAIM_CONQUER:
 			current_phase_label.text = "Collect"
 		App.GamePhase.CARD_COLLECTION:
-			current_phase_label.text = "Contest"
+			current_phase_label.text = "Collect"
 	current_phase_label.visible = true
 
 # ---------- PHASE TRANSITION OVERLAY ----------
@@ -180,15 +203,18 @@ func _apply_card_command_ui() -> void:
 		var my_id := multiplayer.get_unique_id()
 		if PhaseController.current_turn_peer_id != my_id:
 			skip_to_battle_button.visible = false
-			var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
-			set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
+			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = true
+			print("[CLIENT PhaseSystemUI] Command turn: waiting for %s (peer %d)" % [_get_player_name_for_peer(PhaseController.current_turn_peer_id), PhaseController.current_turn_peer_id])
 		else:
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
+			print("[CLIENT PhaseSystemUI] Command turn: it's MY turn")
+		_update_turn_banner()
 	else:
 		set_overlay_state(OverlayState.NONE)
 		is_waiting_for_others = false
+		_update_turn_banner()
 
 func _apply_claim_conquer_ui() -> void:
 	minigame_button.visible = false
@@ -216,23 +242,28 @@ func _apply_claiming_ui() -> void:
 		var my_id := multiplayer.get_unique_id()
 		if PhaseController.current_turn_peer_id != my_id:
 			skip_to_battle_button.visible = false
-			var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
-			set_overlay_state(OverlayState.WAITING, "Waiting for %s..." % turn_name)
+			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = true
+			print("[CLIENT PhaseSystemUI] Claiming turn: waiting for %s (peer %d)" % [_get_player_name_for_peer(PhaseController.current_turn_peer_id), PhaseController.current_turn_peer_id])
 		else:
 			skip_to_battle_button.visible = true
 			skip_to_battle_button.text = "Done claiming"
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
+			print("[CLIENT PhaseSystemUI] Claiming turn: it's MY turn")
+		_update_turn_banner()
 	else:
 		skip_to_battle_button.visible = true
 		skip_to_battle_button.text = "Done claiming"
 		set_overlay_state(OverlayState.NONE)
 		is_waiting_for_others = false
+		_update_turn_banner()
 
 func _apply_resource_collection_ui() -> void:
 	if finish_claiming_button:
 		finish_claiming_button.visible = false
+	if turn_banner_label:
+		turn_banner_label.visible = false
 	if ready_for_battle_button:
 		ready_for_battle_button.visible = false
 	skip_to_battle_button.visible = false
@@ -401,24 +432,32 @@ func _on_net_phase_changed(phase_id: int) -> void:
 		App.minigames_completed_this_phase = 0
 	if not intro_complete:
 		return
-	App.show_phase_transition = (App.current_game_phase != prev_phase)
+	var phase_actually_changed := (App.current_game_phase != prev_phase)
+	# CLAIM_CONQUER transitions are sub-phase-driven; handled via rpc_map_sub_phase.
 	if App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER:
-		App.show_phase_transition = false
+		phase_actually_changed = false
 	is_waiting_for_others = false
 	set_overlay_state(OverlayState.NONE)
+	if turn_banner_label:
+		turn_banner_label.visible = false
 	minigame_button.disabled = false
 	bridge_minigame_button.disabled = false
 	ice_fishing_button.disabled = false
 	play_minigames_button.disabled = false
 	skip_to_battle_button.disabled = false
-	if App.show_phase_transition:
+	if phase_actually_changed:
+		print("[CLIENT PhaseSystemUI] Phase changed to %d — showing transition overlay" % phase_id)
 		show_phase_transition_overlay()
 	else:
+		print("[CLIENT PhaseSystemUI] apply_phase_ui phase=%d sub=%d turn=%d" % [PhaseController.current_phase, PhaseController.map_sub_phase, PhaseController.current_turn_peer_id])
 		apply_phase_ui()
 
 func _on_turn_changed(_peer_id: int) -> void:
 	if intro_complete and not is_phase_overlay_animating:
+		_update_turn_banner()
 		apply_phase_ui()
+		if multiplayer.has_multiplayer_peer():
+			print("[CLIENT PhaseSystemUI] Turn changed → peer %d" % _peer_id)
 
 func _on_done_counts_updated(done: int, total: int) -> void:
 	local_done_count = done

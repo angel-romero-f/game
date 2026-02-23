@@ -100,16 +100,16 @@ func sync_app_game_phase() -> void:
 	match current_phase:
 		0:
 			App.current_game_phase = App.GamePhase.CARD_COMMAND
-			App.phase_transition_text = "Claim"
+			App.phase_transition_text = "Command & Contest"
 		1:
 			App.current_game_phase = App.GamePhase.CLAIM_CONQUER
 			App.phase_transition_text = "Collect"
 		2:
 			App.current_game_phase = App.GamePhase.CARD_COLLECTION
-			App.phase_transition_text = "Contest"
+			App.phase_transition_text = "Collect"
 		_:
 			App.current_game_phase = App.GamePhase.CARD_COMMAND
-			App.phase_transition_text = "Claim"
+			App.phase_transition_text = "Command & Contest"
 
 ## Transition to RESOURCE_COLLECTION sub-phase (reset minigame count, update sub-phase)
 func enter_resource_collection() -> void:

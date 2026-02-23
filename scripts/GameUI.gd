@@ -12,10 +12,56 @@ var lose_music: AudioStreamPlayer = null
 var player: Node2D = null
 var is_paused: bool = false
 
+# Timer + reward preview nodes (created programmatically)
+var _timer_label: Label = null
+var _reward_panel: Control = null
+var _timeout_label: Label = null
+var _pixel_font: Font = null
+
 func _ready():
 	game_over_panel.visible = false
 	win_panel.visible = false
 	settings_panel.visible = false
+	
+	# Load pixel font
+	_pixel_font = load("res://fonts/m5x7.ttf") as Font
+	
+	# Create timer label (top-right corner)
+	_timer_label = Label.new()
+	_timer_label.name = "MinigameTimerLabel"
+	if _pixel_font:
+		_timer_label.add_theme_font_override("font", _pixel_font)
+	_timer_label.add_theme_font_size_override("font_size", 28)
+	_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2, 1.0))
+	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_timer_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_timer_label.offset_left = -180
+	_timer_label.offset_top = 58
+	_timer_label.offset_right = -8
+	_timer_label.offset_bottom = 94
+	_timer_label.text = "Time: 30"
+	$UI.add_child(_timer_label)
+	
+	# Create reward preview panel (top-left)
+	_build_reward_preview()
+	
+	# Timeout overlay message (hidden initially)
+	_timeout_label = Label.new()
+	_timeout_label.name = "TimeoutLabel"
+	if _pixel_font:
+		_timeout_label.add_theme_font_override("font", _pixel_font)
+	_timeout_label.add_theme_font_size_override("font_size", 32)
+	_timeout_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2, 1.0))
+	_timeout_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_timeout_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_timeout_label.set_anchors_preset(Control.PRESET_CENTER)
+	_timeout_label.offset_left = -220
+	_timeout_label.offset_right = 220
+	_timeout_label.offset_top = -30
+	_timeout_label.offset_bottom = 30
+	_timeout_label.text = "Time's Up!"
+	_timeout_label.visible = false
+	$UI.add_child(_timeout_label)
 	
 	# Find the LoseMusic node - it's a sibling under the Game root
 	lose_music = get_parent().get_node_or_null("LoseMusic")
@@ -59,6 +105,80 @@ func _ready():
 	# Find player and connect signals
 	find_player()
 
+func _build_reward_preview() -> void:
+	var reward := App.pending_minigame_reward
+	if reward.is_empty():
+		return
+	var path: String = reward.get("path", "")
+	var frame: int = int(reward.get("frame", 0))
+	if path == "" or not ResourceLoader.exists(path):
+		return
+	var sf := load(path) as SpriteFrames
+	if not sf or not sf.has_animation("default"):
+		return
+	var frame_count := sf.get_frame_count("default")
+	if frame < 0 or frame >= frame_count:
+		return
+	# Container
+	_reward_panel = PanelContainer.new()
+	_reward_panel.name = "RewardPreviewPanel"
+	_reward_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+	_reward_panel.offset_left = 8
+	_reward_panel.offset_top = 8
+	_reward_panel.offset_right = 100
+	_reward_panel.offset_bottom = 160
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.15, 0.82)
+	style.set_border_width_all(2)
+	style.border_color = Color(1.0, 0.85, 0.3, 0.9)
+	style.set_corner_radius_all(4)
+	_reward_panel.add_theme_stylebox_override("panel", style)
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 2)
+	_reward_panel.add_child(vbox)
+	var lbl := Label.new()
+	lbl.text = "If you win:"
+	if _pixel_font:
+		lbl.add_theme_font_override("font", _pixel_font)
+	lbl.add_theme_font_size_override("font_size", 13)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	vbox.add_child(lbl)
+	var tex_rect := TextureRect.new()
+	tex_rect.texture = sf.get_frame_texture("default", frame)
+	tex_rect.custom_minimum_size = Vector2(80, 112)
+	tex_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	vbox.add_child(tex_rect)
+	$UI.add_child(_reward_panel)
+
+func update_timer_display(time_left: float) -> void:
+	if _timer_label:
+		var secs := int(ceil(time_left))
+		var col := Color(1.0, 0.9, 0.2, 1.0)
+		if time_left <= 10.0:
+			col = Color(1.0, 0.3, 0.2, 1.0)  # Red when low
+		_timer_label.add_theme_color_override("font_color", col)
+		_timer_label.text = "Time: %d" % secs
+
+func show_timeout() -> void:
+	if _timer_label:
+		_timer_label.text = "Time: 0"
+		_timer_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2, 1.0))
+	if _reward_panel:
+		_reward_panel.visible = false
+	if _timeout_label:
+		_timeout_label.visible = true
+	# Brief pause then auto-return (press R handled by Game.gd, so we trigger continue)
+	# We drain a life so _on_player_died path fires correctly
+	_auto_return_after_timeout()
+
+func _auto_return_after_timeout() -> void:
+	await get_tree().create_timer(1.8).timeout
+	var game_node := get_parent()
+	if game_node and game_node.has_method("handle_continue"):
+		game_node.call("handle_continue")
+
 func find_player():
 	var players = get_tree().get_nodes_in_group("player")
 	if players.size() > 0:
@@ -101,8 +221,41 @@ func _on_lose_music_finished() -> void:
 
 func show_win():
 	win_panel.visible = true
+	if _timer_label:
+		_timer_label.visible = false
+	if _reward_panel:
+		_reward_panel.visible = false
 	if win_label:
-		win_label.text = "You Made It!\nYou crossed the river!\nPress R to return to map"
+		win_label.text = "You Made It!\nPress R to return to map"
+	_show_reward_in_win_panel()
+
+func _show_reward_in_win_panel() -> void:
+	var reward := App.pending_minigame_reward
+	if reward.is_empty() or not win_panel:
+		return
+	var path: String = reward.get("path", "")
+	var frame: int = int(reward.get("frame", 0))
+	if path == "" or not ResourceLoader.exists(path):
+		return
+	var sf := load(path) as SpriteFrames
+	if not sf or not sf.has_animation("default"):
+		return
+	var fc := sf.get_frame_count("default")
+	if frame < 0 or frame >= fc:
+		return
+	var card_tex := TextureRect.new()
+	card_tex.texture = sf.get_frame_texture("default", frame)
+	card_tex.custom_minimum_size = Vector2(60, 84)
+	card_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	card_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	card_tex.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
+	card_tex.offset_left = 70
+	card_tex.offset_top = 55
+	card_tex.offset_right = -70
+	card_tex.offset_bottom = 145
+	win_panel.add_child(card_tex)
+	if win_label:
+		win_label.text = "You won this card!\nPress R to return to map"
 
 func _on_settings_pressed():
 	toggle_pause()

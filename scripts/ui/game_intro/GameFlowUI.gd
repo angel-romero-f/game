@@ -66,12 +66,18 @@ func skip_to_game_ready() -> int:
 	return map_sub_phase
 
 func on_minigame_pressed() -> void:
+	App.pre_roll_minigame_reward()
+	App.reset_lives()
 	App.go("res://scenes/Game.tscn")
 
 func on_bridge_minigame_pressed() -> void:
+	App.pre_roll_minigame_reward()
+	App.reset_lives()
 	App.go("res://scenes/BridgeGame.tscn")
 
 func on_ice_fishing_pressed() -> void:
+	App.pre_roll_minigame_reward()
+	App.reset_lives()
 	App.go("res://scenes/IceFishingGame.tscn")
 
 func on_play_minigames_pressed() -> void:

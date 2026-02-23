@@ -8,6 +8,7 @@ signal animate_buttons_requested
 
 const TerritoryMapConfigScript := preload("res://scripts/TerritoryMapConfig.gd")
 const TerritoryIndicatorManagerScript := preload("res://scripts/TerritoryIndicatorManager.gd")
+const TerritoryCardThumbnailsScript := preload("res://scripts/TerritoryCardThumbnails.gd")
 const DELAY_BEFORE_BATTLE_TRANSITION_SEC := 1.0
 
 var territory_manager: TerritoryManager = null
@@ -309,11 +310,25 @@ func apply_saved_territory_claims() -> void:
 func refresh_territory_claimed_visuals() -> void:
 	if not territory_manager:
 		return
+	var local_id: Variant = _get_local_player_id()
 	for tid_key in territory_manager.territories:
 		var node: TerritoryNode = territory_manager.territories[tid_key]
 		node.update_claimed_visual()
+		_refresh_card_thumbnails(node, tid_key, local_id)
 	if _territory_indicator_manager and _territory_indicator_manager.has_method("refresh_all_indicator_textures"):
 		_territory_indicator_manager.refresh_all_indicator_textures()
+
+func _refresh_card_thumbnails(territory_node: TerritoryNode, territory_id, local_player_id: Variant) -> void:
+	var tid := int(territory_id)
+	# Find or create the thumbnail manager child
+	var thumbs: Node = territory_node.get_node_or_null("TerritoryCardThumbnails")
+	if not thumbs:
+		thumbs = TerritoryCardThumbnailsScript.new()
+		thumbs.name = "TerritoryCardThumbnails"
+		territory_node.add_child(thumbs)
+		thumbs.setup(territory_node, tid, local_player_id)
+	else:
+		thumbs.call("refresh")
 
 # ---------- HELPERS ----------
 

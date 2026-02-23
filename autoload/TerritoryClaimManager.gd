@@ -191,4 +191,5 @@ func launch_territory_minigame(territory_id: int, region_id: int) -> void:
 	if scene_path != "" and ResourceLoader.exists(scene_path):
 		App.pending_return_map_sub_phase = PhaseController.MapSubPhase.RESOURCE_COLLECTION
 		App.returning_from_territory_minigame = true
+		App.pre_roll_minigame_reward()
 		App.go(scene_path)

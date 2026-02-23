@@ -28,6 +28,10 @@ var current_game_phase: GamePhase = GamePhase.CARD_COMMAND
 var minigames_completed_this_phase: int = 0
 const MAX_MINIGAMES_PER_PHASE: int = 2
 
+## Deterministic pre-rolled reward card for current minigame session.
+## Set before launching minigame scene; cleared after awarding or on loss.
+var pending_minigame_reward: Dictionary = {}  # {"path": String, "frame": int}
+
 ## Flag to show phase transition overlay when returning to GameIntro
 var show_phase_transition: bool = false
 var phase_transition_text: String = ""
@@ -69,9 +73,9 @@ var game_victor_id: int = -1
 func enter_card_command_phase() -> void:
 	current_game_phase = GamePhase.CARD_COMMAND
 	minigames_completed_this_phase = 0
-	phase_transition_text = "Claim"
+	phase_transition_text = "Command & Contest"
 	show_phase_transition = true
-	print("[Phase] Entering CARD_COMMAND")
+	print("[HOST Phase] Entering CARD_COMMAND")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_claim_conquer_phase() -> void:
@@ -79,15 +83,15 @@ func enter_claim_conquer_phase() -> void:
 	minigames_completed_this_phase = 0
 	phase_transition_text = "Collect"
 	show_phase_transition = true
-	print("[Phase] Entering CLAIM_CONQUER")
+	print("[HOST Phase] Entering CLAIM_CONQUER")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_card_collection_phase() -> void:
 	current_game_phase = GamePhase.CARD_COLLECTION
 	minigames_completed_this_phase = 0
-	phase_transition_text = "Contest"
+	phase_transition_text = "Collect"
 	show_phase_transition = true
-	print("[Phase] Entering CARD_COLLECTION")
+	print("[HOST Phase] Entering CARD_COLLECTION")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_battle_phase() -> void:
@@ -466,6 +470,27 @@ func add_card_from_minigame_win() -> void:
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
 	player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
 	print("[Cards] Added card from minigame win. Collection size: ", player_card_collection.size())
+
+## Pre-roll (deterministically pick) the reward card before the minigame scene loads.
+## Stores it in pending_minigame_reward so the minigame UI can preview it.
+func pre_roll_minigame_reward() -> void:
+	var card_pool: Array = MIXED_CARD_POOL.duplicate()
+	if card_pool.is_empty():
+		pending_minigame_reward = {}
+		return
+	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
+	pending_minigame_reward = {"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))}
+	print("[Cards] Pre-rolled reward: %s frame %d" % [pending_minigame_reward.get("path", ""), pending_minigame_reward.get("frame", 0)])
+
+## Award the pre-rolled reward card (called on minigame WIN instead of add_card_from_minigame_win).
+func add_card_from_pending_reward() -> void:
+	if pending_minigame_reward.is_empty():
+		# Fallback if no pending reward was rolled
+		add_card_from_minigame_win()
+		return
+	player_card_collection.append(pending_minigame_reward.duplicate())
+	print("[Cards] Awarded pending reward card. Collection size: ", player_card_collection.size())
+	pending_minigame_reward.clear()
 ## ---------- END PLAYER HAND SYSTEM ----------
 
 func reset_lives() -> void:

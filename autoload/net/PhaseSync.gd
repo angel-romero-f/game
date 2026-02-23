@@ -74,6 +74,8 @@ func host_init_card_collection_phase() -> void:
 @rpc("authority", "call_local", "reliable")
 func rpc_set_current_turn(peer_id: int) -> void:
 	PhaseController.set_turn(peer_id)
+	if multiplayer.is_server():
+		print("[HOST PhaseSync] Turn → peer %d" % peer_id)
 
 ## Client requests to end their Card Command turn
 func request_end_card_command_turn() -> void:
@@ -230,6 +232,8 @@ func _check_all_done_and_advance() -> void:
 @rpc("authority", "call_local", "reliable")
 func rpc_set_phase(phase_id: int) -> void:
 	PhaseController.set_phase(phase_id)
+	if multiplayer.is_server():
+		print("[HOST PhaseSync] Phase → %d ('%s')" % [phase_id, App.phase_transition_text])
 
 ## Authority broadcasts done state dictionaries to clients
 @rpc("authority", "call_local", "reliable")
