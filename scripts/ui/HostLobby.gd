@@ -28,11 +28,18 @@ func _ready() -> void:
 		back_button.pressed.connect(_on_back_pressed)
 	
 	# Host the game
-	NetworkManager.host_game()
+	var host_ok := NetworkManager.host_game()
+	if not host_ok:
+		if code_label:
+			code_label.text = "ERROR: Could not start server on port %d.\nAnother instance may already be running,\nor the port is blocked by your firewall." % NetworkManager.PORT
+		if start_button:
+			start_button.disabled = true
+		return
+
 	PlayerDataSync.submit_player_name(App.player_name)
 	
 	if code_label:
-		code_label.text = "Host code: " + NetworkManager.get_host_code()
+		code_label.text = "Share this code with others:\n" + NetworkManager.get_host_code()
 	
 	# Connect to multiplayer signals to update player list
 	if multiplayer.peer_connected.is_connected(_on_peer_connected):

@@ -9,7 +9,7 @@ signal claim_succeeded(territory_id: int, owner_id: int, cards: Array)
 signal claim_failed(territory_id: int, reason: String)
 signal attack_registered(territory_id: int, attacking_cards: Array)
 
-## Region ID -> minigame. Each TerritoryNode's region_id_override picks which minigame runs.
+## Region ID -> minigame. Each territory's region_id picks which minigame runs.
 const REGION_MINIGAMES: Dictionary = {
 	1: { "name": "Bridge", "scene": "res://scenes/BridgeGame.tscn" },
 	6: { "name": "Ice fishing", "scene": "res://scenes/IceFishingGame.tscn" },

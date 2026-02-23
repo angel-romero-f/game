@@ -16,8 +16,8 @@ signal peer_connected_signal(id: int)
 signal peer_disconnected_signal(id: int)
 signal connection_closing
 
-## Host a game server
-func host_game() -> void:
+## Host a game server. Returns true on success, false on failure.
+func host_game() -> bool:
 	if multiplayer.multiplayer_peer:
 		_cleanup_connection()
 
@@ -25,10 +25,12 @@ func host_game() -> void:
 	var err := peer.create_server(PORT, MAX_CLIENTS)
 	if err != OK:
 		push_error("create_server failed: %s" % err)
-		return
+		peer = null
+		return false
 	multiplayer.multiplayer_peer = peer
 	_connect_signals()
 	joined_game.emit()
+	return true
 
 ## Join a game using code string like:
 ## - IPv4: "192.168.1.12" or "192.168.1.12:9999"
@@ -129,7 +131,7 @@ func get_host_code() -> String:
 			_debug_log("  Skipping %s (IANA reserved - not routable)" % address)
 			continue
 
-		if address.begins_with("192.168.64.") or address.begins_with("192.168.56.") or address.begins_with("172.17."):
+		if address.begins_with("192.168.64.") or address.begins_with("192.168.56."):
 			_debug_log("  Skipping %s (VM bridge - not reachable externally)" % address)
 			continue
 
@@ -142,8 +144,8 @@ func get_host_code() -> String:
 		elif address.begins_with("172."):
 			var second_octet := parts[1].to_int()
 			if second_octet >= 16 and second_octet <= 31:
-				ipv4_candidates.append({"ip": address, "priority": 2, "reason": "172.x private"})
-				_debug_log("  IPv4 Candidate: %s (priority 2 - 172.x private)" % address)
+				ipv4_candidates.append({"ip": address, "priority": 3, "reason": "172.x private (may be VM/container)"})
+				_debug_log("  IPv4 Candidate: %s (priority 3 - 172.x private, may be VM/container)" % address)
 		else:
 			ipv4_candidates.append({"ip": address, "priority": 3, "reason": "other IPv4"})
 			_debug_log("  IPv4 Candidate: %s (priority 3 - other network IP)" % address)
