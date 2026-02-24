@@ -15,6 +15,10 @@ var is_multiplayer: bool = false
 const MAX_LIVES: int = 3
 var current_lives: int = MAX_LIVES
 
+## Persistent minigame timer (survives scene reload on retry).
+## Set to -1.0 when not active; minigame scripts use this instead of resetting.
+var minigame_time_remaining: float = -1.0
+
 ## ---------- PHASE SYSTEM ----------
 ## Game phases: Card Command -> Claim & Conquer -> Card Collection -> loop
 enum GamePhase { CARD_COMMAND, CLAIM_CONQUER, CARD_COLLECTION }
@@ -511,6 +515,8 @@ func pre_roll_minigame_reward() -> void:
 		return
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
 	pending_minigame_reward = {"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))}
+	# Reset the persistent timer so the new minigame gets a fresh 30s
+	minigame_time_remaining = -1.0
 	print("[Cards] Pre-rolled reward: %s frame %d" % [pending_minigame_reward.get("path", ""), pending_minigame_reward.get("frame", 0)])
 
 ## Award the pre-rolled reward card (called on minigame WIN instead of add_card_from_minigame_win).

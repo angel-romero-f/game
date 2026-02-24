@@ -10,6 +10,7 @@ signal collect_resources_overlay_requested
 signal next_round_requested
 signal territory_claimed_from_net(territory_id: int, owner_id: int, cards: Array)
 signal enter_battle_scene(territory_id: String)
+signal minigame_selection_started
 
 enum OverlayState { NONE, PHASE_TRANSITION, WAITING, D20_ROLLING }
 var _overlay_state: OverlayState = OverlayState.NONE
@@ -146,8 +147,8 @@ func show_phase_transition_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		apply_phase_ui()
 		return
-	if current_phase_label:
-		current_phase_label.visible = false
+	# Keep current_phase_label visible during transition so it stays at top
+	_update_current_phase_label()
 	phase_label.text = App.phase_transition_text
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
@@ -171,7 +172,6 @@ func apply_phase_ui() -> void:
 	if not intro_complete or is_phase_overlay_animating:
 		return
 	map_sub_phase = PhaseController.map_sub_phase
-	_update_current_phase_label()
 	match App.current_game_phase:
 		App.GamePhase.CARD_COMMAND:
 			_apply_card_command_ui()
@@ -182,6 +182,8 @@ func apply_phase_ui() -> void:
 	settings_button.visible = true
 	if App.player_card_collection.size() > 0:
 		card_icon_button.visible = true
+	# Always update and show the phase label
+	_update_current_phase_label()
 	phase_ui_applied.emit()
 
 func _hide_battle_selection_ui() -> void:
@@ -203,8 +205,9 @@ func _apply_card_command_ui() -> void:
 		var my_id := multiplayer.get_unique_id()
 		if PhaseController.current_turn_peer_id != my_id:
 			skip_to_battle_button.visible = false
+			# No gray overlay — just show the turn banner
 			set_overlay_state(OverlayState.NONE)
-			is_waiting_for_others = true
+			is_waiting_for_others = false
 			print("[CLIENT PhaseSystemUI] Command turn: waiting for %s (peer %d)" % [_get_player_name_for_peer(PhaseController.current_turn_peer_id), PhaseController.current_turn_peer_id])
 		else:
 			set_overlay_state(OverlayState.NONE)
@@ -242,8 +245,9 @@ func _apply_claiming_ui() -> void:
 		var my_id := multiplayer.get_unique_id()
 		if PhaseController.current_turn_peer_id != my_id:
 			skip_to_battle_button.visible = false
+			# No gray overlay — just show the turn banner
 			set_overlay_state(OverlayState.NONE)
-			is_waiting_for_others = true
+			is_waiting_for_others = false
 			print("[CLIENT PhaseSystemUI] Claiming turn: waiting for %s (peer %d)" % [_get_player_name_for_peer(PhaseController.current_turn_peer_id), PhaseController.current_turn_peer_id])
 		else:
 			skip_to_battle_button.visible = true
@@ -349,6 +353,7 @@ func _apply_card_collection_ui() -> void:
 		skip_to_battle_button.disabled = false
 		set_overlay_state(OverlayState.NONE)
 		is_waiting_for_others = false
+		minigame_selection_started.emit()
 
 # ---------- BUTTON ANIMATION ----------
 

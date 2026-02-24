@@ -24,6 +24,13 @@ var intro_complete: bool = false
 var is_paused: bool = false
 var settings_button: Button
 
+# Minigame selection timer
+var _selection_timer: float = 0.0
+var _selection_timer_active: bool = false
+const SELECTION_TIME_LIMIT: float = 15.0
+var _selection_timer_label: Label = null
+var _minigame_buttons_ref: Array = []  # [river, bridge, icefishing]
+
 
 func _ready() -> void:
 	# ---------- Resolve scene nodes ----------
@@ -96,12 +103,32 @@ func _ready() -> void:
 	turn_banner_label.visible = false
 	turn_banner_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	turn_banner_label.add_theme_font_override("font", load("res://fonts/m5x7.ttf"))
-	turn_banner_label.add_theme_font_size_override("font_size", 22)
+	turn_banner_label.add_theme_font_size_override("font_size", 32)
 	turn_banner_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
+	turn_banner_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	turn_banner_label.add_theme_constant_override("outline_size", 4)
 	turn_banner_label.set_anchors_preset(Control.PRESET_TOP_WIDE)
-	turn_banner_label.offset_top = 36.0
-	turn_banner_label.offset_bottom = 64.0
+	turn_banner_label.offset_top = 62.0
+	turn_banner_label.offset_bottom = 100.0
 	add_child(turn_banner_label)
+	
+	# ---------- Minigame selection timer label (top-right) ----------
+	_selection_timer_label = Label.new()
+	_selection_timer_label.name = "SelectionTimerLabel"
+	_selection_timer_label.visible = false
+	_selection_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	_selection_timer_label.add_theme_font_override("font", load("res://fonts/m5x7.ttf"))
+	_selection_timer_label.add_theme_font_size_override("font_size", 28)
+	_selection_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2, 1.0))
+	_selection_timer_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	_selection_timer_label.add_theme_constant_override("outline_size", 4)
+	_selection_timer_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
+	_selection_timer_label.offset_left = -200.0
+	_selection_timer_label.offset_top = 58.0
+	_selection_timer_label.offset_right = -8.0
+	_selection_timer_label.offset_bottom = 94.0
+	_selection_timer_label.text = "Pick a game: 15"
+	add_child(_selection_timer_label)
 
 	# ---------- Instantiate components ----------
 
@@ -203,6 +230,7 @@ func _ready() -> void:
 	phase_ui.next_round_requested.connect(territory_ui.transition_to_next_round)
 	phase_ui.territory_claimed_from_net.connect(_on_net_territory_claimed)
 	phase_ui.enter_battle_scene.connect(_on_enter_battle_scene)
+	phase_ui.minigame_selection_started.connect(start_selection_timer)
 
 	# TerritorySystemUI → PhaseSystemUI
 	territory_ui.phase_ui_update_requested.connect(phase_ui.apply_phase_ui)
@@ -218,10 +246,11 @@ func _ready() -> void:
 
 	# ---------- Button connections ----------
 
-	minigame_button.pressed.connect(flow_ui.on_minigame_pressed)
-	bridge_minigame_button.pressed.connect(flow_ui.on_bridge_minigame_pressed)
-	ice_fishing_button.pressed.connect(flow_ui.on_ice_fishing_pressed)
+	minigame_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_minigame_pressed))
+	bridge_minigame_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_bridge_minigame_pressed))
+	ice_fishing_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_ice_fishing_pressed))
 	play_minigames_button.pressed.connect(flow_ui.on_play_minigames_pressed)
+	_minigame_buttons_ref = [minigame_button, bridge_minigame_button, ice_fishing_button]
 	skip_to_battle_button.pressed.connect(phase_ui.on_skip_to_battle_pressed)
 	battle_button.pressed.connect(flow_ui.on_battle_button_pressed)
 	if finish_claiming_button:
@@ -275,6 +304,18 @@ func _ready() -> void:
 func _process(delta: float) -> void:
 	if intro_ui and not intro_complete:
 		intro_ui.process_frame(delta)
+	# Minigame selection countdown
+	if _selection_timer_active:
+		_selection_timer -= delta
+		var secs := int(ceil(_selection_timer))
+		if _selection_timer_label:
+			_selection_timer_label.text = "Pick a game: %d" % secs
+			if _selection_timer <= 10.0:
+				_selection_timer_label.add_theme_color_override("font_color", Color(1.0, 0.3, 0.2, 1.0))
+			else:
+				_selection_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2, 1.0))
+		if _selection_timer <= 0.0:
+			_on_selection_timeout()
 
 
 # ---------- INTRO COMPLETION ----------
@@ -377,6 +418,37 @@ func _on_victory_main_menu_pressed() -> void:
 	get_tree().paused = false
 	App.go("res://scenes/ui/MainMenu.tscn")
 
+
+# ---------- MINIGAME SELECTION TIMER ----------
+
+func start_selection_timer() -> void:
+	_selection_timer = SELECTION_TIME_LIMIT
+	_selection_timer_active = true
+	if _selection_timer_label:
+		_selection_timer_label.visible = true
+		_selection_timer_label.text = "Pick a game: %d" % int(SELECTION_TIME_LIMIT)
+		_selection_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2, 1.0))
+
+func stop_selection_timer() -> void:
+	_selection_timer_active = false
+	if _selection_timer_label:
+		_selection_timer_label.visible = false
+
+func _on_minigame_button_pressed(callback: Callable) -> void:
+	stop_selection_timer()
+	callback.call()
+
+func _on_selection_timeout() -> void:
+	stop_selection_timer()
+	# Forfeit this minigame chance — player took too long
+	print("[GameIntro] Selection timed out — forfeiting this minigame chance")
+	App.minigame_time_remaining = -1.0
+	App.pending_minigame_reward.clear()
+	App.on_minigame_completed()
+	# If the player can still play another game, refresh the UI (which will restart the selection timer)
+	if phase_ui:
+		phase_ui.apply_phase_ui()
+		phase_ui.animate_phase_buttons()
 
 # ---------- HELPERS ----------
 

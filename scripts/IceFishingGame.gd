@@ -21,15 +21,20 @@ func _ready():
 		if player.has_signal("player_won"):
 			player.player_won.connect(_on_player_won)
 	
-	# Start countdown timer
-	_minigame_timer = MINIGAME_TIME_LIMIT
+	# Start countdown timer — persist across retries
+	if App.minigame_time_remaining > 0.0:
+		_minigame_timer = App.minigame_time_remaining
+	else:
+		_minigame_timer = MINIGAME_TIME_LIMIT
+		App.minigame_time_remaining = _minigame_timer
 	_timer_active = true
-	print("[Minigame:IceFishing] Timer started (%.0fs)" % MINIGAME_TIME_LIMIT)
+	print("[Minigame:IceFishing] Timer started (%.1fs)" % _minigame_timer)
 
 func _process(delta: float) -> void:
 	# Countdown timer
 	if _timer_active and not game_over:
 		_minigame_timer -= delta
+		App.minigame_time_remaining = _minigame_timer
 		var ui := get_node_or_null("UI")
 		if ui and ui.has_method("update_timer_display"):
 			ui.update_timer_display(_minigame_timer)
@@ -69,15 +74,18 @@ func handle_continue():
 	_has_returned = true
 	
 	if player_won:
+		App.minigame_time_remaining = -1.0
 		App.add_card_from_pending_reward()
 		App.on_minigame_completed()
 		_return_to_map()
 	elif App.get_lives() <= 0:
+		App.minigame_time_remaining = -1.0
 		App.reset_lives()
 		App.pending_minigame_reward.clear()
 		App.on_minigame_completed()
 		_return_to_map()
 	else:
+		App.minigame_time_remaining = _minigame_timer
 		get_tree().reload_current_scene()
 
 func _return_to_map():

@@ -234,14 +234,14 @@ func _show_reward_in_win_panel() -> void:
 		return
 	var card_tex := TextureRect.new()
 	card_tex.texture = sf.get_frame_texture("default", frame)
-	card_tex.custom_minimum_size = Vector2(60, 84)
+	card_tex.custom_minimum_size = Vector2(90, 126)
 	card_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	card_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	card_tex.set_anchors_preset(Control.PRESET_BOTTOM_WIDE)
-	card_tex.offset_left = 70
-	card_tex.offset_top = 55
-	card_tex.offset_right = -70
-	card_tex.offset_bottom = 145
+	card_tex.set_anchors_preset(Control.PRESET_CENTER)
+	card_tex.offset_left = -55
+	card_tex.offset_top = -80
+	card_tex.offset_right = 55
+	card_tex.offset_bottom = 46
 	win_panel.add_child(card_tex)
 	if win_label:
 		win_label.text = "You won this card!\nPress R to return to map"
