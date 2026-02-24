@@ -42,6 +42,9 @@ var pending_return_map_sub_phase: int = -1
 var returning_from_territory_minigame: bool = false
 ## True when we just finished the territory battle sequence (Finish Claiming); GameIntro shows collect resources.
 var returning_from_territory_battles: bool = false
+## True only on the attacker's machine (set in PhaseController.finish_claiming_turn).
+## Prevents the defender from setting returning_from_territory_battles and sending a stale end-turn RPC.
+var is_territory_battle_attacker: bool = false
 
 ## Turn tracking (host-authoritative in multiplayer)
 var current_turn_player_id: int = -1
@@ -167,7 +170,8 @@ func on_battle_completed() -> void:
 	if just_finished_territory_battle and pending_territory_battle_ids.size() == 0:
 		print("[DEBUG] All territory battles completed. Returning to GameIntro with flag set.")
 		pending_territory_battle_ids.clear()
-		returning_from_territory_battles = true
+		if is_territory_battle_attacker:
+			returning_from_territory_battles = true
 		
 		# If Multiplayer, we need to notify the server we are done with battles/claiming
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
@@ -182,10 +186,10 @@ func on_battle_completed() -> void:
 				# Next player's turn
 				current_turn_player_id = turn_order[current_turn_index].get("id", -1)
 				print("[DEBUG] Next player ID: ", current_turn_player_id)
-				go("res://scenes/ui/GameIntro.tscn")
+				go("res://scenes/ui/game_intro.tscn")
 				return
 
-		go("res://scenes/ui/GameIntro.tscn")
+		go("res://scenes/ui/game_intro.tscn")
 		return
 	
 	# Check if more battles in queue
@@ -204,7 +208,7 @@ func on_battle_completed() -> void:
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
 			BattleSync.notify_battle_finished()
 		
-		go("res://scenes/ui/GameIntro.tscn")
+		go("res://scenes/ui/game_intro.tscn")
 
 func _load_next_queued_battle() -> void:
 	## Load the next battle from the queue
@@ -291,6 +295,7 @@ func reset_phase_state() -> void:
 	battle_queue.clear()
 	current_battle_queue_index = -1
 	current_battle_metadata.clear()
+	is_territory_battle_attacker = false
 ## ---------- END PHASE SYSTEM ----------
 
 ## ---------- PLAYER HAND SYSTEM ----------
@@ -326,7 +331,6 @@ const ORC_CARDS: Array = [
 	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
 ]
 
-## Mixed pool for races without specific cards (Orc, Fairy)
 const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
@@ -345,6 +349,33 @@ const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
+]
+
+const FIRE_CARD_POOL: Array = [
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/infernal_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_fire_cards.pxo", "frame_index": 0},
+]
+
+const WATER_CARD_POOL: Array = [
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_water_card.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
+]
+
+const AIR_CARD_POOL: Array = [
+	{"sprite_frames": "res://assets/infernal_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_air_card.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
 ]
 

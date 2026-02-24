@@ -154,7 +154,7 @@ const PORT := 9999
 const MAX_CLIENTS := 4
 
 # ---------- CONNECTION METHODS (delegated to NetworkManager) ----------
-func host_game() -> void: NetworkManager.host_game()
+func host_game() -> bool: return NetworkManager.host_game()
 func join_game(code: String) -> void: NetworkManager.join_game(code)
 func get_host_code() -> String: return NetworkManager.get_host_code()
 func disconnect_from_game() -> void: NetworkManager.disconnect_from_game()
@@ -204,4 +204,4 @@ func start_race_select() -> void:
 @rpc("authority", "call_local", "reliable")
 func start_game() -> void:
 	App.setup_multiplayer_game()
-	App.go("res://scenes/ui/GameIntro.tscn")
+	App.go("res://scenes/ui/game_intro.tscn")

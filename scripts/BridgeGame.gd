@@ -98,4 +98,4 @@ func handle_continue():
 
 func _return_to_map():
 	App.play_main_music()
-	App.go("res://scenes/ui/GameIntro.tscn")
+	App.go("res://scenes/ui/game_intro.tscn")

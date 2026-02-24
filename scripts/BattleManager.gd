@@ -6,7 +6,7 @@ extends Node
 ## In multiplayer: syncs card placement, waits for all players to press Start, flips when all ready.
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card.tscn")
-const MAIN_MENU_PATH := "res://scenes/ui/GameIntro.tscn"
+const MAIN_MENU_PATH := "res://scenes/ui/game_intro.tscn"
 
 enum State { SETUP, WAITING_FOR_PLAYER, WAITING_FOR_ALL_READY, FLIPPING, RESOLVED }
 var state: State = State.SETUP

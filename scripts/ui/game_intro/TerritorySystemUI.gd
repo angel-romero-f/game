@@ -98,12 +98,12 @@ func get_territory_indicator_manager() -> Node:
 	return _territory_indicator_manager
 
 func _setup_territory_indicators() -> void:
-	if not territory_manager or not territories_container or territory_manager.territories.is_empty():
+	if not territory_manager or territory_manager.territories.is_empty():
 		return
 	var manager := TerritoryIndicatorManagerScript.new()
 	manager.name = "TerritoryIndicatorManager"
 	parent_control.add_child(manager)
-	manager.create_indicators(territory_manager, territories_container)
+	manager.initialize(territory_manager)
 	_territory_indicator_manager = manager
 
 # ---------- TERRITORY INITIALIZATION ----------
@@ -174,8 +174,8 @@ func update_territory_interaction() -> void:
 		return
 	var interactable := are_territories_interactable()
 	for tid_key in territory_manager.territories:
-		var node: TerritoryNode = territory_manager.territories[tid_key]
-		node.mouse_filter = Control.MOUSE_FILTER_STOP if interactable else Control.MOUSE_FILTER_IGNORE
+		var indicator: TerritoryIndicator = territory_manager.territories[tid_key]
+		indicator.mouse_filter = Control.MOUSE_FILTER_STOP if interactable else Control.MOUSE_FILTER_IGNORE
 
 # ---------- TERRITORY EVENTS ----------
 
@@ -312,9 +312,8 @@ func refresh_territory_claimed_visuals() -> void:
 		return
 	var local_id: Variant = _get_local_player_id()
 	for tid_key in territory_manager.territories:
-		var node: TerritoryNode = territory_manager.territories[tid_key]
-		node.update_claimed_visual()
-		_refresh_card_thumbnails(node, tid_key, local_id)
+		var indicator: TerritoryIndicator = territory_manager.territories[tid_key]
+		indicator.update_claimed_visual()
 	if _territory_indicator_manager and _territory_indicator_manager.has_method("refresh_all_indicator_textures"):
 		_territory_indicator_manager.refresh_all_indicator_textures()
 

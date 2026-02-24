@@ -49,23 +49,26 @@ func _on_join_pressed() -> void:
 	
 	NetworkManager.join_game(code)
 	
-	# Wait for the connection to actually be established (ENet is asynchronous)
 	var mp := multiplayer.multiplayer_peer
 	if not mp:
 		if status_label:
-			status_label.text = "Failed to join %s" % code
+			status_label.text = "Could not connect to %s.\nMake sure the host is running and the code is their IP address (e.g. 192.168.1.5), not a player ID number." % code
 		return
-	var timeout_sec := 5.0
-	var step := 0.1
+	var timeout_sec := 8.0
+	var step := 0.2
 	var waited := 0.0
 	while waited < timeout_sec:
 		await get_tree().create_timer(step).timeout
 		waited += step
 		if mp.get_connection_status() == ENetMultiplayerPeer.CONNECTION_CONNECTED:
 			break
+		if mp.get_connection_status() == ENetMultiplayerPeer.CONNECTION_DISCONNECTED:
+			break
+		if status_label:
+			status_label.text = "Connecting to %s... (%.0fs)" % [code, waited]
 	if mp.get_connection_status() != ENetMultiplayerPeer.CONNECTION_CONNECTED:
 		if status_label:
-			status_label.text = "Failed to join %s" % code
+			status_label.text = "Could not reach %s after %.0fs.\nCheck that:\n- The host game is running\n- Both devices are on the same Wi-Fi\n- Windows Firewall allows Godot/the game" % [code, waited]
 		return
 	PlayerDataSync.submit_player_name(App.player_name)
 	App.go("res://scenes/ui/WaitingRoom.tscn")

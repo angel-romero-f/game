@@ -11,6 +11,11 @@ signal minigame_requested(territory_id: int, region_id: int)
 const UI_FONT := preload("res://fonts/m5x7.ttf")
 const CLAIM_PANEL_FULL_OFFSET := Vector4(-220.0, -180.0, 220.0, 180.0)
 const CLAIM_PANEL_PLAY_ONLY_OFFSET := Vector4(-160.0, -55.0, 160.0, 55.0)
+const CLAIMED_SLOTS_INDICATOR_PATH := "res://assets/claimed_slots_indicator.pxo"
+const CARD_SIZE_CLAIM := Vector2(180, 270)  # ~3x original 60x90
+const RACE_FRAME_BASE: Dictionary = { "elf": 1, "orc": 4, "fairy": 7, "infernal": 10 }
+const HIGHLIGHT_COLOR := Color(0.4, 0.85, 0.4, 0.5)
+const DARKEN_MODULATE := 0.45
 
 # External references (set by initialize())
 var territory_manager: TerritoryManager
@@ -30,9 +35,9 @@ var claim_panel_play_only_mode: bool = false
 var claim_slot_cards: Array = [null, null, null]
 var claim_attacking_slot_cards: Array = [null, null, null]
 var claim_hand_cards: Array = []
-var claim_selected_hand_index: int = -1
+var claim_highlighted_indices: Array = []  # up to 3 hand indices for claim/attack selection (replaces slot placement)
 var claim_panel_attack_mode: bool = false
-var original_claim_slot_cards: Array = [null, null, null] # snapshot of cards when panel opened for updates
+var original_claim_slot_cards: Array = [null, null, null]
 
 # Message panel
 var message_panel: PanelContainer
@@ -134,12 +139,12 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 	offset_bottom = CLAIM_PANEL_FULL_OFFSET.w
 	_deselect_current()
 	current_claim_territory_id = territory_id
-	claim_selected_hand_index = -1
+	claim_highlighted_indices.clear()
 	var title_label: Label = get_node_or_null("MarginContainer/VBoxContainer/TitleLabel") as Label
 	if title_label:
 		title_label.text = "Claim Territory"
 	if claim_slots_container:
-		claim_slots_container.visible = true
+		claim_slots_container.visible = false
 	var hand_label: Control = get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
 	if hand_label:
 		hand_label.visible = true
@@ -177,6 +182,10 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 		var is_owner: bool = owner_id != null and int(local_id) == int(owner_id)
 		if claim_attack_button:
 			claim_attack_button.visible = not is_owner and (map_sub_phase == PhaseController.MapSubPhase.CLAIMING)
+		if claim_slots_container:
+			claim_slots_container.visible = true
+		if title_label:
+			title_label.text = "Attack Territory"
 	else:
 		claim_attacking_slot_cards = [null, null, null]
 		if is_claimed:
@@ -211,8 +220,9 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 		if claim_attack_button:
 			claim_attack_button.visible = false
 	if hand_label and hand_label is Label:
-		(hand_label as Label).text = "Place attacking cards to start battle" if claim_panel_attack_mode else "Place 1-3 cards (click card, then click a slot)"
-	_populate_claim_slots()
+		(hand_label as Label).text = "Click 1-3 cards then press attack" if claim_panel_attack_mode else "Click 1-3 cards then press claim"
+	if claim_panel_attack_mode:
+		_populate_claim_slots()
 	_populate_claim_hand()
 	_update_claim_button_state()
 	_update_attack_button_state()
@@ -246,9 +256,9 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 			claim_attack_button.visible = false
 	z_index = 100
 	visible = true
-	var node: TerritoryNode = territory_manager.get_territory_node(territory_id) if territory_manager else null
-	if node:
-		node.show_selection_glow()
+	var indicator: TerritoryIndicator = territory_manager.get_territory_node(territory_id) if territory_manager else null
+	if indicator:
+		indicator.show_selection_glow()
 
 func open_play_only_panel(territory_id: int) -> void:
 	_deselect_current()
@@ -289,9 +299,9 @@ func open_play_only_panel(territory_id: int) -> void:
 		claim_attack_button.visible = false
 	z_index = 100
 	visible = true
-	var play_node: TerritoryNode = territory_manager.get_territory_node(territory_id) if territory_manager else null
-	if play_node:
-		play_node.show_selection_glow()
+	var play_indicator: TerritoryIndicator = territory_manager.get_territory_node(territory_id) if territory_manager else null
+	if play_indicator:
+		play_indicator.show_selection_glow()
 
 func close_panel() -> void:
 	_deselect_current()
@@ -350,9 +360,9 @@ func show_already_claimed_message(claimer_name: String) -> void:
 
 func _deselect_current() -> void:
 	if territory_manager and current_claim_territory_id >= 0:
-		var node: TerritoryNode = territory_manager.get_territory_node(current_claim_territory_id)
-		if node:
-			node.deselect()
+		var indicator: TerritoryIndicator = territory_manager.get_territory_node(current_claim_territory_id)
+		if indicator:
+			indicator.deselect()
 
 func _on_cancel_clicked() -> void:
 	close_panel()
@@ -363,31 +373,39 @@ func _on_claim_clicked() -> void:
 		close_panel()
 		panel_closed.emit()
 		return
-	var has_any_card: bool = false
-	for slot_idx in range(3):
-		if claim_slot_cards[slot_idx] != null:
-			has_any_card = true
-			break
-	if not has_any_card:
+	if claim_highlighted_indices.is_empty():
 		return
+	var sorted_idx: Array = claim_highlighted_indices.duplicate()
+	sorted_idx.sort()
+	var cards_out: Array = [null, null, null]
+	for i in range(mini(3, sorted_idx.size())):
+		var hi: int = sorted_idx[i]
+		if hi >= 0 and hi < claim_hand_cards.size():
+			cards_out[i] = claim_hand_cards[hi]
 	if _is_territory_claimed_by_local(current_claim_territory_id):
-		update_submitted.emit(current_claim_territory_id, original_claim_slot_cards, claim_slot_cards)
+		update_submitted.emit(current_claim_territory_id, original_claim_slot_cards, cards_out)
 	else:
-		claim_submitted.emit(current_claim_territory_id, claim_slot_cards)
+		claim_submitted.emit(current_claim_territory_id, cards_out)
+	close_panel()
+	panel_closed.emit()
 
 func _on_attack_clicked() -> void:
 	if current_claim_territory_id < 0:
 		close_panel()
 		panel_closed.emit()
 		return
-	var has_any_card: bool = false
-	for slot_idx in range(3):
-		if claim_attacking_slot_cards[slot_idx] != null:
-			has_any_card = true
-			break
-	if not has_any_card:
+	if claim_highlighted_indices.is_empty():
 		return
-	attack_submitted.emit(current_claim_territory_id, claim_attacking_slot_cards)
+	var sorted_idx: Array = claim_highlighted_indices.duplicate()
+	sorted_idx.sort()
+	var cards_out: Array = [null, null, null]
+	for i in range(mini(3, sorted_idx.size())):
+		var hi: int = sorted_idx[i]
+		if hi >= 0 and hi < claim_hand_cards.size():
+			cards_out[i] = claim_hand_cards[hi]
+	attack_submitted.emit(current_claim_territory_id, cards_out)
+	close_panel()
+	panel_closed.emit()
 
 func _on_play_minigame_pressed() -> void:
 	if current_claim_territory_id < 0 or not territory_manager or not territory_manager.territory_data.has(current_claim_territory_id):
@@ -405,103 +423,63 @@ func _on_message_close_pressed() -> void:
 	tween.tween_callback(func(): message_panel.visible = false)
 
 func _populate_claim_slots() -> void:
+	# Only used in attack mode: one full-width bar below the title (claimed_slots_indicator).
 	for child in claim_slots_container.get_children():
 		child.queue_free()
-	var slot_size := Vector2(70, 100)
-	var local_id: Variant = _get_local_player_id()
-	var owner_id: Variant = _territory_claim_state.call("get_owner_id", current_claim_territory_id) if _territory_claim_state else null
-	var is_owner: bool = owner_id != null and int(local_id) == int(owner_id)
-
-	if claim_panel_attack_mode:
-		var vbox := VBoxContainer.new()
-		vbox.add_theme_constant_override("separation", 8)
-		var def_label := Label.new()
-		def_label.text = "Defending"
-		def_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(def_label)
-		var def_row := HBoxContainer.new()
-		def_row.add_theme_constant_override("separation", 10)
-		for i in range(3):
-			var panel := Panel.new()
-			panel.custom_minimum_size = slot_size
-			panel.set_meta("slot_type", "defending")
-			panel.set_meta("slot_index", i)
-			var tex := TextureRect.new()
-			tex.set_anchors_preset(Control.PRESET_FULL_RECT)
-			tex.offset_left = 4; tex.offset_top = 4; tex.offset_right = -4; tex.offset_bottom = -4
-			tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
-			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			if claim_slot_cards[i] != null and claim_slot_cards[i] is Dictionary:
-				if is_owner:
-					var path: String = claim_slot_cards[i].get("path", "")
-					var frame: int = int(claim_slot_cards[i].get("frame", 0))
-					if path != "" and ResourceLoader.exists(path):
-						var sf: SpriteFrames = load(path) as SpriteFrames
-						if sf and sf.has_animation("default"):
-							tex.texture = sf.get_frame_texture("default", frame)
-				else:
-					var back := _get_card_back_texture()
-					if back:
-						tex.texture = back
-			panel.add_child(tex)
-			if is_owner:
-				panel.gui_input.connect(_on_slot_gui_input_attack.bind("defending", i))
-			panel.mouse_filter = Control.MOUSE_FILTER_STOP
-			def_row.add_child(panel)
-		vbox.add_child(def_row)
-		var atk_label := Label.new()
-		atk_label.text = "Attacking"
-		atk_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		vbox.add_child(atk_label)
-		var atk_row := HBoxContainer.new()
-		atk_row.add_theme_constant_override("separation", 10)
-		for i in range(3):
-			var panel := Panel.new()
-			panel.custom_minimum_size = slot_size
-			panel.set_meta("slot_type", "attacking")
-			panel.set_meta("slot_index", i)
-			var tex := TextureRect.new()
-			tex.set_anchors_preset(Control.PRESET_FULL_RECT)
-			tex.offset_left = 4; tex.offset_top = 4; tex.offset_right = -4; tex.offset_bottom = -4
-			tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
-			tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-			tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-			if claim_attacking_slot_cards[i] != null and claim_attacking_slot_cards[i] is Dictionary:
-				var path: String = claim_attacking_slot_cards[i].get("path", "")
-				var frame: int = int(claim_attacking_slot_cards[i].get("frame", 0))
-				if path != "" and ResourceLoader.exists(path):
-					var sf: SpriteFrames = load(path) as SpriteFrames
-					if sf and sf.has_animation("default"):
-						tex.texture = sf.get_frame_texture("default", frame)
-			panel.add_child(tex)
-			if not is_owner:
-				panel.gui_input.connect(_on_slot_gui_input_attack.bind("attacking", i))
-			panel.mouse_filter = Control.MOUSE_FILTER_STOP
-			atk_row.add_child(panel)
-		vbox.add_child(atk_row)
-		claim_slots_container.add_child(vbox)
+	if not claim_panel_attack_mode:
 		return
+	var bar := TextureRect.new()
+	bar.name = "ClaimSlotsBar"
+	bar.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	bar.custom_minimum_size = Vector2(0, 48)
+	bar.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	bar.stretch_mode = TextureRect.STRETCH_SCALE
+	bar.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	var frame_idx := _get_claimed_slots_indicator_frame(true)
+	_set_claimed_slots_texture(bar, frame_idx)
+	claim_slots_container.add_child(bar)
 
-	for i in range(3):
-		var panel := Panel.new()
-		panel.custom_minimum_size = slot_size
-		panel.set_meta("slot_index", i)
-		var tex := TextureRect.new()
-		tex.set_anchors_preset(Control.PRESET_FULL_RECT)
-		tex.offset_left = 4; tex.offset_top = 4; tex.offset_right = -4; tex.offset_bottom = -4
-		tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
-		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		if claim_slot_cards[i] != null and claim_slot_cards[i] is Dictionary:
-			var path: String = claim_slot_cards[i].get("path", "")
-			var frame: int = int(claim_slot_cards[i].get("frame", 0))
-			if path != "" and ResourceLoader.exists(path):
-				var sf: SpriteFrames = load(path) as SpriteFrames
-				if sf and sf.has_animation("default"):
-					tex.texture = sf.get_frame_texture("default", frame)
-		panel.add_child(tex)
-		panel.gui_input.connect(_on_slot_gui_input.bind(i))
-		claim_slots_container.add_child(panel)
+func _get_claimed_slots_indicator_frame(is_defending: bool) -> int:
+	var tcs: Node = _territory_claim_state
+	if not tcs or not tcs.has_method("is_claimed") or not tcs.call("is_claimed", current_claim_territory_id):
+		return 0
+	var owner_id: Variant = tcs.call("get_owner_id", current_claim_territory_id)
+	if owner_id == null:
+		return 0
+	var race := ""
+	for p in App.game_players:
+		if p.get("id", -999) == owner_id:
+			race = str(p.get("race", "")).to_lower().strip_edges()
+			break
+	if race.is_empty() or not RACE_FRAME_BASE.has(race):
+		return 0
+	var card_count := 0
+	if is_defending:
+		if BattleStateManager:
+			var slots: Dictionary = BattleStateManager.get_defending_slots(str(current_claim_territory_id))
+			card_count = slots.size()
+		if card_count <= 0 and tcs.has_method("get_cards"):
+			var cards: Array = tcs.call("get_cards", current_claim_territory_id)
+			for c in cards:
+				if c != null:
+					card_count += 1
+	else:
+		if BattleStateManager:
+			var slots: Dictionary = BattleStateManager.get_attacking_slots(str(current_claim_territory_id))
+			card_count = slots.size()
+	if card_count <= 0:
+		return 0
+	return RACE_FRAME_BASE[race] + clampi(card_count, 1, 3) - 1
+
+func _set_claimed_slots_texture(tex: TextureRect, frame_idx: int) -> void:
+	if not ResourceLoader.exists(CLAIMED_SLOTS_INDICATOR_PATH):
+		return
+	var sf: SpriteFrames = load(CLAIMED_SLOTS_INDICATOR_PATH) as SpriteFrames
+	if not sf or not sf.has_animation("default"):
+		return
+	var count := sf.get_frame_count("default")
+	frame_idx = clampi(frame_idx, 0, maxi(0, count - 1))
+	tex.texture = sf.get_frame_texture("default", frame_idx)
 
 func _is_territory_claimed_by_local(territory_id: int) -> bool:
 	if not _territory_claim_state or not _territory_claim_state.has_method("is_claimed"):
@@ -512,143 +490,86 @@ func _is_territory_claimed_by_local(territory_id: int) -> bool:
 	var local_id: Variant = _get_local_player_id()
 	return owner_id != null and local_id != null and int(owner_id) == int(local_id)
 
-func _on_slot_gui_input(event: InputEvent, slot_index: int) -> void:
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and mb.double_click:
-			if claim_slot_cards[slot_index] != null and claim_slot_cards[slot_index] is Dictionary:
-				var c: Dictionary = claim_slot_cards[slot_index]
-				var path: String = c.get("path", "")
-				var frame: int = int(c.get("frame", 0))
-				if not path.is_empty() and CardEnlargeOverlay:
-					CardEnlargeOverlay.show_enlarged_card(path, frame)
-				return
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
-			if claim_selected_hand_index >= 0 and claim_selected_hand_index < claim_hand_cards.size():
-				var card: Dictionary = claim_hand_cards[claim_selected_hand_index]
-				claim_slot_cards[slot_index] = card
-				claim_hand_cards.remove_at(claim_selected_hand_index)
-				claim_selected_hand_index = -1
-				_populate_claim_slots()
-				_populate_claim_hand()
-				_update_claim_button_state()
-			elif claim_slot_cards[slot_index] != null:
-				if _is_territory_claimed_by_local(current_claim_territory_id):
-					var card_count := 0
-					for idx in range(3):
-						if claim_slot_cards[idx] != null:
-							card_count += 1
-					if card_count <= 1:
-						return
-				claim_hand_cards.append(claim_slot_cards[slot_index])
-				claim_slot_cards[slot_index] = null
-				_populate_claim_slots()
-				_populate_claim_hand()
-				_update_claim_button_state()
-
-func _on_slot_gui_input_attack(event: InputEvent, slot_type: String, slot_index: int) -> void:
-	if event is InputEventMouseButton:
-		var mb := event as InputEventMouseButton
-		if not mb.pressed or mb.button_index != MOUSE_BUTTON_LEFT:
-			return
-		var arr: Array = claim_slot_cards if slot_type == "defending" else claim_attacking_slot_cards
-		if mb.double_click and slot_index >= 0 and slot_index < arr.size() and arr[slot_index] != null and arr[slot_index] is Dictionary:
-			var c: Dictionary = arr[slot_index]
-			var path: String = c.get("path", "")
-			var frame: int = int(c.get("frame", 0))
-			if not path.is_empty() and CardEnlargeOverlay:
-				CardEnlargeOverlay.show_enlarged_card(path, frame)
-			return
-		if claim_selected_hand_index >= 0 and claim_selected_hand_index < claim_hand_cards.size():
-			var card: Dictionary = claim_hand_cards[claim_selected_hand_index]
-			if slot_type == "attacking":
-				claim_attacking_slot_cards[slot_index] = card
-			elif slot_type == "defending":
-				claim_slot_cards[slot_index] = card
-			claim_hand_cards.remove_at(claim_selected_hand_index)
-			claim_selected_hand_index = -1
-		elif arr[slot_index] != null:
-			if slot_type == "attacking":
-				claim_hand_cards.append(claim_attacking_slot_cards[slot_index])
-				claim_attacking_slot_cards[slot_index] = null
-			elif slot_type == "defending":
-				claim_hand_cards.append(claim_slot_cards[slot_index])
-				claim_slot_cards[slot_index] = null
-		if slot_type == "defending":
-			var defending_dict: Dictionary = {}
-			for idx in range(3):
-				if claim_slot_cards[idx] != null and claim_slot_cards[idx] is Dictionary:
-					defending_dict[idx] = claim_slot_cards[idx]
-			if BattleStateManager:
-				BattleStateManager.set_defending_slots(str(current_claim_territory_id), defending_dict)
-			if _territory_claim_state and _territory_claim_state.has_method("set_claim"):
-				var owner_id: Variant = _territory_claim_state.call("get_owner_id", current_claim_territory_id)
-				if owner_id != null:
-					_territory_claim_state.set_claim(current_claim_territory_id, int(owner_id), claim_slot_cards)
-		_populate_claim_slots()
-		_populate_claim_hand()
-		_update_attack_button_state()
-
 func _update_claim_button_state() -> void:
 	if not claim_button:
 		return
-	var has_any: bool = false
-	for slot_idx in range(3):
-		if claim_slot_cards[slot_idx] != null:
-			has_any = true
-			break
-	claim_button.disabled = not has_any
+	var n := claim_highlighted_indices.size()
+	claim_button.disabled = (n < 1 or n > 3)
 
 func _update_attack_button_state() -> void:
 	if not claim_attack_button:
 		return
-	var has_any: bool = false
-	for slot_idx in range(3):
-		if claim_attacking_slot_cards[slot_idx] != null:
-			has_any = true
-			break
-	claim_attack_button.disabled = not has_any
+	var n := claim_highlighted_indices.size()
+	claim_attack_button.disabled = (n < 1 or n > 3)
 
 func _populate_claim_hand() -> void:
 	for child in claim_hand_container.get_children():
 		child.queue_free()
-	var card_size := Vector2(60, 90)
+	var all_highlighted := claim_highlighted_indices.size() >= 3
 	for i in range(claim_hand_cards.size()):
 		var card_data: Dictionary = claim_hand_cards[i]
-		var btn := Button.new()
-		btn.custom_minimum_size = card_size
-		btn.flat = true
-		btn.set_meta("hand_index", i)
+		var panel := PanelContainer.new()
+		panel.custom_minimum_size = CARD_SIZE_CLAIM
+		panel.set_meta("hand_index", i)
+		var is_highlighted: bool = i in claim_highlighted_indices
+		var should_darken: bool = all_highlighted and not is_highlighted
+		if is_highlighted:
+			var style := StyleBoxFlat.new()
+			style.bg_color = HIGHLIGHT_COLOR
+			style.set_border_width_all(4)
+			style.border_color = Color(0.2, 0.9, 0.2)
+			style.set_corner_radius_all(6)
+			panel.add_theme_stylebox_override("panel", style)
+		if should_darken:
+			panel.modulate.a = DARKEN_MODULATE
+		panel.mouse_filter = Control.MOUSE_FILTER_STOP
 		var tex := TextureRect.new()
 		tex.set_anchors_preset(Control.PRESET_FULL_RECT)
-		tex.offset_left = 4; tex.offset_top = 4; tex.offset_right = -4; tex.offset_bottom = -4
+		tex.offset_left = 4
+		tex.offset_top = 4
+		tex.offset_right = -4
+		tex.offset_bottom = -4
 		tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
 		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		var path: String = card_data.get("path", "")
 		var frame: int = int(card_data.get("frame", 0))
 		if path != "" and ResourceLoader.exists(path):
 			var sf: SpriteFrames = load(path) as SpriteFrames
 			if sf and sf.has_animation("default"):
 				tex.texture = sf.get_frame_texture("default", frame)
-		btn.add_child(tex)
-		btn.pressed.connect(_on_hand_card_clicked.bind(i))
-		btn.gui_input.connect(_on_hand_card_gui_input.bind(i))
-		claim_hand_container.add_child(btn)
+		panel.add_child(tex)
+		panel.gui_input.connect(_on_hand_card_gui_input.bind(i))
+		claim_hand_container.add_child(panel)
 
 func _on_hand_card_gui_input(event: InputEvent, hand_index: int) -> void:
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
-		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT and mb.double_click:
+		if mb.button_index != MOUSE_BUTTON_LEFT or not mb.pressed:
+			return
+		if mb.double_click:
 			if hand_index >= 0 and hand_index < claim_hand_cards.size():
 				var c: Dictionary = claim_hand_cards[hand_index]
 				var path: String = c.get("path", "")
 				var frame: int = int(c.get("frame", 0))
 				if not path.is_empty() and CardEnlargeOverlay:
 					CardEnlargeOverlay.show_enlarged_card(path, frame)
-				get_viewport().set_input_as_handled()
+			get_viewport().set_input_as_handled()
+			return
+		# Single click: toggle highlight
+		var idx_in_list := claim_highlighted_indices.find(hand_index)
+		if idx_in_list >= 0:
+			claim_highlighted_indices.remove_at(idx_in_list)
+		elif claim_highlighted_indices.size() < 3:
+			claim_highlighted_indices.append(hand_index)
+		_populate_claim_hand()
+		_update_claim_button_state()
+		_update_attack_button_state()
+		get_viewport().set_input_as_handled()
 
 func _on_hand_card_clicked(hand_index: int) -> void:
-	claim_selected_hand_index = hand_index
+	# Toggle handled in _on_hand_card_gui_input
+	pass
 
 func _get_card_back_texture() -> Texture2D:
 	var path := "res://assets/cardback.pxo"

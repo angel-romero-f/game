@@ -17,6 +17,9 @@ var adjacent_nodes: Array[TerritoryNode] = []
 signal territory_selected(territory_id: int)
 signal card_placed(territory_id: int, player_id: int)
 
+const INDICATOR_TEXTURE_PATH := "res://assets/territory_indicator.pxo"
+const INDICATOR_PREVIEW_SIZE := Vector2(96, 96)
+
 ## Visual representation (optional - can be set in editor)
 @export var territory_name: String = ""
 
@@ -68,6 +71,7 @@ var claimed_display_color: Color = Color(0, 0, 0, 0)
 
 ## Store original polygon points before adjustment
 var original_polygon_points: PackedVector2Array = []
+var _editor_preview_texture: Texture2D = null
 
 
 func _ready() -> void:
@@ -227,6 +231,7 @@ func _draw_editor_preview() -> void:
 			var p := points_to_draw[i]
 			draw_circle(p, 4.0, Color(1.0, 1.0, 0.0, 0.9))
 			draw_arc(p, 4.0, 0, TAU, 8, Color(0, 0, 0, 0.8), 1.0)
+		_draw_editor_indicator_preview(_calculate_center(points_to_draw))
 	else:
 		# No polygon yet: draw the control's rect so you can position/size it
 		var w: float = 200.0
@@ -238,7 +243,20 @@ func _draw_editor_preview() -> void:
 		var rect := Rect2(0, 0, w, h)
 		draw_rect(rect, Color(0.2, 0.8, 1.0, 0.25), false, 2.0)
 		draw_rect(rect, Color(0.0, 0.6, 1.0, 0.8), false, 2.0)
+		_draw_editor_indicator_preview(Vector2(w * 0.5, h * 0.5))
 		# Hint text would need ThemeDB - skip for now
+
+
+func _draw_editor_indicator_preview(center: Vector2) -> void:
+	if _editor_preview_texture == null and ResourceLoader.exists(INDICATOR_TEXTURE_PATH):
+		var res := load(INDICATOR_TEXTURE_PATH)
+		if res is SpriteFrames:
+			var frames := res as SpriteFrames
+			if frames.has_animation("default") and frames.get_frame_count("default") > 0:
+				_editor_preview_texture = frames.get_frame_texture("default", 0)
+	if _editor_preview_texture:
+		var rect := Rect2(center - INDICATOR_PREVIEW_SIZE / 2.0, INDICATOR_PREVIEW_SIZE)
+		draw_texture_rect(_editor_preview_texture, rect, false, Color(1, 1, 1, 0.85))
 
 
 func _notification(what: int) -> void:

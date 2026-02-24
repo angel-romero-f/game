@@ -82,6 +82,8 @@ func finish_claiming_turn() -> void:
 		App.pending_territory_battle_ids = BattleStateManager.get_territory_ids_with_battle()
 		print("[DEBUG] Finish Claiming. Pending Battle IDs: ", App.pending_territory_battle_ids)
 
+	App.is_territory_battle_attacker = true
+
 	if App.pending_territory_battle_ids.size() > 0:
 		has_battles = true
 		print("[DEBUG] Battles found! calling App.on_battle_completed() to start first battle.")
