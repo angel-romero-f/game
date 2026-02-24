@@ -327,7 +327,6 @@ const ORC_CARDS: Array = [
 	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
 ]
 
-## Mixed pool for races without specific cards (Orc, Fairy)
 const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
@@ -346,6 +345,33 @@ const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
+]
+
+const FIRE_CARD_POOL: Array = [
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/infernal_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_fire_cards.pxo", "frame_index": 0},
+]
+
+const WATER_CARD_POOL: Array = [
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_water_card.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
+]
+
+const AIR_CARD_POOL: Array = [
+	{"sprite_frames": "res://assets/infernal_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_air_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/fairy_air_card.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
 ]
 
