@@ -20,6 +20,7 @@ var _territory_nodes: Dictionary = {}
 signal territories_initialized
 signal territory_selected(territory_id: int)
 signal card_placed(territory_id: int, player_id: int)
+signal defending_cards_preview_requested(territory_id: int)
 
 
 func _enter_tree() -> void:
@@ -73,6 +74,8 @@ func initialize_from_editor_nodes(parent_node: Node) -> void:
 			indicator.territory_selected.connect(_on_territory_selected)
 		if not indicator.card_placed.is_connected(_on_card_placed):
 			indicator.card_placed.connect(_on_card_placed)
+		if not indicator.defending_cards_preview_requested.is_connected(_on_defending_preview_requested):
+			indicator.defending_cards_preview_requested.connect(_on_defending_preview_requested)
 
 		# Hide the TerritoryNode — it's just a position marker
 		node.visible = false
@@ -123,6 +126,7 @@ func initialize_territories(territory_configs: Array[Dictionary], parent_node: N
 
 		indicator.territory_selected.connect(_on_territory_selected)
 		indicator.card_placed.connect(_on_card_placed)
+		indicator.defending_cards_preview_requested.connect(_on_defending_preview_requested)
 
 	territories_initialized.emit()
 	print("[TerritoryManager] Initialized %d territories from config" % territories.size())
@@ -155,3 +159,7 @@ func _on_territory_selected(territory_id: int) -> void:
 
 func _on_card_placed(territory_id: int, player_id: int) -> void:
 	card_placed.emit(territory_id, player_id)
+
+
+func _on_defending_preview_requested(territory_id: int) -> void:
+	defending_cards_preview_requested.emit(territory_id)
