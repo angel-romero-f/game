@@ -7,6 +7,7 @@ extends Control
 
 signal territory_selected(territory_id: int)
 signal card_placed(territory_id: int, player_id: int)
+signal defending_cards_preview_requested(territory_id: int)
 
 const INDICATOR_TEXTURE_PATH := "res://assets/territory_indicator.pxo"
 const INDICATOR_SIZE := Vector2(128, 128)
@@ -27,6 +28,8 @@ var is_selected: bool = false
 var _texture_rect: TextureRect = null
 var _sprite_frames: SpriteFrames = null
 var _glow_alpha: float = 0.0
+var _hover_timer: Timer = null
+const HOVER_PREVIEW_DELAY_SEC := 1.0
 
 
 func _ready() -> void:
@@ -36,6 +39,9 @@ func _ready() -> void:
 
 	_load_sprite_frames()
 	_setup_texture_rect()
+	_setup_hover_timer()
+	mouse_entered.connect(_on_mouse_entered)
+	mouse_exited.connect(_on_mouse_exited)
 
 	if territory_id != -1 and not territory_data:
 		territory_data = Territory.new(territory_id, region_id if region_id != -1 else 1, null, [])
@@ -58,6 +64,15 @@ func _setup_texture_rect() -> void:
 	_texture_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	_texture_rect.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(_texture_rect)
+
+
+func _setup_hover_timer() -> void:
+	_hover_timer = Timer.new()
+	_hover_timer.name = "HoverPreviewTimer"
+	_hover_timer.one_shot = true
+	_hover_timer.wait_time = HOVER_PREVIEW_DELAY_SEC
+	_hover_timer.timeout.connect(_on_hover_timer_timeout)
+	add_child(_hover_timer)
 
 
 func _draw() -> void:
@@ -117,6 +132,42 @@ func _count_defending_cards(tcs: Node) -> int:
 				count += 1
 		return count
 	return 0
+
+
+# ---------- HOVER PREVIEW ----------
+
+func _on_mouse_entered() -> void:
+	if _hover_timer:
+		_hover_timer.start()
+
+
+func _on_mouse_exited() -> void:
+	if _hover_timer and _hover_timer.time_left > 0:
+		_hover_timer.stop()
+
+
+func _on_hover_timer_timeout() -> void:
+	# Don't open hover preview during resource collection / minigame phase.
+	if PhaseController and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+		return
+	if not _is_claimed_by_local_player():
+		return
+	defending_cards_preview_requested.emit(territory_id)
+
+
+func _is_claimed_by_local_player() -> bool:
+	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+	if not tcs or not tcs.has_method("is_claimed") or not tcs.call("is_claimed", territory_id):
+		return false
+	var owner_id: Variant = tcs.call("get_owner_id", territory_id)
+	if owner_id == null:
+		return false
+	var local_id: Variant = null
+	for p in App.game_players:
+		if p.get("is_local", false):
+			local_id = p.get("id", -999)
+			break
+	return local_id != null and int(owner_id) == int(local_id)
 
 
 # ---------- INPUT ----------

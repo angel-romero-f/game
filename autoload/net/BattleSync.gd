@@ -30,6 +30,10 @@ var active_battle_side: String = ""
 # Reports from participants that they finished the battle
 var battle_finished_reports: Dictionary = {}
 
+# Territory battle: participant ids (set when start_territory_battle runs)
+var territory_battle_attacker_id: int = -1
+var territory_battle_defender_id: int = -1
+
 signal battle_decider_changed(peer_id: int)
 signal battle_choices_updated(snapshot: Dictionary)
 signal battle_started(p1_id: int, p2_id: int, side: String)
@@ -126,16 +130,23 @@ func set_battle_ready() -> void:
 
 func _server_set_battle_ready(peer_id: int) -> void:
 	## Battle starts only when all players in the card battle scene have pressed Ready (not when Attack is pressed in GameIntro).
+	## For territory battles only the attacker and defender are in the scene; for 3+ players we must not wait for the third.
 	battle_ready_peers[peer_id] = true
-	var all_peers: Array = []
-	all_peers.append(multiplayer.get_unique_id())
-	for pid in multiplayer.get_peers():
-		all_peers.append(pid)
-	var all_ready := true
-	for pid in all_peers:
-		if not battle_ready_peers.get(pid, false):
-			all_ready = false
-			break
+	var all_ready := false
+	if territory_battle_attacker_id >= 0 and territory_battle_defender_id >= 0:
+		# Territory battle: only the two participants need to be ready (third player is still on map)
+		all_ready = battle_ready_peers.get(territory_battle_attacker_id, false) and battle_ready_peers.get(territory_battle_defender_id, false)
+	else:
+		# Non-territory (e.g. queue battle): all peers must be ready
+		var all_peers: Array = []
+		all_peers.append(multiplayer.get_unique_id())
+		for pid in multiplayer.get_peers():
+			all_peers.append(pid)
+		all_ready = true
+		for pid in all_peers:
+			if not battle_ready_peers.get(pid, false):
+				all_ready = false
+				break
 	if all_ready:
 		start_battle.rpc()
 
@@ -162,6 +173,7 @@ func notify_battle_left() -> void:
 				if not path.is_empty():
 					BattleStateManager.set_local_slot(int(slot_idx), path, frame, territory_id)
 
+
 # ---------- TERRITORY BATTLE INITIATION ----------
 
 ## Request to start a territory battle (Attacker -> Server)
@@ -181,20 +193,22 @@ func server_handle_start_territory_battle(territory_id: int) -> void:
 	_server_handle_start_territory_battle(id, territory_id)
 
 func _server_handle_start_territory_battle(attacker_id: int, territory_id: int) -> void:
-	if not App.territory_manager:
-		print("[BattleSync] request_start_territory_battle: App.territory_manager is missing!")
+	# Use TerritoryClaimState (persists across scenes); App.territory_manager is null when we're in card battle scene.
+	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+	if not tcs or not tcs.has_method("is_claimed"):
+		print("[BattleSync] request_start_territory_battle: TerritoryClaimState not available!")
+		return
+	if not tcs.call("is_claimed", territory_id):
+		print("[BattleSync] request_start_territory_battle: Territory ", territory_id, " is not claimed (no defender).")
 		return
 
-	var t_data = App.territory_manager.get_territory_data(territory_id)
-	if not t_data:
-		print("[BattleSync] request_start_territory_battle: Invalid territory ID ", territory_id)
-		return
-
+	var owner_val: Variant = tcs.call("get_owner_id", territory_id)
 	var defender_id: int = -1
-	if t_data.owner_player_id != null:
-		defender_id = int(t_data.owner_player_id)
+	if owner_val != null:
+		defender_id = int(owner_val)
 	else:
 		print("[BattleSync] request_start_territory_battle: Territory ", territory_id, " has no owner!")
+		return
 
 	print("[BattleSync] Starting Territory Battle: ID=", territory_id, " Attacker=", attacker_id, " Defender=", defender_id)
 	start_territory_battle.rpc(territory_id, attacker_id, defender_id)
@@ -202,6 +216,9 @@ func _server_handle_start_territory_battle(attacker_id: int, territory_id: int) 
 @rpc("authority", "call_local", "reliable")
 func start_territory_battle(territory_id: int, attacker_id: int, defender_id: int) -> void:
 	print("[BattleSync] Received start_territory_battle: ", territory_id)
+	territory_battle_attacker_id = attacker_id
+	territory_battle_defender_id = defender_id
+	battle_ready_peers.clear()
 	App.enter_territory_battle(territory_id, attacker_id, defender_id)
 
 # ---------- BATTLE DECISION SYSTEM ----------

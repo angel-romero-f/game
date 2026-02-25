@@ -91,11 +91,20 @@ func initialize_territory_system() -> void:
 		claim_ui.attack_submitted.connect(_on_attack_submitted)
 		claim_ui.minigame_requested.connect(_on_claim_minigame_requested)
 
+	if territory_manager and not territory_manager.defending_cards_preview_requested.is_connected(_on_defending_preview_requested):
+		territory_manager.defending_cards_preview_requested.connect(_on_defending_preview_requested)
+
 func get_territory_manager() -> TerritoryManager:
 	return territory_manager
 
 func get_territory_indicator_manager() -> Node:
 	return _territory_indicator_manager
+
+
+func _on_defending_preview_requested(territory_id: int) -> void:
+	if claim_ui and claim_ui.has_method("show_defending_preview"):
+		claim_ui.show_defending_preview(territory_id)
+
 
 func _setup_territory_indicators() -> void:
 	if not territory_manager or territory_manager.territories.is_empty():
@@ -182,13 +191,19 @@ func update_territory_interaction() -> void:
 func _on_territory_selected(territory_id: int) -> void:
 	if not are_territories_interactable() or not claim_ui:
 		return
+	var is_claimed: bool = _territory_claim_state != null and _territory_claim_state.call("is_claimed", territory_id)
+	var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
+	var local_id: Variant = _get_local_player_id()
+	# If this territory is already owned by the local player and we're not in resource collection,
+	# open the defending-cards preview immediately instead of the full claim panel.
+	if map_sub_phase != PhaseController.MapSubPhase.RESOURCE_COLLECTION and is_claimed and owner_id == local_id:
+		if claim_ui.has_method("show_defending_preview"):
+			claim_ui.show_defending_preview(territory_id)
+		return
 	if map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
 		if App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
 			claim_ui.show_unclaimed_territory_message()
 			return
-		var is_claimed: bool = _territory_claim_state != null and _territory_claim_state.call("is_claimed", territory_id)
-		var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
-		var local_id: Variant = _get_local_player_id()
 		if not is_claimed or owner_id != local_id:
 			claim_ui.show_unclaimed_territory_message()
 			return

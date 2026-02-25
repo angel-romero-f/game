@@ -18,10 +18,9 @@ var state: State = State.SETUP
 @export var player_slots: Array[StringName] = [&"CardSlotPL", &"CardSlotPM", &"CardSlotPR"]
 @export var opponent_slots: Array[StringName] = [&"CardSlotOR", &"CardSlotOM", &"CardSlotOL"]
 
-## Deck node that defines the opponent pool and the back image.
-@export var deck_o_name: StringName = &"DeckO"
-## Player deck (hidden when restoring cards).
-@export var deck_p_name: StringName = &"DeckP"
+## Card back used for face-down opponent cards (DeckP/DeckO nodes were removed).
+const CARD_BACK_FRAMES: SpriteFrames = preload("res://assets/cardback.pxo")
+const CARD_BACK_FRAME_INDEX := 0
 
 ## UI node paths (created in scene).
 @export var start_button_path: NodePath = NodePath("BattleUI/UI/StartBattleButton")
@@ -40,8 +39,6 @@ var state: State = State.SETUP
 
 var _player_slot_nodes: Array = []
 var _opponent_slot_nodes: Array = []
-var _deck_o: Node = null
-var _deck_p: Node = null
 
 var _start_button: Button
 var _result_label: Label
@@ -91,8 +88,7 @@ func _ready() -> void:
 	_update_start_button_visibility()
 	state = State.WAITING_FOR_PLAYER
 
-	# Update deck visibility and respace hand cards after everything is set up
-	call_deferred("_update_deck_visibility")
+	# Respace hand cards after everything is set up
 	call_deferred("_respace_hand_cards")
 
 
@@ -109,12 +105,13 @@ func _cache_nodes() -> void:
 	for slot_name in opponent_slots:
 		_opponent_slot_nodes.append(root.get_node_or_null(NodePath(String(slot_name))) if root else null)
 
-	_deck_o = root.get_node_or_null(NodePath(String(deck_o_name))) if root else null
-	_deck_p = root.get_node_or_null(NodePath(String(deck_p_name))) if root else null
-
 	_start_button = (root.get_node_or_null(start_button_path) if root else null) as Button
 	_result_label = (root.get_node_or_null(result_label_path) if root else null) as Label
 	_continue_label = (root.get_node_or_null(continue_label_path) if root else null) as Label
+	if not _result_label:
+		push_warning("[BattleManager] ResultLabel not found at path: %s. Result text will not be displayed." % String(result_label_path))
+	if not _continue_label:
+		push_warning("[BattleManager] ContinueLabel not found at path: %s. Continue hint will not be displayed." % String(continue_label_path))
 	_leave_button = (root.get_node_or_null(leave_button_path) if root else null) as Button
 	_debug_add_card_button = (root.get_node_or_null(debug_add_card_button_path) if root else null) as Button
 
@@ -154,26 +151,25 @@ func _restore_and_sync_placed_cards() -> void:
 		print("[BattleManager] Opponent slots (their side) data: ", _debug_slots_summary(opponent_slots_data))
 
 		# 1. Populate opponent slots (face-down) from opponent_slots_data
-		if _deck_o:
-			var back_frames: SpriteFrames = _deck_o.get("deck_sprite_frames")
-			var back_frame_index: int = int(_deck_o.get("frame_index"))
-			for slot_idx in range(_opponent_slot_nodes.size()):
-				var slot = _opponent_slot_nodes[slot_idx]
-				if not slot: continue
-				var card_data = opponent_slots_data.get(int(slot_idx))
-				if card_data == null: card_data = opponent_slots_data.get(str(slot_idx))
-				if card_data:
-					var card := CARD_SCENE.instantiate()
-					get_tree().current_scene.add_child(card)
-					var area := card.get_node_or_null("Card_Collision") as Area2D
-					if area: area.input_pickable = false
-					card.card_sprite_frames = back_frames
-					card.frame_index = back_frame_index
-					_opponent_cards_by_slot[slot] = card
-					if slot.has_method("force_snap_card"):
-						slot.force_snap_card(card)
-					card.set_meta("territory_face_path", card_data.get("path", ""))
-					card.set_meta("territory_face_frame", card_data.get("frame"))
+		var back_frames: SpriteFrames = CARD_BACK_FRAMES
+		var back_frame_index: int = CARD_BACK_FRAME_INDEX
+		for slot_idx in range(_opponent_slot_nodes.size()):
+			var slot = _opponent_slot_nodes[slot_idx]
+			if not slot: continue
+			var card_data = opponent_slots_data.get(int(slot_idx))
+			if card_data == null: card_data = opponent_slots_data.get(str(slot_idx))
+			if card_data:
+				var card := CARD_SCENE.instantiate()
+				get_tree().current_scene.add_child(card)
+				var area := card.get_node_or_null("Card_Collision") as Area2D
+				if area: area.input_pickable = false
+				card.card_sprite_frames = back_frames
+				card.frame_index = back_frame_index
+				_opponent_cards_by_slot[slot] = card
+				if slot.has_method("force_snap_card"):
+					slot.force_snap_card(card)
+				card.set_meta("territory_face_path", card_data.get("path", ""))
+				card.set_meta("territory_face_frame", card_data.get("frame"))
 
 		# 2. Populate player slots from player_slots_data (our cards for this battle)
 		var placed: Dictionary = player_slots_data
@@ -313,10 +309,8 @@ func _update_opponent_cards_from_net() -> void:
 	if other_peer_id < 0:
 		return
 	var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
-	if not _deck_o:
-		return
-	var back_frames: SpriteFrames = _deck_o.get("deck_sprite_frames")
-	var back_frame_index: int = int(_deck_o.get("frame_index"))
+	var back_frames: SpriteFrames = CARD_BACK_FRAMES
+	var back_frame_index: int = CARD_BACK_FRAME_INDEX
 	for slot_idx in range(_opponent_slot_nodes.size()):
 		var slot = _opponent_slot_nodes[slot_idx]
 		if not slot:
@@ -427,10 +421,6 @@ func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
 		call_deferred("_respace_hand_cards")
 
 	# Reset deck spawned flag so it can be used again
-	if _deck_p and _deck_p.use_player_collection:
-		if _deck_p.has_method("reset_spawned_flag"):
-			_deck_p.reset_spawned_flag()
-
 	_update_start_button_visibility()
 
 
@@ -457,12 +447,8 @@ func _place_opponent_backs() -> void:
 	if _is_multiplayer:
 		_update_opponent_cards_from_net()
 		return
-	if not _deck_o:
-		push_warning("BattleManager: DeckO not found; cannot place opponent backs.")
-		return
-
-	var back_frames: SpriteFrames = _deck_o.get("deck_sprite_frames")
-	var back_frame_index: int = int(_deck_o.get("frame_index"))
+	var back_frames: SpriteFrames = CARD_BACK_FRAMES
+	var back_frame_index: int = CARD_BACK_FRAME_INDEX
 
 	for slot in _opponent_slot_nodes:
 		if not slot:
@@ -522,9 +508,6 @@ func _on_start_battle_pressed() -> void:
 
 
 func _flip_opponent_cards_from_pool() -> void:
-	if not _deck_o:
-		return
-
 	var chosen: Dictionary = {} # slot -> {frames, frame_index}
 
 	if _is_multiplayer:
@@ -551,8 +534,6 @@ func _flip_opponent_cards_from_pool() -> void:
 					if frames:
 						chosen[slot] = {"frames": frames, "frame_index": fidx}
 
-						chosen[slot] = {"frames": frames, "frame_index": fidx}
-
 	# Single-player territory battle override:
 	# If cards were already placed by _restore_and_sync_placed_cards (stored in _opponent_cards_by_slot)
 	# and have metadata, we use that instead of random pool.
@@ -568,23 +549,10 @@ func _flip_opponent_cards_from_pool() -> void:
 					if frames:
 						chosen[slot] = {"frames": frames, "frame_index": fidx}
 
-	# Single-player (and multiplayer fallback if no data) uses the DeckO pool.
+	# If we have no known opponent cards to reveal, keep backs as-is.
 	if chosen.is_empty():
-		var pool: Array = _deck_o.get("card_sprite_pool")
-		var frame_indices: Array = _deck_o.get("card_frame_indices")
-		if pool == null or pool.size() == 0:
-			# In multiplayer with no other_cards, keep backs and do nothing.
-			if _is_multiplayer:
-				return
-			push_warning("BattleManager: DeckO card_sprite_pool is empty; opponent will remain unknown.")
-			return
-		for slot in _opponent_slot_nodes:
-			var idx := randi() % pool.size()
-			var frames := pool[idx] as SpriteFrames
-			var fidx := 0
-			if frame_indices != null and frame_indices.size() > idx:
-				fidx = int(frame_indices[idx])
-			chosen[slot] = {"frames": frames, "frame_index": fidx}
+		# No known opponent cards to reveal; keep backs as-is.
+		return
 
 	# Animate: backs go up offscreen, swap, then faces come down into slots.
 	var tween := create_tween()
@@ -628,13 +596,22 @@ func _flip_opponent_cards_from_pool() -> void:
 func _resolve_battle() -> void:
 	## Battle must only be resolved after both players press Ready in the card battle scene.
 	## Do not resolve when Attack is pressed in GameIntro; only resolve when we've transitioned to FLIPPING via Ready.
-	if state != State.FLIPPING:
+	## Allow WAITING_FOR_ALL_READY so defender still gets correct result if they reach this before state is FLIPPING (timing/race).
+	if state != State.FLIPPING and state != State.WAITING_FOR_ALL_READY:
+		if _result_label:
+			_result_label.text = "Tie (0)"
+		print("[BattleManager] _resolve_battle: early return (state=%s), set result to Tie (0)" % state)
 		return
+	if state == State.WAITING_FOR_ALL_READY:
+		state = State.FLIPPING
 	# Pairing is fixed by array ordering:
 	# PL vs OR, PM vs OM, PR vs OL
 	# Determine per-pair results using power values with attribute modifiers, then best-of-3 overall.
 	if attribute_config == null or not attribute_config.has_method("get_attribute"):
 		push_warning("BattleManager: attribute_config not set; battle will tie.")
+		if _result_label:
+			_result_label.text = "Tie (0)"
+		print("[BattleManager] _resolve_battle: early return (no attribute_config), set result to Tie (0)")
 		return
 
 	var player_wins := 0
@@ -738,6 +715,9 @@ func _resolve_battle() -> void:
 
 	if _result_label:
 		_result_label.text = result_text
+		print("[BattleManager] _resolve_battle: result_text set to \"%s\"" % result_text)
+	else:
+		print("[BattleManager] _resolve_battle: _result_label is null, result_text would be \"%s\"" % result_text)
 
 
 func _get_card_attribute(card: Node) -> String:
@@ -752,10 +732,29 @@ func _get_card_attribute(card: Node) -> String:
 
 
 func _show_result() -> void:
+	print("[BattleManager] _show_result() called. _result_label valid=%s _continue_label valid=%s" % [_result_label != null, _continue_label != null])
 	if _result_label:
+		if _result_label.text.is_empty():
+			_result_label.text = "Tie (0)"
+			print("[BattleManager] _show_result: result text was empty, set fallback \"Tie (0)\"")
 		_result_label.visible = true
+		if _result_label.text:
+			print("[BattleManager] _show_result: ResultLabel.visible=true, text=\"%s\"" % _result_label.text)
+		else:
+			print("[BattleManager] _show_result: ResultLabel.visible=true but text is empty")
 	if _continue_label:
 		_continue_label.visible = true
+	# Ensure visibility is applied after any other updates this frame
+	call_deferred("_apply_result_visibility")
+
+
+func _apply_result_visibility() -> void:
+	if _result_label and not _result_label.visible:
+		_result_label.visible = true
+		print("[BattleManager] _apply_result_visibility: re-applied ResultLabel.visible=true")
+	if _continue_label and not _continue_label.visible:
+		_continue_label.visible = true
+		print("[BattleManager] _apply_result_visibility: re-applied ContinueLabel.visible=true")
 
 
 func _get_battle_result() -> String:
@@ -879,7 +878,8 @@ func _on_leave_pressed() -> void:
 
 	App.switch_to_main_music()
 	if state == State.RESOLVED:
-		# on_battle_completed handles scene transition (next battle or GameIntro)
+		# on_battle_completed pops next battle and request_start_territory_battle(next_id) if queue non-empty.
+		# The RPC start_territory_battle pulls the other player into the new battle from wherever they are.
 		App.on_battle_completed()
 	else:
 		# Unresolved - return to GameIntro directly
@@ -942,34 +942,8 @@ func _persist_local_placed_cards() -> void:
 
 
 func _update_deck_visibility() -> void:
-	## Update deck visibility: show only if no cards in hand (hand not visible)
-	if not _deck_p or not _deck_p.use_player_collection:
-		return
-
-	# Check if there are any cards in hand (not snapped to slots)
-	var root := get_tree().current_scene
-	var card_manager := root.get_node_or_null("CardManager")
-	var has_hand_cards := false
-
-	if card_manager:
-		# Check if there are any cards with spawn positions that aren't snapped
-		for card in card_manager.card_spawn_positions:
-			if is_instance_valid(card) and not card_manager.snapped_cards.has(card):
-				has_hand_cards = true
-				break
-
-	# Show deck only if no hand cards AND there are available cards to spawn
-	if not has_hand_cards:
-		if _deck_p.has_method("has_available_cards") and _deck_p.has_available_cards():
-			if _deck_p.has_method("_show_and_enable"):
-				_deck_p._show_and_enable()
-		else:
-			if _deck_p.has_method("_hide_and_disable"):
-				_deck_p._hide_and_disable()
-	else:
-		# Hand is visible, hide deck
-		if _deck_p.has_method("_hide_and_disable"):
-			_deck_p._hide_and_disable()
+	# Deck nodes were removed from the card battle scene.
+	pass
 
 
 func _respace_hand_cards() -> void:
@@ -987,9 +961,6 @@ func _respace_hand_cards() -> void:
 		if not card_manager.snapped_cards.has(card):
 			if is_instance_valid(card):
 				hand_cards.append(card)
-
-	# Update deck visibility based on hand state
-	_update_deck_visibility()
 
 	if hand_cards.is_empty():
 		return
@@ -1060,4 +1031,5 @@ func _unhandled_input(event: InputEvent) -> void:
 					_reported_battle_finished = true
 			BattleSync.clear_battle_state()
 			App.switch_to_main_music()
+			# Proceed immediately; start_territory_battle RPC will pull the other player into the next battle.
 			App.on_battle_completed()

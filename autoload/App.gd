@@ -312,6 +312,9 @@ const ELF_CARDS: Array = [
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
 	{"sprite_frames": "res://assets/elf_air_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 3},
 ]
 
 const INFERNAL_CARDS: Array = [
@@ -331,6 +334,9 @@ const FAIRY_CARDS: Array = [
 
 const ORC_CARDS: Array = [
 	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 3},
 	{"sprite_frames": "res://assets/orc_fire_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
 ]
@@ -342,6 +348,9 @@ const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/elf_fire_cards.pxo", "frame_index": 3},
 	{"sprite_frames": "res://assets/elf_air_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 3},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 1},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
@@ -352,6 +361,9 @@ const MIXED_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/fairy_water_card.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/fairy_fire_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 3},
 	{"sprite_frames": "res://assets/orc_fire_cards.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 0},
 ]
@@ -372,8 +384,14 @@ const WATER_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 2},
 	{"sprite_frames": "res://assets/infernal_water_cards.pxo", "frame_index": 3},
 	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/elf_water_cards.pxo", "frame_index": 3},
 	{"sprite_frames": "res://assets/fairy_water_card.pxo", "frame_index": 0},
 	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 0},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 1},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 2},
+	{"sprite_frames": "res://assets/orc_water_cards.pxo", "frame_index": 3},
 ]
 
 const AIR_CARD_POOL: Array = [

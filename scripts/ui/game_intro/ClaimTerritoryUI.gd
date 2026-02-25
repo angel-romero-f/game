@@ -24,6 +24,7 @@ var _territory_claim_state: Node
 # Node references (resolved from children)
 var claim_slots_container: HBoxContainer
 var claim_hand_container: HBoxContainer
+var claim_buttons_container: Control  # ButtonsContainer (hide in defending preview)
 var claim_cancel_button: Button
 var claim_button: Button
 var claim_attack_button: Button
@@ -38,6 +39,7 @@ var claim_hand_cards: Array = []
 var claim_highlighted_indices: Array = []  # up to 3 hand indices for claim/attack selection (replaces slot placement)
 var claim_panel_attack_mode: bool = false
 var original_claim_slot_cards: Array = [null, null, null]
+var claim_preview_mode: bool = false  # true when showing defending cards on hover (no buttons, close on mouse move)
 
 # Message panel
 var message_panel: PanelContainer
@@ -51,6 +53,7 @@ func initialize(territory_mgr: TerritoryManager, tcs: Node) -> void:
 func _ready() -> void:
 	claim_slots_container = get_node_or_null("MarginContainer/VBoxContainer/SlotsContainer") as HBoxContainer
 	claim_hand_container = get_node_or_null("MarginContainer/VBoxContainer/ClaimHandContainer") as HBoxContainer
+	claim_buttons_container = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer") as Control
 	claim_cancel_button = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer/CancelButton") as Button
 	claim_button = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer/ClaimButton") as Button
 	claim_attack_button = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer/AttackButton") as Button
@@ -131,6 +134,7 @@ func _setup_message_panel() -> void:
 
 func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -> void:
 	claim_panel_play_only_mode = false
+	claim_preview_mode = false
 	if BattleStateManager:
 		BattleStateManager.set_current_territory(str(territory_id))
 	offset_left = CLAIM_PANEL_FULL_OFFSET.x
@@ -264,6 +268,7 @@ func open_play_only_panel(territory_id: int) -> void:
 	_deselect_current()
 	current_claim_territory_id = territory_id
 	claim_panel_play_only_mode = true
+	claim_preview_mode = false
 	offset_left = CLAIM_PANEL_PLAY_ONLY_OFFSET.x
 	offset_top = CLAIM_PANEL_PLAY_ONLY_OFFSET.y
 	offset_right = CLAIM_PANEL_PLAY_ONLY_OFFSET.z
@@ -308,6 +313,7 @@ func close_panel() -> void:
 	current_claim_territory_id = -1
 	visible = false
 	claim_panel_play_only_mode = false
+	claim_preview_mode = false
 	offset_left = CLAIM_PANEL_FULL_OFFSET.x
 	offset_top = CLAIM_PANEL_FULL_OFFSET.y
 	offset_right = CLAIM_PANEL_FULL_OFFSET.z
@@ -328,6 +334,67 @@ func is_open() -> bool:
 
 func get_current_territory_id() -> int:
 	return current_claim_territory_id
+
+
+func show_defending_preview(territory_id: int) -> void:
+	## Show read-only panel with defending slot cards (no buttons, no hand label). Closes on mouse move.
+	claim_preview_mode = true
+	current_claim_territory_id = territory_id
+	claim_highlighted_indices.clear()
+	var title_label: Label = get_node_or_null("MarginContainer/VBoxContainer/TitleLabel") as Label
+	if title_label:
+		title_label.text = "Cards Defending Territory"
+	if claim_slots_container:
+		claim_slots_container.visible = false
+	var hand_label: Control = get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	if hand_label:
+		hand_label.visible = false
+	if claim_buttons_container:
+		claim_buttons_container.visible = false
+	if claim_hand_container:
+		claim_hand_container.visible = true
+	# Populate with defending slot cards (BSM first, then TCS)
+	var tid_str := str(territory_id)
+	var defs: Dictionary = BattleStateManager.get_defending_slots(tid_str) if BattleStateManager else {}
+	claim_hand_cards = []
+	if not defs.is_empty():
+		for idx in range(3):
+			if defs.has(idx):
+				claim_hand_cards.append(defs[idx])
+			else:
+				claim_hand_cards.append(null)
+	else:
+		var saved: Array = _territory_claim_state.call("get_cards", territory_id) as Array if _territory_claim_state else []
+		for i in range(3):
+			claim_hand_cards.append(saved[i] if i < saved.size() and saved[i] != null else null)
+	_populate_claim_hand()
+	offset_left = CLAIM_PANEL_FULL_OFFSET.x
+	offset_top = CLAIM_PANEL_FULL_OFFSET.y
+	offset_right = CLAIM_PANEL_FULL_OFFSET.z
+	offset_bottom = CLAIM_PANEL_FULL_OFFSET.w
+	z_index = 100
+	visible = true
+
+
+func close_preview() -> void:
+	if not claim_preview_mode:
+		return
+	claim_preview_mode = false
+	visible = false
+	current_claim_territory_id = -1
+	if claim_buttons_container:
+		claim_buttons_container.visible = true
+	var hand_label: Control = get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	if hand_label:
+		hand_label.visible = true
+	if claim_slots_container:
+		claim_slots_container.visible = true
+
+
+func _input(event: InputEvent) -> void:
+	if claim_preview_mode and event is InputEventMouseMotion:
+		close_preview()
+
 
 func show_unclaimed_territory_message() -> void:
 	if not message_panel or not message_label:
@@ -507,7 +574,10 @@ func _populate_claim_hand() -> void:
 		child.queue_free()
 	var all_highlighted := claim_highlighted_indices.size() >= 3
 	for i in range(claim_hand_cards.size()):
-		var card_data: Dictionary = claim_hand_cards[i]
+		var card_data: Variant = claim_hand_cards[i]
+		if card_data == null or not (card_data is Dictionary):
+			continue
+		var card_dict: Dictionary = card_data as Dictionary
 		var panel := PanelContainer.new()
 		panel.custom_minimum_size = CARD_SIZE_CLAIM
 		panel.set_meta("hand_index", i)
@@ -532,8 +602,8 @@ func _populate_claim_hand() -> void:
 		tex.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
 		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 		tex.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		var path: String = card_data.get("path", "")
-		var frame: int = int(card_data.get("frame", 0))
+		var path: String = card_dict.get("path", "")
+		var frame: int = int(card_dict.get("frame", 0))
 		if path != "" and ResourceLoader.exists(path):
 			var sf: SpriteFrames = load(path) as SpriteFrames
 			if sf and sf.has_animation("default"):
@@ -550,11 +620,14 @@ func _on_hand_card_gui_input(event: InputEvent, hand_index: int) -> void:
 		if mb.double_click:
 			if hand_index >= 0 and hand_index < claim_hand_cards.size():
 				var c: Dictionary = claim_hand_cards[hand_index]
-				var path: String = c.get("path", "")
-				var frame: int = int(c.get("frame", 0))
-				if not path.is_empty() and CardEnlargeOverlay:
-					CardEnlargeOverlay.show_enlarged_card(path, frame)
+				if c and c is Dictionary:
+					var path: String = c.get("path", "")
+					var frame: int = int(c.get("frame", 0))
+					if not path.is_empty() and CardEnlargeOverlay:
+						CardEnlargeOverlay.show_enlarged_card(path, frame)
 			get_viewport().set_input_as_handled()
+			return
+		if claim_preview_mode:
 			return
 		# Single click: toggle highlight
 		var idx_in_list := claim_highlighted_indices.find(hand_index)
