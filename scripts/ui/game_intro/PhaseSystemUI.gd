@@ -150,9 +150,8 @@ func show_phase_transition_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		apply_phase_ui()
 		return
-	# Hide top phase indicator during overlay to avoid redundant text.
-	if current_phase_label:
-		current_phase_label.visible = false
+	# Keep current_phase_label visible during transition so it stays at top
+	_update_current_phase_label()
 	phase_label.text = App.phase_transition_text
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
@@ -468,6 +467,7 @@ func _on_net_phase_changed(phase_id: int) -> void:
 func _on_turn_changed(_peer_id: int) -> void:
 	if intro_complete and not is_phase_overlay_animating:
 		_update_turn_banner()
+		apply_phase_ui()
 		if multiplayer.has_multiplayer_peer():
 			print("[CLIENT PhaseSystemUI] Turn changed → peer %d" % _peer_id)
 
