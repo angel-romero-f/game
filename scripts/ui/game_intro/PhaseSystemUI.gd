@@ -136,7 +136,10 @@ func _update_current_phase_label() -> void:
 		App.GamePhase.CARD_COMMAND:
 			current_phase_label.text = "Command & Contest"
 		App.GamePhase.CLAIM_CONQUER:
-			current_phase_label.text = "Collect"
+			if map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+				current_phase_label.text = "Collect"
+			else:
+				current_phase_label.text = "Command & Conquest"
 		App.GamePhase.CARD_COLLECTION:
 			current_phase_label.text = "Collect"
 	current_phase_label.visible = true
@@ -294,6 +297,11 @@ func _apply_resource_collection_ui() -> void:
 		else:
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
+			minigame_selection_started.emit()
+	elif App.can_play_minigame():
+		set_overlay_state(OverlayState.NONE)
+		is_waiting_for_others = false
+		minigame_selection_started.emit()
 
 func _apply_battle_ready_ui() -> void:
 	if finish_claiming_button:
@@ -402,11 +410,10 @@ func on_skip_to_battle_pressed() -> void:
 		App.GamePhase.CARD_COMMAND:
 			skip_to_battle_button.visible = false
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-				var prev_phase := App.current_game_phase
 				PhaseSync.request_end_card_command_turn()
-				if App.current_game_phase == prev_phase:
-					set_overlay_state(OverlayState.WAITING, "Waiting for other players...")
-					is_waiting_for_others = true
+				# Keep non-active players on the board with turn banner guidance; no gray waiting screen.
+				set_overlay_state(OverlayState.NONE)
+				is_waiting_for_others = false
 			else:
 				App.enter_claim_conquer_phase()
 				show_phase_transition_overlay()
@@ -523,14 +530,26 @@ func _on_net_territory_claim_rejected(territory_id: int, claimer_name: String) -
 		claim_ui.show_already_claimed_message(claimer_name)
 
 func _on_net_map_sub_phase_changed(sub_phase: int) -> void:
+	# Ignore stale/non-applicable sub-phase transitions outside Claim & Conquer.
+	# This prevents late RESOURCE_COLLECTION RPCs from reopening "Collect" UI while in Command.
+	if App.current_game_phase != App.GamePhase.CLAIM_CONQUER:
+		if sub_phase == PhaseController.MapSubPhase.CLAIMING:
+			map_sub_phase = PhaseController.MapSubPhase.CLAIMING
+		return
+	var previous_sub_phase := map_sub_phase
 	if sub_phase == 0:  # CLAIMING
 		map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		App.minigames_completed_this_phase = 0
 		is_waiting_for_others = false
 		waiting_overlay.visible = false
 		set_overlay_state(OverlayState.NONE)
-		apply_phase_ui()
-		animate_phase_buttons()
+		# Show phase transition when exiting resource collection into claiming.
+		if previous_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+			App.phase_transition_text = "Command & Conquest"
+			show_phase_transition_overlay()
+		else:
+			apply_phase_ui()
+			animate_phase_buttons()
 	elif sub_phase == 1:  # RESOURCE_COLLECTION
 		skip_to_battle_button.visible = false
 		if finish_claiming_button:

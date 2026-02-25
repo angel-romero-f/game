@@ -27,8 +27,9 @@ func _ready():
 	if spawner and spawner.has_method("set_bridge_bounds"):
 		spawner.set_bridge_bounds(BRIDGE_TOP, BRIDGE_BOTTOM, BRIDGE_LEFT + 80, BRIDGE_RIGHT - 40)
 	
-	# Reset lives for a fresh minigame session
-	App.reset_lives()
+	# Only reset lives on first load (not on retry reloads)
+	if App.minigame_time_remaining <= 0.0:
+		App.reset_lives()
 	
 	# Connect to player signals
 	if player:
@@ -47,8 +48,8 @@ func _ready():
 	print("[Minigame:Bridge] Timer started (%.1fs)" % _minigame_timer)
 
 func _process(delta: float) -> void:
-	# Countdown timer
-	if _timer_active and not game_over:
+	# Countdown timer — keeps running even during death screen
+	if _timer_active:
 		_minigame_timer -= delta
 		App.minigame_time_remaining = _minigame_timer
 		var ui := get_node_or_null("UI")
@@ -59,19 +60,23 @@ func _process(delta: float) -> void:
 
 func _on_timeout() -> void:
 	_timer_active = false
-	if game_over:
+	if _has_returned:
 		return
-	print("[Minigame:Bridge] Time's up! Treating as loss.")
+	_has_returned = true
+	print("[Minigame:Bridge] Time's up! Returning to map.")
 	game_over = true
 	player_won = false
-	var ui := get_node_or_null("UI")
-	if ui and ui.has_method("show_timeout"):
-		ui.show_timeout()
+	App.minigame_time_remaining = -1.0
+	App.reset_lives()
+	App.pending_minigame_reward.clear()
+	App.on_minigame_completed()
+	_return_to_map()
 
 func _on_player_died():
-	_timer_active = false
+	# Don't stop the timer — it keeps counting down during the retry prompt
 	game_over = true
 	player_won = false
+	App.lose_life()
 
 func _on_player_won():
 	_timer_active = false

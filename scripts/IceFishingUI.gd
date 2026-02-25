@@ -31,7 +31,7 @@ func _ready():
 	_timer_label.name = "MinigameTimerLabel"
 	if _pixel_font:
 		_timer_label.add_theme_font_override("font", _pixel_font)
-	_timer_label.add_theme_font_size_override("font_size", 28)
+	_timer_label.add_theme_font_size_override("font_size", 36)
 	_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2, 1.0))
 	_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_timer_label.set_anchors_preset(Control.PRESET_TOP_RIGHT)
@@ -182,8 +182,9 @@ func find_player():
 			player.player_won.connect(_on_player_won)
 
 func _on_player_died():
-	var is_final_death := App.lose_life()
-	show_game_over(is_final_death)
+	# App.lose_life() is called by the game script; we just show the UI
+	var is_final := App.get_lives() <= 0
+	show_game_over(is_final)
 
 func _on_player_won():
 	show_win()
@@ -216,7 +217,6 @@ func show_win():
 		_reward_panel.visible = false
 	if win_label:
 		win_label.text = "Great Catch!\nPress R to return to map"
-	_show_reward_in_win_panel()
 
 func _show_reward_in_win_panel() -> void:
 	var reward := App.pending_minigame_reward

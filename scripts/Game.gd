@@ -21,8 +21,9 @@ func _ready():
 		background.stop()  # Stop the autoplay animation
 		background.frame = 0
 	
-	# Reset lives for a fresh minigame session
-	App.reset_lives()
+	# Only reset lives on first load (not on retry reloads)
+	if App.minigame_time_remaining <= 0.0:
+		App.reset_lives()
 	
 	# Connect to player signals
 	var player = get_tree().get_first_node_in_group("player")
@@ -50,11 +51,11 @@ func _process(delta: float) -> void:
 			waterfall_frame = 1 - waterfall_frame  # Toggle between 0 and 1
 			background.frame = waterfall_frame
 
-	# Countdown timer
-	if _timer_active and not game_over:
+	# Countdown timer — keeps running even during death screen
+	if _timer_active:
 		_minigame_timer -= delta
 		App.minigame_time_remaining = _minigame_timer
-		# Update UI — CanvasLayer node is named "UI" in the scene tree
+		# Update UI
 		var ui := get_node_or_null("UI")
 		if ui and ui.has_method("update_timer_display"):
 			ui.update_timer_display(_minigame_timer)
@@ -63,26 +64,29 @@ func _process(delta: float) -> void:
 
 func _on_timeout() -> void:
 	_timer_active = false
-	if game_over:
+	if _has_returned:
 		return
-	print("[Minigame:River] Time's up! Treating as loss.")
+	_has_returned = true
+	print("[Minigame:River] Time's up! Returning to map.")
 	game_over = true
 	player_won = false
-	var ui := get_node_or_null("UI")
-	if ui and ui.has_method("show_timeout"):
-		ui.show_timeout()
+	# Timeout = loss, return to map immediately
+	App.minigame_time_remaining = -1.0
+	App.reset_lives()
+	App.pending_minigame_reward.clear()
+	App.on_minigame_completed()
+	_return_to_map()
 
 func _on_player_died():
-	_timer_active = false
+	# Don't stop the timer — it keeps counting down during the retry prompt
 	game_over = true
 	player_won = false
-	# UI will handle showing game over panel
+	App.lose_life()
 
 func _on_player_won():
 	_timer_active = false
 	game_over = true
 	player_won = true
-	# UI will handle showing win panel
 
 func _input(event):
 	if event is InputEventKey and event.keycode == KEY_R and event.pressed:
@@ -107,11 +111,10 @@ func handle_continue():
 		App.on_minigame_completed()
 		_return_to_map()
 	else:
-		# Save timer and reload — timer will persist
+		# Save timer and reload — timer + lives persist
 		App.minigame_time_remaining = _minigame_timer
 		get_tree().reload_current_scene()
 
 func _return_to_map():
-	# Ensure main music is playing when returning to map
 	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")

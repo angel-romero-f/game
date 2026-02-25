@@ -49,6 +49,7 @@ func host_init_card_command_phase() -> void:
 	rpc_set_current_turn.rpc(PhaseController.current_turn_peer_id)
 	rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
 	rpc_sync_done_counts.rpc(0, total)
+	rpc_map_sub_phase.rpc(0)  # Reset map sub-phase to CLAIMING
 	rpc_set_phase.rpc(0)  # Must be last - triggers UI update
 
 ## Host: Initialize Card Collection phase (after all players finish their turns)
@@ -169,6 +170,12 @@ func server_increment_minigame() -> void:
 	_server_increment_minigame(id)
 
 func _server_increment_minigame(peer_id: int) -> void:
+	if not multiplayer.is_server():
+		return
+	# Minigames only count during Claim & Conquer resource collection.
+	if PhaseController.current_phase != 1 or PhaseController.map_sub_phase != PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+		print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (phase=", PhaseController.current_phase, " sub=", PhaseController.map_sub_phase, ")")
+		return
 	if PhaseController.player_done_state.get(peer_id, false):
 		print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (already done)")
 		return
@@ -221,8 +228,11 @@ func _check_all_done_and_advance() -> void:
 	if total > 0 and done_count >= total:
 		if PhaseController.current_phase == 0:  # CARD_COMMAND -> CLAIM_CONQUER
 			_server_enter_claim_conquer_phase()
-		elif PhaseController.current_phase == 1:  # CLAIM_CONQUER: all done -> next claiming round
-			server_enter_claim_conquer_from_battles()
+		elif PhaseController.current_phase == 1:  # CLAIM_CONQUER
+			if PhaseController.map_sub_phase == 1:  # RESOURCE_COLLECTION done → advance to CARD_COMMAND
+				host_init_card_command_phase()
+			else:  # CLAIMING or BATTLE_READY done → loop back to claim/conquer
+				server_enter_claim_conquer_from_battles()
 		elif PhaseController.current_phase == 2:  # CARD_COLLECTION -> CARD_COMMAND (loop)
 			host_init_card_command_phase()
 

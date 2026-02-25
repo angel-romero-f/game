@@ -28,6 +28,22 @@ func _server_process_claim_territory(requester_id: int, territory_id: int, owner
 	# Requester must claim for themselves
 	if requester_id != owner_id:
 		return
+	# Turn/phase authority gate: only the active player can claim during turn-based claim windows.
+	# Resource collection and any non-claiming phases must not accept territory claims.
+	var is_turn_based_claim_window := (
+		PhaseController.current_phase == 0
+		or (PhaseController.current_phase == 1 and PhaseController.map_sub_phase == PhaseController.MapSubPhase.CLAIMING)
+	)
+	if not is_turn_based_claim_window:
+		print("[TerritorySync] REJECTED claim from %d for territory %d (phase=%d sub=%d)" % [
+			requester_id, territory_id, PhaseController.current_phase, PhaseController.map_sub_phase
+		])
+		return
+	if PhaseController.current_turn_peer_id != -1 and requester_id != PhaseController.current_turn_peer_id:
+		print("[TerritorySync] REJECTED out-of-turn claim from %d (current turn: %d)" % [
+			requester_id, PhaseController.current_turn_peer_id
+		])
+		return
 	# Check if territory is already claimed by another player
 	var tcs := _get_territory_claim_state()
 	if tcs and tcs.has_method("is_claimed") and tcs.call("is_claimed", territory_id):

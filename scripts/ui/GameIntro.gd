@@ -118,7 +118,7 @@ func _ready() -> void:
 	_selection_timer_label.visible = false
 	_selection_timer_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	_selection_timer_label.add_theme_font_override("font", load("res://fonts/m5x7.ttf"))
-	_selection_timer_label.add_theme_font_size_override("font_size", 28)
+	_selection_timer_label.add_theme_font_size_override("font_size", 36)
 	_selection_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2, 1.0))
 	_selection_timer_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 	_selection_timer_label.add_theme_constant_override("outline_size", 4)
@@ -326,19 +326,19 @@ func _on_intro_completed() -> void:
 	phase_ui.intro_complete = true
 
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		if PhaseController.current_phase == 0:
+		if PhaseController.current_phase == 0 and PhaseController.player_done_state.is_empty():
+			# First game load — host initializes the Card Command phase
 			PhaseSync.host_init_card_command_phase()
 			App.phase_transition_text = "Command & Contest"
 		else:
+			# Returning from minigame/battle — phase already set by server RPCs
 			PhaseController.sync_app_game_phase()
-			if PhaseController.current_phase == 1:
-				phase_ui.map_sub_phase = PhaseController.map_sub_phase
-				territory_ui.map_sub_phase = PhaseController.map_sub_phase
-	elif App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		PhaseController.sync_app_game_phase()
-		if PhaseController.current_phase == 1:
 			phase_ui.map_sub_phase = PhaseController.map_sub_phase
 			territory_ui.map_sub_phase = PhaseController.map_sub_phase
+	elif App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		PhaseController.sync_app_game_phase()
+		phase_ui.map_sub_phase = PhaseController.map_sub_phase
+		territory_ui.map_sub_phase = PhaseController.map_sub_phase
 	else:
 		App.enter_claim_conquer_phase()
 		phase_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
@@ -354,6 +354,14 @@ func _on_intro_completed() -> void:
 func _on_phase_ui_applied() -> void:
 	territory_ui.update_territory_interaction()
 	hand_ui.update_card_count()
+	# Stop the selection timer if we've left the collect phase
+	var in_collect_phase := (
+		App.current_game_phase == App.GamePhase.CARD_COLLECTION
+		or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+			and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+	)
+	if not in_collect_phase:
+		stop_selection_timer()
 
 func _on_net_territory_claimed(territory_id: int, owner_id: int, cards: Array) -> void:
 	# TerritoryClaimManager applies via TerritorySync.territory_claimed; we just refresh visuals.
@@ -422,12 +430,33 @@ func _on_victory_main_menu_pressed() -> void:
 # ---------- MINIGAME SELECTION TIMER ----------
 
 func start_selection_timer() -> void:
+	# Only start in collect phases (not Command & Contest)
+	var in_collect_phase := (
+		App.current_game_phase == App.GamePhase.CARD_COLLECTION
+		or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+			and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+	)
+	if not in_collect_phase:
+		stop_selection_timer()
+		return
+	# Don't restart if already running (prevents flicker resets)
+	if _selection_timer_active:
+		return
+	# Don't start if player has no more minigames (check count directly, not can_play_minigame which only works in CARD_COLLECTION)
+	var minigame_count: int = App.minigames_completed_this_phase
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		minigame_count = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
+	if minigame_count >= App.MAX_MINIGAMES_PER_PHASE:
+		return
 	_selection_timer = SELECTION_TIME_LIMIT
 	_selection_timer_active = true
 	if _selection_timer_label:
 		_selection_timer_label.visible = true
 		_selection_timer_label.text = "Pick a game: %d" % int(SELECTION_TIME_LIMIT)
 		_selection_timer_label.add_theme_color_override("font_color", Color(1.0, 0.9, 0.2, 1.0))
+
+
+
 
 func stop_selection_timer() -> void:
 	_selection_timer_active = false
@@ -445,8 +474,13 @@ func _on_selection_timeout() -> void:
 	App.minigame_time_remaining = -1.0
 	App.pending_minigame_reward.clear()
 	App.on_minigame_completed()
-	# If the player can still play another game, refresh the UI (which will restart the selection timer)
-	if phase_ui:
+	# Only refresh UI if the player can still play another game in the collect phase
+	var minigame_count: int = App.minigames_completed_this_phase
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		minigame_count = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
+	if minigame_count < App.MAX_MINIGAMES_PER_PHASE and phase_ui:
+		# Reset the timer guard so a fresh timer can start for the 2nd pick
+		_selection_timer_active = false
 		phase_ui.apply_phase_ui()
 		phase_ui.animate_phase_buttons()
 

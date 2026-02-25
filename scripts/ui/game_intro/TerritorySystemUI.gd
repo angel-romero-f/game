@@ -191,16 +191,31 @@ func update_territory_interaction() -> void:
 func _on_territory_selected(territory_id: int) -> void:
 	if not are_territories_interactable() or not claim_ui:
 		return
+	var is_card_command := App.current_game_phase == App.GamePhase.CARD_COMMAND
+	var is_claiming_phase := (
+		App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+		and map_sub_phase == PhaseController.MapSubPhase.CLAIMING
+	)
+	var is_resource_collection := (
+		App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+		and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION
+	)
 	var is_claimed: bool = _territory_claim_state != null and _territory_claim_state.call("is_claimed", territory_id)
 	var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
 	var local_id: Variant = _get_local_player_id()
 	# If this territory is already owned by the local player and we're not in resource collection,
 	# open the defending-cards preview immediately instead of the full claim panel.
-	if map_sub_phase != PhaseController.MapSubPhase.RESOURCE_COLLECTION and is_claimed and owner_id == local_id:
+	if not is_resource_collection and is_claimed and owner_id == local_id:
 		if claim_ui.has_method("show_defending_preview"):
 			claim_ui.show_defending_preview(territory_id)
 		return
-	if map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+	# In multiplayer, block non-turn interactions during Claiming and Card Command
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		if is_card_command or is_claiming_phase:
+			var my_id := multiplayer.get_unique_id()
+			if PhaseController.current_turn_peer_id != my_id and PhaseController.current_turn_peer_id != -1:
+				return
+	if is_resource_collection:
 		if App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
 			claim_ui.show_unclaimed_territory_message()
 			return
