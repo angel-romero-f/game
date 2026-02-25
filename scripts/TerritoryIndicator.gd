@@ -147,6 +147,9 @@ func _on_mouse_exited() -> void:
 
 
 func _on_hover_timer_timeout() -> void:
+	# Don't open hover preview during resource collection / minigame phase.
+	if PhaseController and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+		return
 	if not _is_claimed_by_local_player():
 		return
 	defending_cards_preview_requested.emit(territory_id)
