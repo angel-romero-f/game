@@ -469,6 +469,13 @@ func _on_minigame_button_pressed(callback: Callable) -> void:
 
 func _on_selection_timeout() -> void:
 	stop_selection_timer()
+	var in_collect_phase := (
+		App.current_game_phase == App.GamePhase.CARD_COLLECTION
+		or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+			and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+	)
+	if not in_collect_phase:
+		return
 	# Forfeit this minigame chance — player took too long
 	print("[GameIntro] Selection timed out — forfeiting this minigame chance")
 	App.minigame_time_remaining = -1.0
