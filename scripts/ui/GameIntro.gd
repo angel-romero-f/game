@@ -47,7 +47,9 @@ func _ready() -> void:
 	var battle_button := $BattleButton as Button
 	var skip_to_battle_button := $SkipToBattleButton as Button
 	settings_button = $SettingsButton as Button
-	var current_phase_label := $CurrentPhaseLabel as Label
+	# Phase indicator bar — built in code so the editor doesn't need to reload
+	var phase_indicator_bar := _create_phase_indicator_bar()
+	add_child(phase_indicator_bar)
 	settings_panel = $SettingsPanel as Panel
 	var phase_overlay := $PhaseOverlay as ColorRect
 	var phase_label := $PhaseOverlay/PhaseLabel as Label
@@ -174,7 +176,7 @@ func _ready() -> void:
 		"ready_for_battle_button": ready_for_battle_button,
 		"settings_button": settings_button,
 		"card_icon_button": card_icon_button,
-		"current_phase_label": current_phase_label,
+		"phase_indicator_bar": phase_indicator_bar,
 	}, {
 		"battle_ui": battle_ui,
 		"claim_ui": claim_ui,
@@ -371,3 +373,45 @@ func _get_local_player_id() -> Variant:
 		if p.get("is_local", false):
 			return p.get("id", 1)
 	return 1
+
+func _create_phase_indicator_bar() -> HBoxContainer:
+	var font: Font = load("res://fonts/m5x7.ttf")
+	var bar := HBoxContainer.new()
+	bar.name = "PhaseIndicatorBar"
+	bar.visible = false
+	bar.anchor_left = 0.5
+	bar.anchor_right = 0.5
+	bar.offset_left = -250.0
+	bar.offset_top = 8.0
+	bar.offset_right = 250.0
+	bar.offset_bottom = 52.0
+	bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	bar.alignment = BoxContainer.ALIGNMENT_CENTER
+	bar.add_theme_constant_override("separation", 6)
+	var names: Array[String] = ["Claim & Contest", "Collect"]
+	for i in names.size():
+		if i > 0:
+			var sep := Label.new()
+			sep.text = ">"
+			sep.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
+			sep.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+			sep.add_theme_constant_override("outline_size", 3)
+			sep.add_theme_font_override("font", font)
+			sep.add_theme_font_size_override("font_size", 30)
+			sep.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+			sep.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+			bar.add_child(sep)
+		var panel := PanelContainer.new()
+		panel.name = names[i] + "PhasePanel"
+		var label := Label.new()
+		label.text = names[i]
+		label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
+		label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+		label.add_theme_constant_override("outline_size", 5)
+		label.add_theme_font_override("font", font)
+		label.add_theme_font_size_override("font_size", 36)
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		panel.add_child(label)
+		bar.add_child(panel)
+	return bar
