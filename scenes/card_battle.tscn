@@ -1,14 +1,10 @@
-[gd_scene load_steps=13 format=3 uid="uid://8s4xj8qvpi8a"]
+[gd_scene load_steps=9 format=3 uid="uid://8s4xj8qvpi8a"]
 
 [ext_resource type="Script" uid="uid://bo11tt1dae0fx" path="res://scripts/CardBattleScene.gd" id="1_scene"]
 [ext_resource type="Script" uid="uid://bkwfgx4dtvma" path="res://scripts/BattleManager.gd" id="2_battle_manager"]
 [ext_resource type="Script" uid="uid://p40834bmanry" path="res://scripts/CardManager.gd" id="2_cardmanager"]
-[ext_resource type="SpriteFrames" uid="uid://yyxr5atbdxks" path="res://assets/elf_fire_cards.pxo" id="3_elfcards"]
 [ext_resource type="PackedScene" uid="uid://bafobj10bgihh" path="res://scenes/card_slot.tscn" id="3_u4xae"]
-[ext_resource type="SpriteFrames" uid="uid://hvr81v2f05y4" path="res://assets/cardback.pxo" id="3_uesyd"]
 [ext_resource type="SpriteFrames" uid="uid://bwveqdlwnn8tw" path="res://assets/cardslot.pxo" id="4_aiscu"]
-[ext_resource type="PackedScene" uid="uid://ca7ctiluaej" path="res://scenes/deck.tscn" id="5_sp37g"]
-[ext_resource type="SpriteFrames" uid="uid://c2lmkncx35e0t" path="res://assets/infernal_water_cards.pxo" id="8_x2u0b"]
 [ext_resource type="Script" uid="uid://bumkisumq4jxt" path="res://scripts/battle/AttributeConfig.gd" id="9_attr_cfg_script"]
 [ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="10_iwbf0"]
 

@@ -9,12 +9,13 @@ signal player_won(player_id: int)
 
 ## Returns true if the player owns at least one territory in 5 or more different regions.
 func check_player_wins(player_id: int) -> bool:
-	var tcs := get_node_or_null("/root/TerritoryClaimState") as Node
-	if not tcs or not tcs.has_method("get"):
+	var tcs = get_node_or_null("/root/TerritoryClaimState")
+	if not tcs:
 		return false
-	var claims: Dictionary = tcs.get("claims")
-	if not claims is Dictionary:
+	var claims_val = tcs.get("claims")
+	if not claims_val is Dictionary:
 		return false
+	var claims: Dictionary = claims_val
 
 	var unique_regions: Dictionary = {}  # region_id -> true
 	var tm = App.territory_manager if App else null
@@ -22,7 +23,7 @@ func check_player_wins(player_id: int) -> bool:
 		return false
 
 	for tid_key in claims:
-		var claim_data: Dictionary = (claims as Dictionary)[tid_key]
+		var claim_data: Dictionary = claims[tid_key]
 		var owner_id: Variant = claim_data.get("owner_player_id", null)
 		if owner_id == null or int(owner_id) != int(player_id):
 			continue
