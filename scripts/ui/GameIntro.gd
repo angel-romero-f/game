@@ -349,7 +349,28 @@ func _on_player_won(player_id: int) -> void:
 func _show_victory_overlay(player_id: int) -> void:
 	var victory_overlay := get_node_or_null("VictoryOverlay") as ColorRect
 	if not victory_overlay:
-		return
+		# Create overlay in code (editor cache may not have the .tscn node)
+		victory_overlay = ColorRect.new()
+		victory_overlay.name = "VictoryOverlay"
+		victory_overlay.color = Color(0, 0, 0, 0.75)
+		victory_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
+		victory_overlay.z_index = 50
+		add_child(victory_overlay)
+		var label := Label.new()
+		label.name = "VictoryLabel"
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.set_anchors_preset(Control.PRESET_FULL_RECT)
+		label.add_theme_font_size_override("font_size", 48)
+		victory_overlay.add_child(label)
+		var btn := Button.new()
+		btn.name = "MainMenuButton"
+		btn.text = "Main Menu"
+		btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+		btn.position = Vector2(-60, -80)
+		btn.size = Vector2(120, 40)
+		btn.pressed.connect(_on_victory_main_menu_pressed)
+		victory_overlay.add_child(btn)
 	var victory_label := victory_overlay.get_node_or_null("VictoryLabel") as Label
 	var player_name: String = "Player"
 	for p in App.game_players:

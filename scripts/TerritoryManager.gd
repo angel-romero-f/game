@@ -8,6 +8,17 @@ extends Node
 ## creates a TerritoryIndicator at each node's polygon center,
 ## then hides the TerritoryNode. The TerritoryIndicator handles all interaction.
 
+## Authoritative region mapping: territory_id -> region_id
+## 6 regions, 2 territories each. Overrides scene file values.
+const TERRITORY_REGIONS: Dictionary = {
+	1: 1, 2: 1,
+	3: 2, 4: 2,
+	5: 3, 6: 3,
+	7: 4, 8: 4,
+	9: 5, 10: 5,
+	11: 6, 12: 6
+}
+
 ## Dictionary: territory_id -> TerritoryIndicator (the interactive indicator)
 var territories: Dictionary = {}
 
@@ -51,6 +62,9 @@ func initialize_from_editor_nodes(parent_node: Node) -> void:
 
 		var tid: int = node.territory_data.territory_id
 		var territory: Territory = node.territory_data
+		# Override region_id from authoritative mapping
+		if TERRITORY_REGIONS.has(tid):
+			territory.region_id = TERRITORY_REGIONS[tid]
 		territory_data[tid] = territory
 		_territory_nodes[tid] = node
 
