@@ -36,7 +36,7 @@ var finish_claiming_button: Button
 var ready_for_battle_button: Button
 var settings_button: Button
 var card_icon_button: Button
-var current_phase_label: Label
+var phase_indicator_bar: HBoxContainer
 
 # Component references
 var battle_ui: Node  # BattleSelectionUI
@@ -58,7 +58,7 @@ func initialize(nodes: Dictionary, refs: Dictionary) -> void:
 	ready_for_battle_button = nodes.get("ready_for_battle_button")
 	settings_button = nodes.get("settings_button")
 	card_icon_button = nodes.get("card_icon_button")
-	current_phase_label = nodes.get("current_phase_label")
+	phase_indicator_bar = nodes.get("phase_indicator_bar")
 	battle_ui = refs.get("battle_ui")
 	claim_ui = refs.get("claim_ui")
 
@@ -105,17 +105,49 @@ func set_overlay_state(state: OverlayState, text: String = "") -> void:
 
 # ---------- CURRENT PHASE LABEL ----------
 
-func _update_current_phase_label() -> void:
-	if not current_phase_label:
+func _update_phase_indicator() -> void:
+	if not phase_indicator_bar:
 		return
+	var active_color := Color(1, 0.85, 0.3, 1)
+	var inactive_color := Color(0.5, 0.5, 0.5, 1)
+	var panel_names: Array[String] = ["Claim & ContestPhasePanel", "CollectPhasePanel"]
+	# 0 = Claim & Contest (CARD_COMMAND, CLAIMING, BATTLE_READY)
+	# 1 = Collect (RESOURCE_COLLECTION, CARD_COLLECTION)
+	var active_index: int = 0
 	match App.current_game_phase:
 		App.GamePhase.CARD_COMMAND:
-			current_phase_label.text = "Claim"
+			active_index = 0
 		App.GamePhase.CLAIM_CONQUER:
-			current_phase_label.text = "Collect"
+			match map_sub_phase:
+				PhaseController.MapSubPhase.CLAIMING:
+					active_index = 0
+				PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+					active_index = 1
+				PhaseController.MapSubPhase.BATTLE_READY:
+					active_index = 0
 		App.GamePhase.CARD_COLLECTION:
-			current_phase_label.text = "Contest"
-	current_phase_label.visible = true
+			active_index = 1
+	for i in panel_names.size():
+		var panel: PanelContainer = phase_indicator_bar.get_node_or_null(panel_names[i]) as PanelContainer
+		if not panel:
+			continue
+		var label: Label = panel.get_child(0) as Label
+		var style := StyleBoxFlat.new()
+		if i == active_index:
+			style.bg_color = Color(1, 0.85, 0.3, 0.2)
+			if label:
+				label.add_theme_color_override("font_color", active_color)
+		else:
+			style.bg_color = Color(0.1, 0.1, 0.15, 0.4)
+			if label:
+				label.add_theme_color_override("font_color", inactive_color)
+		style.set_corner_radius_all(6)
+		style.content_margin_left = 12.0
+		style.content_margin_top = 4.0
+		style.content_margin_right = 12.0
+		style.content_margin_bottom = 4.0
+		panel.add_theme_stylebox_override("panel", style)
+	phase_indicator_bar.visible = true
 
 # ---------- PHASE TRANSITION OVERLAY ----------
 
@@ -123,8 +155,8 @@ func show_phase_transition_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		apply_phase_ui()
 		return
-	if current_phase_label:
-		current_phase_label.visible = false
+	if phase_indicator_bar:
+		phase_indicator_bar.visible = false
 	phase_label.text = App.phase_transition_text
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
@@ -148,7 +180,7 @@ func apply_phase_ui() -> void:
 	if not intro_complete or is_phase_overlay_animating:
 		return
 	map_sub_phase = PhaseController.map_sub_phase
-	_update_current_phase_label()
+	_update_phase_indicator()
 	match App.current_game_phase:
 		App.GamePhase.CARD_COMMAND:
 			_apply_card_command_ui()
