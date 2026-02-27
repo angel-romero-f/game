@@ -4,6 +4,7 @@ extends Node
 ## Programmatic component: created with .new(), receives node refs via initialize().
 
 signal intro_completed
+signal corner_order_ready
 
 const UI_FONT := preload("res://fonts/m5x7.ttf")
 const D20_SPRITESHEET_PATH := "res://pictures/d20_roll_sprite.png"
@@ -75,7 +76,7 @@ func skip_intro() -> void:
 	order_center_container.visible = false
 	map_overlay.modulate.a = 0.0
 	var corner_parent = order_corner_container.get_parent()
-	corner_parent.visible = true
+	corner_parent.visible = false
 	for child in order_corner_container.get_children():
 		if child.name != "TitleLabel":
 			child.queue_free()
@@ -83,6 +84,7 @@ func skip_intro() -> void:
 		var player = App.turn_order[i]
 		var item := _create_order_item(player, i + 1, false)
 		order_corner_container.add_child(item)
+	corner_order_ready.emit()
 	current_phase = Phase.GAME_READY
 
 func process_frame(delta: float) -> void:
@@ -282,8 +284,7 @@ func _minimize_to_corner() -> void:
 func _show_corner_order() -> void:
 	order_center_container.visible = false
 	var corner_parent = order_corner_container.get_parent()
-	corner_parent.visible = true
-	corner_parent.modulate.a = 0.0
+	corner_parent.visible = false
 	for child in order_corner_container.get_children():
 		if child.name != "TitleLabel":
 			child.queue_free()
@@ -294,10 +295,9 @@ func _show_corner_order() -> void:
 		order_corner_container.add_child(item)
 		order_items_corner.append(item)
 	var map_tween := create_tween()
-	map_tween.set_parallel(true)
 	map_tween.tween_property(map_overlay, "modulate:a", 0.0, 0.8)
-	map_tween.tween_property(corner_parent, "modulate:a", 1.0, 0.5)
 	await map_tween.finished
+	corner_order_ready.emit()
 	current_phase = Phase.GAME_READY
 	intro_completed.emit()
 
@@ -307,9 +307,9 @@ func _create_order_item(player: Dictionary, order_position: int, is_center: bool
 	var pos_label := Label.new()
 	pos_label.text = str(order_position) + "."
 	pos_label.add_theme_font_override("font", UI_FONT)
-	pos_label.add_theme_font_size_override("font_size", 24 if is_center else 16)
+	pos_label.add_theme_font_size_override("font_size", 24 if is_center else 30)
 	pos_label.add_theme_color_override("font_color", Color.WHITE)
-	pos_label.custom_minimum_size.x = 30 if is_center else 20
+	pos_label.custom_minimum_size.x = 30 if is_center else 35
 	container.add_child(pos_label)
 	var race_icon := TextureRect.new()
 	var texture_path: String = App.get_race_texture_path(String(player.get("race", "Elf")))
@@ -318,12 +318,12 @@ func _create_order_item(player: Dictionary, order_position: int, is_center: bool
 		race_icon.texture = texture
 	race_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	race_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	race_icon.custom_minimum_size = Vector2(40, 40) if is_center else Vector2(24, 24)
+	race_icon.custom_minimum_size = Vector2(40, 40) if is_center else Vector2(48, 48)
 	container.add_child(race_icon)
 	var name_label := Label.new()
 	name_label.text = player.get("name", "Player")
 	name_label.add_theme_font_override("font", UI_FONT)
-	name_label.add_theme_font_size_override("font_size", 22 if is_center else 14)
+	name_label.add_theme_font_size_override("font_size", 22 if is_center else 28)
 	name_label.add_theme_color_override("font_color", App.get_race_color(player.get("race", "Elf")))
 	container.add_child(name_label)
 	if is_center:
@@ -337,7 +337,7 @@ func _create_order_item(player: Dictionary, order_position: int, is_center: bool
 		var you_label := Label.new()
 		you_label.text = " (You)" if is_center else "*"
 		you_label.add_theme_font_override("font", UI_FONT)
-		you_label.add_theme_font_size_override("font_size", 18 if is_center else 12)
+		you_label.add_theme_font_size_override("font_size", 18 if is_center else 22)
 		you_label.add_theme_color_override("font_color", Color(0.3, 1.0, 0.3))
 		container.add_child(you_label)
 	return container

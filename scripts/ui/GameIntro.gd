@@ -23,6 +23,10 @@ var settings_panel: Panel      # Script-on-node (SettingsPanelUI)
 var intro_complete: bool = false
 var is_paused: bool = false
 var settings_button: Button
+var order_corner_panel: PanelContainer
+var order_corner_title_button: Button
+var order_corner_vbox: VBoxContainer
+var turn_order_expanded: bool = false
 
 
 func _ready() -> void:
@@ -40,6 +44,8 @@ func _ready() -> void:
 	var order_center_container := $OrderCenterContainer as CenterContainer
 	var order_list_center := $OrderCenterContainer/Panel/MarginContainer/VBoxContainer/OrderList as VBoxContainer
 	var order_corner_container := $OrderCornerContainer/VBoxContainer as VBoxContainer
+	order_corner_panel = $OrderCornerContainer as PanelContainer
+	order_corner_vbox = order_corner_container
 	var minigame_button := $MinigameButton as Button
 	var bridge_minigame_button := $BridgeMinigameButton as Button
 	var ice_fishing_button := $IceFishingButton as Button
@@ -123,6 +129,7 @@ func _ready() -> void:
 		"map_overlay": map_overlay,
 	})
 	intro_ui.intro_completed.connect(_on_intro_completed)
+	intro_ui.corner_order_ready.connect(_on_corner_order_ready)
 
 	battle_ui = BattleSelectionUIScript.new()
 	battle_ui.name = "BattleSelectionUI"
@@ -394,6 +401,43 @@ func _get_local_player_id() -> Variant:
 		if p.get("is_local", false):
 			return p.get("id", 1)
 	return 1
+
+func _on_corner_order_ready() -> void:
+	# Replace TitleLabel with a clickable Button inside the panel
+	var title_label: Label = order_corner_vbox.get_node_or_null("TitleLabel")
+	if title_label:
+		title_label.queue_free()
+	var font: Font = load("res://fonts/m5x7.ttf")
+	order_corner_title_button = Button.new()
+	order_corner_title_button.name = "TitleButton"
+	order_corner_title_button.text = "Turn Order  >"
+	order_corner_title_button.add_theme_font_override("font", font)
+	order_corner_title_button.add_theme_font_size_override("font_size", 36)
+	order_corner_title_button.add_theme_color_override("font_color", Color(1, 0.85, 0.3, 1))
+	order_corner_title_button.flat = true
+	order_corner_title_button.pressed.connect(_on_turn_order_toggle_pressed)
+	order_corner_vbox.add_child(order_corner_title_button)
+	order_corner_vbox.move_child(order_corner_title_button, 0)
+	# Start collapsed — hide list items
+	turn_order_expanded = false
+	_apply_turn_order_collapsed()
+	order_corner_panel.visible = true
+
+func _on_turn_order_toggle_pressed() -> void:
+	turn_order_expanded = not turn_order_expanded
+	if turn_order_expanded:
+		order_corner_title_button.text = "Turn Order  v"
+		for i in range(1, order_corner_vbox.get_child_count()):
+			order_corner_vbox.get_child(i).visible = true
+		order_corner_panel.offset_bottom = order_corner_panel.offset_top + 340.0
+	else:
+		_apply_turn_order_collapsed()
+
+func _apply_turn_order_collapsed() -> void:
+	order_corner_title_button.text = "Turn Order  >"
+	for i in range(1, order_corner_vbox.get_child_count()):
+		order_corner_vbox.get_child(i).visible = false
+	order_corner_panel.offset_bottom = order_corner_panel.offset_top + 55.0
 
 func _create_phase_indicator_bar() -> HBoxContainer:
 	var font: Font = load("res://fonts/m5x7.ttf")
