@@ -83,6 +83,9 @@ func _ready() -> void:
 	# Wait another frame for cards to be properly registered
 	await get_tree().process_frame
 
+	# Short delay so BattleSync.battle_placed_cards is synced before we draw opponent backs (avoids wrong count with 3+ players)
+	if _is_multiplayer:
+		await get_tree().create_tween().tween_interval(0.2).finished
 	_place_opponent_backs()
 	_connect_player_slot_signals()
 	_update_start_button_visibility()
@@ -150,26 +153,27 @@ func _restore_and_sync_placed_cards() -> void:
 		print("[BattleManager] Player slots (our side) data: ", _debug_slots_summary(player_slots_data))
 		print("[BattleManager] Opponent slots (their side) data: ", _debug_slots_summary(opponent_slots_data))
 
-		# 1. Populate opponent slots (face-down) from opponent_slots_data
-		var back_frames: SpriteFrames = CARD_BACK_FRAMES
-		var back_frame_index: int = CARD_BACK_FRAME_INDEX
-		for slot_idx in range(_opponent_slot_nodes.size()):
-			var slot = _opponent_slot_nodes[slot_idx]
-			if not slot: continue
-			var card_data = opponent_slots_data.get(int(slot_idx))
-			if card_data == null: card_data = opponent_slots_data.get(str(slot_idx))
-			if card_data:
-				var card := CARD_SCENE.instantiate()
-				get_tree().current_scene.add_child(card)
-				var area := card.get_node_or_null("Card_Collision") as Area2D
-				if area: area.input_pickable = false
-				card.card_sprite_frames = back_frames
-				card.frame_index = back_frame_index
-				_opponent_cards_by_slot[slot] = card
-				if slot.has_method("force_snap_card"):
-					slot.force_snap_card(card)
-				card.set_meta("territory_face_path", card_data.get("path", ""))
-				card.set_meta("territory_face_frame", card_data.get("frame"))
+		# 1. Populate opponent slots (face-down). In multiplayer use only BattleSync (in _place_opponent_backs after a short delay) to avoid wrong count from stale BSM data.
+		if not _is_multiplayer:
+			var back_frames: SpriteFrames = CARD_BACK_FRAMES
+			var back_frame_index: int = CARD_BACK_FRAME_INDEX
+			for slot_idx in range(_opponent_slot_nodes.size()):
+				var slot = _opponent_slot_nodes[slot_idx]
+				if not slot: continue
+				var card_data = opponent_slots_data.get(int(slot_idx))
+				if card_data == null: card_data = opponent_slots_data.get(str(slot_idx))
+				if card_data:
+					var card := CARD_SCENE.instantiate()
+					get_tree().current_scene.add_child(card)
+					var area := card.get_node_or_null("Card_Collision") as Area2D
+					if area: area.input_pickable = false
+					card.card_sprite_frames = back_frames
+					card.frame_index = back_frame_index
+					_opponent_cards_by_slot[slot] = card
+					if slot.has_method("force_snap_card"):
+						slot.force_snap_card(card)
+					card.set_meta("territory_face_path", card_data.get("path", ""))
+					card.set_meta("territory_face_frame", card_data.get("frame"))
 
 		# 2. Populate player slots from player_slots_data (our cards for this battle)
 		var placed: Dictionary = player_slots_data
@@ -290,6 +294,8 @@ func _on_battle_start_requested() -> void:
 		_start_button.visible = false
 	state = State.FLIPPING
 	await _flip_opponent_cards_from_pool()
+	# Short delay so both clients have synced opponent cards before resolving (fixes wrong result text for one player)
+	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
 	_show_result()
 	state = State.RESOLVED
@@ -298,6 +304,7 @@ func _on_battle_start_requested() -> void:
 
 func _update_opponent_cards_from_net() -> void:
 	## Place/update face-down cards in opponent slots from BattleSync.battle_placed_cards.
+	## Clear existing opponent cards first so we never show more backs than the other player has (fixes race with 3+ players).
 	if not multiplayer.has_multiplayer_peer():
 		return
 	var my_id := multiplayer.get_unique_id()
@@ -307,8 +314,10 @@ func _update_opponent_cards_from_net() -> void:
 			other_peer_id = int(pid)
 			break
 	if other_peer_id < 0:
+		_clear_opponent_slot_cards()
 		return
 	var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
+	_clear_opponent_slot_cards()
 	var back_frames: SpriteFrames = CARD_BACK_FRAMES
 	var back_frame_index: int = CARD_BACK_FRAME_INDEX
 	for slot_idx in range(_opponent_slot_nodes.size()):
@@ -340,6 +349,18 @@ func _update_opponent_cards_from_net() -> void:
 					slot.unsnap_card()
 				existing.queue_free()
 				_opponent_cards_by_slot.erase(slot)
+
+
+func _clear_opponent_slot_cards() -> void:
+	for slot in _opponent_slot_nodes:
+		if not slot:
+			continue
+		var existing = _opponent_cards_by_slot.get(slot, null)
+		if existing and is_instance_valid(existing):
+			if slot.has_method("unsnap_card"):
+				slot.unsnap_card()
+			existing.queue_free()
+		_opponent_cards_by_slot.erase(slot)
 
 
 func _setup_ui() -> void:
@@ -501,6 +522,8 @@ func _on_start_battle_pressed() -> void:
 
 	state = State.FLIPPING
 	await _flip_opponent_cards_from_pool()
+	# Short delay so both clients have synced opponent cards before resolving (fixes wrong result text for one player)
+	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
 	_show_result()
 	state = State.RESOLVED
