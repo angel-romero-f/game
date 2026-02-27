@@ -23,15 +23,15 @@ corner_radius_top_right = 12
 bg_color = Color(0, 0, 0, 0)
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ClaimLabelBg"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
 bg_color = Color(0, 0, 0, 0.55)
 corner_radius_top_left = 6
 corner_radius_top_right = 6
 corner_radius_bottom_right = 6
 corner_radius_bottom_left = 6
-content_margin_left = 12.0
-content_margin_top = 6.0
-content_margin_right = 12.0
-content_margin_bottom = 6.0
 
 [node name="GameIntro" type="Control"]
 layout_mode = 3
@@ -77,14 +77,11 @@ mouse_filter = 2
 
 [node name="TerritoryNode" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
-anchor_left = 0.21900001
-anchor_top = 0.29900002
-anchor_right = 0.335
-anchor_bottom = 0.44900003
-offset_left = -0.28800964
-offset_top = 0.24798584
-offset_right = 0.07998657
-offset_bottom = 0.047973633
+anchors_preset = 0
+offset_left = 252.0
+offset_top = 194.0
+offset_right = 386.0
+offset_bottom = 291.0
 script = ExtResource("3_vp4a4")
 polygon_points = PackedVector2Array(0, 0, 134, 0, 134, 97, 0, 97)
 territory_id_override = 1
@@ -106,14 +103,11 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode3" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
-anchor_left = 0.73800004
-anchor_top = 0.072000004
-anchor_right = 0.836
-anchor_bottom = 0.24200001
-offset_left = 96.823975
-offset_top = 92.343994
-offset_right = 94.389404
-offset_bottom = 74.342926
+anchors_preset = 0
+offset_left = 947.0
+offset_top = 139.0
+offset_right = 1057.4614
+offset_bottom = 231.15894
 rotation = -3.1415927
 script = ExtResource("3_vp4a4")
 polygon_points = PackedVector2Array(0, 0, 110.461426, 0, 110.461426, 92.158936, 0, 92.158936)
@@ -232,14 +226,11 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode12" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
-anchor_left = 0.777
-anchor_top = 0.28800002
-anchor_right = 0.87200004
-anchor_bottom = 0.43100002
-offset_left = 109.895996
-offset_top = 92.37599
-offset_right = 110.91736
-offset_bottom = 91.87094
+anchors_preset = 0
+offset_left = 1005.0
+offset_top = 279.0
+offset_right = 1115.4614
+offset_bottom = 371.15897
 rotation = -3.1415927
 script = ExtResource("3_vp4a4")
 polygon_points = PackedVector2Array(0, 0, 110.461426, 0, 110.461426, 92.158966, 0, 92.158966)
@@ -774,13 +765,13 @@ text = "Settings"
 [node name="SettingsPanel" type="Panel" parent="."]
 process_mode = 3
 visible = false
-script = ExtResource("6_settings")
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("6_settings")
 
 [node name="SettingsContainer" type="VBoxContainer" parent="SettingsPanel"]
 layout_mode = 1
@@ -921,7 +912,6 @@ grow_horizontal = 0
 grow_vertical = 0
 theme_override_fonts/font = ExtResource("4_84bnw")
 theme_override_font_sizes/font_size = 16
-text = ""
 
 [node name="CardIcon" type="TextureRect" parent="CardIconButton"]
 layout_mode = 1
@@ -960,7 +950,6 @@ theme_override_font_sizes/font_size = 40
 text = "0"
 horizontal_alignment = 1
 vertical_alignment = 1
-mouse_filter = 2
 
 [node name="HandDisplayPanel" type="PanelContainer" parent="."]
 visible = false
@@ -995,7 +984,7 @@ theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
 theme_override_constants/outline_size = 2
 theme_override_fonts/font = ExtResource("4_84bnw")
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 70
 text = "Your Hand"
 horizontal_alignment = 1
 
@@ -1024,11 +1013,6 @@ script = ExtResource("5_claim")
 
 [node name="ContentWrap" type="Control" parent="ClaimTerritoryPanel"]
 layout_mode = 2
-anchors_preset = 15
-anchor_right = 1.0
-anchor_bottom = 1.0
-grow_horizontal = 2
-grow_vertical = 2
 
 [node name="PanelBackground" type="TextureRect" parent="ClaimTerritoryPanel/ContentWrap"]
 layout_mode = 1
@@ -1039,11 +1023,9 @@ grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
 expand_mode = 1
-stretch_mode = 0
 
 [node name="CenterContainer" type="CenterContainer" parent="ClaimTerritoryPanel/ContentWrap"]
-layout_mode = 2
-anchors_preset = 15
+layout_mode = 0
 anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
