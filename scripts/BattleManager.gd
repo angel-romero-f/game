@@ -320,8 +320,19 @@ func _on_battle_start_requested() -> void:
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
 	_show_result()
+	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
+
+
+func _report_battle_resolved() -> void:
+	## Report result to BattleStateManager and sync loser's card clearance to Net (multiplayer).
+	var result := _get_battle_result()
+	var local_won := result == "win"
+	if BattleStateManager:
+		BattleStateManager.record_battle_result(result, local_won)
+	if _is_multiplayer and result == "lose":
+		Net.request_clear_my_battle_cards()
 
 
 func _update_opponent_cards_from_net() -> void:
