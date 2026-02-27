@@ -125,7 +125,7 @@ func sync_app_game_phase() -> void:
 			if map_sub_phase == MapSubPhase.RESOURCE_COLLECTION:
 				App.phase_transition_text = "Collect"
 			else:
-				App.phase_transition_text = "Command & Conquest"
+				App.phase_transition_text = "Command & Contest"
 		2:
 			App.current_game_phase = App.GamePhase.CARD_COLLECTION
 			App.phase_transition_text = "Collect"

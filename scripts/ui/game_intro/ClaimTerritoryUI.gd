@@ -259,7 +259,7 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 				claim_play_minigame_button.visible = true
 			else:
 				claim_play_minigame_button.visible = false
-		if claim_attack_button:
+		if claim_attack_button and not claim_panel_attack_mode:
 			claim_attack_button.visible = false
 	z_index = 100
 	visible = true
@@ -525,14 +525,16 @@ func _get_claimed_slots_indicator_frame(is_defending: bool) -> int:
 		return 0
 	var card_count := 0
 	if is_defending:
-		if BattleStateManager:
-			var slots: Dictionary = BattleStateManager.get_defending_slots(str(current_claim_territory_id))
-			card_count = slots.size()
-		if card_count <= 0 and tcs.has_method("get_cards"):
+		# Prefer TerritoryClaimState (synced) for accurate cross-player count
+		if tcs.has_method("get_cards"):
 			var cards: Array = tcs.call("get_cards", current_claim_territory_id)
 			for c in cards:
 				if c != null:
 					card_count += 1
+		# Fall back to BattleStateManager for real-time local updates
+		if card_count <= 0 and BattleStateManager:
+			var slots: Dictionary = BattleStateManager.get_defending_slots(str(current_claim_territory_id))
+			card_count = slots.size()
 	else:
 		if BattleStateManager:
 			var slots: Dictionary = BattleStateManager.get_attacking_slots(str(current_claim_territory_id))

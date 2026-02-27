@@ -144,7 +144,7 @@ func _update_current_phase_label() -> void:
 				if map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
 					current_phase_label.text = "Collect"
 				else:
-					current_phase_label.text = "Command & Conquest"
+					current_phase_label.text = "Command & Contest"
 			App.GamePhase.CARD_COLLECTION:
 				current_phase_label.text = "Collect"
 		current_phase_label.visible = true
@@ -244,6 +244,9 @@ func _apply_card_command_ui() -> void:
 		else:
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
+			# Clear stale attacking slots from previous battles to prevent phantom battles
+			if BattleStateManager:
+				BattleStateManager.clear_all_attacking_slots()
 			print("[CLIENT PhaseSystemUI] Command turn: it's MY turn")
 		_update_turn_banner()
 	else:
@@ -489,12 +492,29 @@ func _on_net_phase_changed(phase_id: int) -> void:
 	set_overlay_state(OverlayState.NONE)
 	if turn_banner_label:
 		turn_banner_label.visible = false
+	# Hide ALL game buttons immediately to prevent flashing during overlay
+	minigame_button.visible = false
+	bridge_minigame_button.visible = false
+	ice_fishing_button.visible = false
+	play_minigames_button.visible = false
+	skip_to_battle_button.visible = false
+	minigames_counter_label.visible = false
+	battle_button.visible = false
+	_hide_battle_selection_ui()
 	minigame_button.disabled = false
 	bridge_minigame_button.disabled = false
 	ice_fishing_button.disabled = false
 	play_minigames_button.disabled = false
 	skip_to_battle_button.disabled = false
 	if phase_actually_changed:
+		# Set phase_transition_text based on the new phase
+		match App.current_game_phase:
+			App.GamePhase.CARD_COMMAND:
+				App.phase_transition_text = "Command & Contest"
+			App.GamePhase.CLAIM_CONQUER:
+				App.phase_transition_text = "Collect"
+			App.GamePhase.CARD_COLLECTION:
+				App.phase_transition_text = "Collect"
 		print("[CLIENT PhaseSystemUI] Phase changed to %d — showing transition overlay" % phase_id)
 		show_phase_transition_overlay()
 	else:
@@ -581,7 +601,7 @@ func _on_net_map_sub_phase_changed(sub_phase: int) -> void:
 		set_overlay_state(OverlayState.NONE)
 		# Show phase transition when exiting resource collection into claiming.
 		if previous_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
-			App.phase_transition_text = "Command & Conquest"
+			App.phase_transition_text = "Command & Contest"
 			show_phase_transition_overlay()
 		else:
 			apply_phase_ui()

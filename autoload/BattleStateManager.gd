@@ -221,6 +221,13 @@ func clear_attacking_slots(territory_id: String = "") -> void:
 	print("[BattleStateManager] Attacking slots cleared for territory %s" % territory_id)
 
 
+func clear_all_attacking_slots() -> void:
+	## Clear attacking slots for ALL territories. Called at the start of each turn
+	## to prevent stale attacking cards from previous battles triggering phantom battles.
+	for tid in _territories:
+		_territories[tid]["attacking_slots"] = {}
+
+
 func get_defending_slots(territory_id: String = "") -> Dictionary:
 	var state := _get_state(territory_id)
 	return state.get("defending_slots", {}).duplicate(true)

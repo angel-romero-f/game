@@ -120,17 +120,20 @@ func _get_frame_index() -> int:
 
 
 func _count_defending_cards(tcs: Node) -> int:
-	if BattleStateManager:
-		var slots: Dictionary = BattleStateManager.get_defending_slots(str(territory_id))
-		if slots.size() > 0:
-			return slots.size()
+	# Prefer TerritoryClaimState (synced across peers) for accurate cross-player display
 	if tcs and tcs.has_method("get_cards"):
 		var cards: Array = tcs.call("get_cards", territory_id)
 		var count := 0
 		for c in cards:
 			if c != null:
 				count += 1
-		return count
+		if count > 0:
+			return count
+	# Fall back to BattleStateManager for real-time local updates (during card placement)
+	if BattleStateManager:
+		var slots: Dictionary = BattleStateManager.get_defending_slots(str(territory_id))
+		if slots.size() > 0:
+			return slots.size()
 	return 0
 
 
