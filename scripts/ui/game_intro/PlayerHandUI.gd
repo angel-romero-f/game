@@ -60,7 +60,8 @@ func _populate_hand_display() -> void:
 		var card_visual := TextureRect.new()
 		card_visual.expand_mode = TextureRect.EXPAND_FIT_HEIGHT_PROPORTIONAL
 		card_visual.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		card_visual.custom_minimum_size = Vector2(80, 120)
+		# Make hand cards larger for better readability (3x previous size).
+		card_visual.custom_minimum_size = Vector2(240, 360)
 		card_visual.mouse_filter = Control.MOUSE_FILTER_STOP
 		var sprite_frames_path: String = card_data.get("path", "")
 		var frame_index: int = int(card_data.get("frame", 0))
