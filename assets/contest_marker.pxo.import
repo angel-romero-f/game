@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://7q0noiym8s2h"
+path="res://.godot/imported/contest_marker.pxo-4509dad57dc944975a09e9e93a2dbbf1.res"
+
+[deps]
+
+source_file="res://assets/contest_marker.pxo"
+dest_files=["res://.godot/imported/contest_marker.pxo-4509dad57dc944975a09e9e93a2dbbf1.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

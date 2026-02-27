@@ -105,6 +105,9 @@ func _on_deck_input_event(_viewport: Node, event: InputEvent, _shape_idx: int) -
 
 func has_available_cards() -> bool:
 	## Returns true if there are cards available to spawn (public method)
+	# Territory battles: hand = only cards placed in territory (no extra cards from collection)
+	if use_player_collection and App.pending_territory_battle_ids.size() > 0:
+		return false
 	if use_player_collection:
 		# Check if player has any cards not already placed
 		var placed_paths: Array = []

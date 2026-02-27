@@ -17,6 +17,9 @@ var adjacent_nodes: Array[TerritoryNode] = []
 signal territory_selected(territory_id: int)
 signal card_placed(territory_id: int, player_id: int)
 
+const INDICATOR_TEXTURE_PATH := "res://assets/territory_indicator.pxo"
+const INDICATOR_PREVIEW_SIZE := Vector2(96, 96)
+
 ## Visual representation (optional - can be set in editor)
 @export var territory_name: String = ""
 
@@ -68,6 +71,7 @@ var claimed_display_color: Color = Color(0, 0, 0, 0)
 
 ## Store original polygon points before adjustment
 var original_polygon_points: PackedVector2Array = []
+var _editor_preview_texture: Texture2D = null
 
 
 func _ready() -> void:
@@ -193,19 +197,22 @@ func _draw() -> void:
 				glow_points.append(point + direction * offset)
 			draw_colored_polygon(glow_points, glow_color)
 	
-	# Draw main polygon (claimed = race color; unclaimed = white transparent glow)
+	# Draw main polygon (claimed = race color; unclaimed = region color)
 	if is_claimed() and claimed_display_color.a > 0:
 		var fill := claimed_display_color
 		fill.a = 0.5
 		draw_colored_polygon(points_to_draw, fill)
 		draw_polyline(points_to_draw, claimed_display_color, 3.0, true)
 	elif debug_visible:
-		# Unclaimed: white transparent glow
-		var unclaimed_color := Color(1.0, 1.0, 1.0, 0.35)
-		draw_colored_polygon(points_to_draw, unclaimed_color)
-		draw_polyline(points_to_draw, Color(1.0, 1.0, 1.0, 0.7), 2.0, true)
+		var rid := get_region_id()
+		var region_col := App.get_region_color(rid) if rid > 0 else Color(1.0, 1.0, 1.0, 1.0)
+		var fill_col := region_col
+		fill_col.a = 0.35
+		draw_colored_polygon(points_to_draw, fill_col)
+		var outline_col := region_col
+		outline_col.a = 0.7
+		draw_polyline(points_to_draw, outline_col, 2.0, true)
 	elif current_color.a > 0:
-		# Normal drawing when not in debug mode
 		draw_colored_polygon(points_to_draw, current_color)
 		draw_polyline(points_to_draw, Color(0.5, 0.5, 0.5, 0.3), 2.0, true)
 
@@ -224,6 +231,7 @@ func _draw_editor_preview() -> void:
 			var p := points_to_draw[i]
 			draw_circle(p, 4.0, Color(1.0, 1.0, 0.0, 0.9))
 			draw_arc(p, 4.0, 0, TAU, 8, Color(0, 0, 0, 0.8), 1.0)
+		_draw_editor_indicator_preview(_calculate_center(points_to_draw))
 	else:
 		# No polygon yet: draw the control's rect so you can position/size it
 		var w: float = 200.0
@@ -235,7 +243,20 @@ func _draw_editor_preview() -> void:
 		var rect := Rect2(0, 0, w, h)
 		draw_rect(rect, Color(0.2, 0.8, 1.0, 0.25), false, 2.0)
 		draw_rect(rect, Color(0.0, 0.6, 1.0, 0.8), false, 2.0)
+		_draw_editor_indicator_preview(Vector2(w * 0.5, h * 0.5))
 		# Hint text would need ThemeDB - skip for now
+
+
+func _draw_editor_indicator_preview(center: Vector2) -> void:
+	if _editor_preview_texture == null and ResourceLoader.exists(INDICATOR_TEXTURE_PATH):
+		var res := load(INDICATOR_TEXTURE_PATH)
+		if res is SpriteFrames:
+			var frames := res as SpriteFrames
+			if frames.has_animation("default") and frames.get_frame_count("default") > 0:
+				_editor_preview_texture = frames.get_frame_texture("default", 0)
+	if _editor_preview_texture:
+		var rect := Rect2(center - INDICATOR_PREVIEW_SIZE / 2.0, INDICATOR_PREVIEW_SIZE)
+		draw_texture_rect(_editor_preview_texture, rect, false, Color(1, 1, 1, 0.85))
 
 
 func _notification(what: int) -> void:
@@ -269,6 +290,13 @@ func _calculate_center(points: PackedVector2Array) -> Vector2:
 	for point in points:
 		sum += point
 	return sum / points.size()
+
+
+## Return the center of the territory polygon in this node's local coordinates.
+## Used by TerritoryIndicatorManager to place the indicator sprite.
+func get_center_local() -> Vector2:
+	var points := _polygon_points_backing if not _polygon_points_backing.is_empty() else original_polygon_points
+	return _calculate_center(points)
 
 
 func _gui_input(event: InputEvent) -> void:
@@ -386,18 +414,20 @@ func add_adjacent_node(node: TerritoryNode) -> void:
 		adjacent_nodes.append(node)
 
 
-## Select this territory (emits signal). Shows cyan glow while claim panel is open.
+## Select this territory (emits signal). Does NOT show glow - GameIntro calls show_selection_glow() when panel opens.
 func _select_territory() -> void:
 	if not territory_data:
 		push_warning("TerritoryNode '%s' has no territory_data. Cannot select." % name)
 		return
-	
-	is_selected = true
-	_show_selected_glow()
 	territory_selected.emit(territory_data.territory_id)
 
 
-## Deselect this territory
+## Show cyan selection glow (call when claim panel is open for this territory)
+func show_selection_glow() -> void:
+	is_selected = true
+	_show_selected_glow()
+
+## Deselect this territory (remove cyan glow - call when claim panel closes)
 func deselect() -> void:
 	is_selected = false
 	_hide_glow()

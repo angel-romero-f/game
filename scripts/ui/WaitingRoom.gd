@@ -31,12 +31,12 @@ func _ready() -> void:
 		multiplayer.peer_connected.disconnect(_on_peer_connected)
 	if multiplayer.peer_disconnected.is_connected(_on_peer_disconnected):
 		multiplayer.peer_disconnected.disconnect(_on_peer_disconnected)
-	if Net.player_names_updated.is_connected(_on_player_names_updated):
-		Net.player_names_updated.disconnect(_on_player_names_updated)
+	if PlayerDataSync.player_names_updated.is_connected(_on_player_names_updated):
+		PlayerDataSync.player_names_updated.disconnect(_on_player_names_updated)
 	
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-	Net.player_names_updated.connect(_on_player_names_updated)
+	PlayerDataSync.player_names_updated.connect(_on_player_names_updated)
 	
 	_refresh_players_list()
 
@@ -58,16 +58,16 @@ func _refresh_players_list() -> void:
 	if multiplayer.has_multiplayer_peer():
 		# Add self
 		var my_id := multiplayer.get_unique_id()
-		var my_name: String = String(Net.player_names.get(my_id, "You"))
+		var my_name: String = String(PlayerDataSync.player_names.get(my_id, "You"))
 		players_list.add_item("%s - ID: %d" % [my_name, my_id])
 		
 		# Add other peers
 		var peers := multiplayer.get_peers()
 		for peer_id in peers:
 			if peer_id != my_id:
-				var peer_name: String = String(Net.player_names.get(peer_id, "Player"))
+				var peer_name: String = String(PlayerDataSync.player_names.get(peer_id, "Player"))
 				players_list.add_item("%s - ID: %d" % [peer_name, peer_id])
 
 func _on_back_pressed() -> void:
-	Net.disconnect_from_game()
+	NetworkManager.disconnect_from_game()
 	App.go("res://scenes/ui/PlayMenu.tscn")

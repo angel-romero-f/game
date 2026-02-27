@@ -1,993 +1,207 @@
 extends Node
 
-const PORT := 9999
-const MAX_CLIENTS := 4
+## Net — Thin facade for backward compatibility.
+## Delegates all functionality to the decoupled modules:
+##   NetworkManager  (connection transport)
+##   PlayerDataSync  (player data sync)
+##   PhaseController (phase state)
+##   PhaseSync       (phase RPCs)
+##   BattleSync      (battle coordination)
+##   TerritorySync   (territory claiming)
+##
+## New code should reference the specific modules directly.
 
-var peer: ENetMultiplayerPeer
-
+# ---------- FORWARDED SIGNALS ----------
+# Connection
 signal joined_game
 signal left_game
+# Player data
 signal player_names_updated
 signal player_races_updated
 signal player_rolls_updated
-
-# Phase sync signals
+# Phase
 signal phase_changed(phase_id: int)
 signal done_counts_updated(done_count: int, total: int)
+signal turn_changed(peer_id: int)
+signal map_sub_phase_changed(sub_phase: int)
+# Battle
 signal battle_decider_changed(peer_id: int)
 signal battle_choices_updated(snapshot: Dictionary)
 signal battle_started(p1_id: int, p2_id: int, side: String)
 signal battle_finished_broadcast()
+signal battle_cards_updated
+signal battle_start_requested
+signal battle_player_left(peer_id: int)
+# Territory
+signal territory_claimed(territory_id: int, owner_id: int, cards: Array)
+signal territory_claim_rejected(territory_id: int, claimer_name: String)
 
-var player_names: Dictionary = {}
-var player_races: Dictionary = {} # peer_id -> race_name (String)
-var player_rolls: Dictionary = {} # peer_id -> roll value (int)
+func _ready() -> void:
+	# Forward connection signals
+	NetworkManager.joined_game.connect(func(): joined_game.emit())
+	NetworkManager.left_game.connect(func(): left_game.emit())
 
-# ========== PHASE SYNC STATE ==========
-# Current game phase: 0 = RESOURCE_PHASE, 1 = BATTLE_PHASE
-var current_phase: int = 0
-# Per-player done state in current phase: {peer_id: bool}
-var player_done_state: Dictionary = {}
-# Per-player minigame counts for resource phase: {peer_id: int}
-var player_minigame_counts: Dictionary = {}
+	# Forward player data signals
+	PlayerDataSync.player_names_updated.connect(func(): player_names_updated.emit())
+	PlayerDataSync.player_races_updated.connect(func(): player_races_updated.emit())
+	PlayerDataSync.player_rolls_updated.connect(func(): player_rolls_updated.emit())
 
-# ========== BATTLE PHASE STATE ==========
-# Current position in turn order for battle decisions
-var battle_decision_index: int = 0
-# Current decider's peer_id
-var battle_decider_peer_id: int = -1
-# Each player's battle choice: {peer_id: "LEFT"/"RIGHT"/"SKIP"/"UNDECIDED"}
-var battle_choices: Dictionary = {}
-# Queues for each battle option (max 2 each)
-var left_queue: Array = []
-var right_queue: Array = []
-# Whether a battle is currently in progress
-var battle_in_progress: bool = false
-# The 2 participants in the active battle
-var active_battle_participants: Array = []
-# Which side the active battle is for
-var active_battle_side: String = ""
-# Reports from participants that they finished the battle
-var battle_finished_reports: Dictionary = {} # {peer_id: bool}
+	# Forward phase signals
+	PhaseController.phase_changed.connect(func(id): phase_changed.emit(id))
+	PhaseController.turn_changed.connect(func(id): turn_changed.emit(id))
+	PhaseController.done_counts_updated.connect(func(d, t): done_counts_updated.emit(d, t))
+	PhaseController.map_sub_phase_changed.connect(func(sp): map_sub_phase_changed.emit(sp))
 
+	# Forward battle signals
+	BattleSync.battle_decider_changed.connect(func(id): battle_decider_changed.emit(id))
+	BattleSync.battle_choices_updated.connect(func(s): battle_choices_updated.emit(s))
+	BattleSync.battle_started.connect(func(p1, p2, side): battle_started.emit(p1, p2, side))
+	BattleSync.battle_finished_broadcast.connect(func(): battle_finished_broadcast.emit())
+	BattleSync.battle_cards_updated.connect(func(): battle_cards_updated.emit())
+	BattleSync.battle_start_requested.connect(func(): battle_start_requested.emit())
+	BattleSync.battle_player_left.connect(func(id): battle_player_left.emit(id))
+
+	# Forward territory signals
+	TerritorySync.territory_claimed.connect(func(tid, oid, c): territory_claimed.emit(tid, oid, c))
+	TerritorySync.territory_claim_rejected.connect(func(tid, n): territory_claim_rejected.emit(tid, n))
+
+# ---------- PLAYER DATA PROPERTIES (delegated to PlayerDataSync) ----------
+var player_names: Dictionary:
+	get: return PlayerDataSync.player_names
+	set(v): PlayerDataSync.player_names = v
+
+var player_races: Dictionary:
+	get: return PlayerDataSync.player_races
+	set(v): PlayerDataSync.player_races = v
+
+var player_rolls: Dictionary:
+	get: return PlayerDataSync.player_rolls
+	set(v): PlayerDataSync.player_rolls = v
+
+# ---------- PHASE STATE PROPERTIES (delegated to PhaseController) ----------
+var current_phase: int:
+	get: return PhaseController.current_phase
+	set(v): PhaseController.current_phase = v
+
+var map_sub_phase: int:
+	get: return PhaseController.map_sub_phase
+	set(v): PhaseController.map_sub_phase = v
+
+var player_done_state: Dictionary:
+	get: return PhaseController.player_done_state
+	set(v): PhaseController.player_done_state = v
+
+var player_minigame_counts: Dictionary:
+	get: return PhaseController.player_minigame_counts
+	set(v): PhaseController.player_minigame_counts = v
+
+var current_turn_peer_id: int:
+	get: return PhaseController.current_turn_peer_id
+	set(v): PhaseController.current_turn_peer_id = v
+
+var current_turn_index: int:
+	get: return PhaseController.current_turn_index
+	set(v): PhaseController.current_turn_index = v
+
+# ---------- BATTLE STATE PROPERTIES (delegated to BattleSync) ----------
+var battle_decision_index: int:
+	get: return BattleSync.battle_decision_index
+	set(v): BattleSync.battle_decision_index = v
+
+var battle_decider_peer_id: int:
+	get: return BattleSync.battle_decider_peer_id
+	set(v): BattleSync.battle_decider_peer_id = v
+
+var battle_choices: Dictionary:
+	get: return BattleSync.battle_choices
+	set(v): BattleSync.battle_choices = v
+
+var left_queue: Array:
+	get: return BattleSync.left_queue
+	set(v): BattleSync.left_queue = v
+
+var right_queue: Array:
+	get: return BattleSync.right_queue
+	set(v): BattleSync.right_queue = v
+
+var battle_in_progress: bool:
+	get: return BattleSync.battle_in_progress
+	set(v): BattleSync.battle_in_progress = v
+
+var active_battle_participants: Array:
+	get: return BattleSync.active_battle_participants
+	set(v): BattleSync.active_battle_participants = v
+
+var active_battle_side: String:
+	get: return BattleSync.active_battle_side
+	set(v): BattleSync.active_battle_side = v
+
+var battle_finished_reports: Dictionary:
+	get: return BattleSync.battle_finished_reports
+	set(v): BattleSync.battle_finished_reports = v
+
+var battle_placed_cards: Dictionary:
+	get: return BattleSync.battle_placed_cards
+	set(v): BattleSync.battle_placed_cards = v
+
+var battle_ready_peers: Dictionary:
+	get: return BattleSync.battle_ready_peers
+	set(v): BattleSync.battle_ready_peers = v
+
+# ---------- CONSTANTS ----------
 const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
+const PORT := 9999
+const MAX_CLIENTS := 4
 
-## Host a game server
-func host_game() -> void:
-	# Clean up any existing connection first (silent cleanup)
-	if multiplayer.multiplayer_peer:
-		_cleanup_connection()
-	
-	peer = ENetMultiplayerPeer.new()
-	var err := peer.create_server(PORT, MAX_CLIENTS)
-	if err != OK:
-		push_error("create_server failed: %s" % err)
-		return
-	multiplayer.multiplayer_peer = peer
-	_connect_signals()
-	joined_game.emit()
+# ---------- CONNECTION METHODS (delegated to NetworkManager) ----------
+func host_game() -> bool: return NetworkManager.host_game()
+func join_game(code: String) -> void: NetworkManager.join_game(code)
+func get_host_code() -> String: return NetworkManager.get_host_code()
+func disconnect_from_game() -> void: NetworkManager.disconnect_from_game()
 
-## Join a game using code string like:
-## - IPv4: "192.168.1.12" or "192.168.1.12:9999"
-## - IPv6: "2607:fb91::1" or "[2607:fb91::1]:9999"
-func join_game(code: String) -> void:
-	_debug_log("=== JOIN_GAME CALLED ===")
-	_debug_log("Raw code input: '%s'" % code)
-	
-	var ip := ""
-	var port := PORT
+# ---------- PLAYER DATA METHODS (delegated to PlayerDataSync) ----------
+func submit_player_name(player_name: String) -> void: PlayerDataSync.submit_player_name(player_name)
+func submit_player_race(race: String) -> void: PlayerDataSync.submit_player_race(race)
+func host_generate_and_sync_rolls() -> void: PlayerDataSync.host_generate_and_sync_rolls()
+func request_roll_generation() -> void: PlayerDataSync.request_roll_generation()
 
-	# Parse code: handle both IPv4 and IPv6 formats
-	code = code.strip_edges()
-	
-	# Check if it's IPv6 format (contains multiple colons or starts with bracket)
-	if code.begins_with("["):
-		# Bracketed IPv6: [2607:fb91::1] or [2607:fb91::1]:9999
-		var bracket_end := code.find("]")
-		if bracket_end > 0:
-			ip = code.substr(1, bracket_end - 1)  # Extract IP without brackets
-			if code.length() > bracket_end + 1 and code[bracket_end + 1] == ":":
-				# Has port after bracket
-				port = code.substr(bracket_end + 2).to_int()
-				if port <= 0:
-					port = PORT
-		else:
-			ip = code  # Malformed, try anyway
-	elif code.count(":") > 1:
-		# Unbracketed IPv6 (no port possible in this format): 2607:fb91::1
-		ip = code
-	elif ":" in code:
-		# IPv4 with port: 192.168.1.12:9999
-		var parts := code.split(":")
-		if parts.size() >= 2:
-			ip = parts[0]
-		else:
-			ip = code
-	else:
-		# Plain IPv4: 192.168.1.12
-		ip = code
+# ---------- PHASE METHODS (delegated to PhaseSync) ----------
+func host_init_card_command_phase() -> void: PhaseSync.host_init_card_command_phase()
+func host_init_card_collection_phase() -> void: PhaseSync.host_init_card_collection_phase()
+func request_end_card_command_turn() -> void: PhaseSync.request_end_card_command_turn()
+func request_end_claiming_turn() -> void: PhaseSync.request_end_claiming_turn()
+func request_increment_minigame() -> void: PhaseSync.request_increment_minigame()
+func request_skip_to_done() -> void: PhaseSync.request_skip_to_done()
 
-	_debug_log("Parsed IP: '%s', Port: %d" % [ip, port])
-	_debug_log("IP type: %s" % ("IPv6" if ":" in ip else "IPv4"))
+func reset_phase_sync_state() -> void:
+	PhaseController.reset()
+	BattleSync.reset_battle_state()
 
-	if ip.is_empty():
-		push_error("Invalid host code: empty IP")
-	_debug_log("=== DISCONNECTED FROM SERVER ===")
-	_debug_log("Lost connection to the host")
+# ---------- BATTLE METHODS (delegated to BattleSync) ----------
+func clear_battle_state() -> void: BattleSync.clear_battle_state()
+func request_place_battle_card(slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
+	BattleSync.request_place_battle_card(slot_index, sprite_frames_path, frame_index)
+func request_remove_battle_card(slot_index: int) -> void: BattleSync.request_remove_battle_card(slot_index)
+func request_battle_ready() -> void: BattleSync.request_battle_ready()
+func notify_battle_left() -> void: BattleSync.notify_battle_left()
+func notify_battle_finished() -> void: BattleSync.notify_battle_finished()
+func request_start_territory_battle(territory_id: int) -> void: BattleSync.request_start_territory_battle(territory_id)
+func request_battle_choice(choice: String) -> void: BattleSync.request_battle_choice(choice)
 
-## Get the host's likely network address (IPv4 or IPv6)
-## Returns IP only, no port. For IPv6, returns bracketed format like [2607:fb91::1]
-func get_host_code() -> String:
-	var addresses := IP.get_local_addresses()
+# ---------- TERRITORY METHODS (delegated to TerritorySync) ----------
+func request_claim_territory(territory_id: int, owner_id: int, cards: Array) -> void:
+	TerritorySync.request_claim_territory(territory_id, owner_id, cards)
 
-	_debug_log("get_host_code() - Scanning for network IP...")
-	_debug_log("All addresses found: %s" % str(addresses))
+# ---------- RPC METHODS (needed because consumers call Net.xyz.rpc()) ----------
+# These RPCs execute on all peers via the Net autoload node.
 
-	# Collect candidate IPs with priorities (lower = better)
-	var ipv4_candidates: Array = []
-	var ipv6_candidates: Array = []
-	
-	for address in addresses:
-		if typeof(address) != TYPE_STRING:
-			continue
-		
-		# Check if IPv6 (contains colons)
-		if ":" in address:
-			# Skip localhost IPv6
-			if address == "0:0:0:0:0:0:0:1" or address == "::1":
-				_debug_log("  Skipping %s (IPv6 localhost)" % address)
-				continue
-			# Skip link-local IPv6 (fe80::)
-			if address.begins_with("fe80:"):
-				_debug_log("  Skipping %s (IPv6 link-local)" % address)
-				continue
-			# Global unicast IPv6 addresses start with 2 or 3
-			if address.begins_with("2") or address.begins_with("3"):
-				ipv6_candidates.append({"ip": address, "reason": "IPv6 global"})
-				_debug_log("  IPv6 Candidate: %s (global unicast)" % address)
-			continue
-		
-		# IPv4 handling
-		if address == "127.0.0.1" or address.begins_with("127."):
-			_debug_log("  Skipping %s (IPv4 localhost)" % address)
-			continue
-		
-		var parts := address.split(".")
-		if parts.size() != 4:
-			continue
-		
-		# Skip IANA reserved ranges that aren't routable
-		# 192.0.0.x - IANA reserved (DS-Lite, etc.)
-		# 192.0.2.x - TEST-NET-1
-		# 198.51.100.x - TEST-NET-2
-		# 203.0.113.x - TEST-NET-3
-		if address.begins_with("192.0.0.") or address.begins_with("192.0.2.") or address.begins_with("198.51.100.") or address.begins_with("203.0.113."):
-			_debug_log("  Skipping %s (IANA reserved - not routable)" % address)
-			continue
-		
-		# Skip common VM bridge ranges (these are NOT reachable from other devices)
-		# 192.168.64.x - Parallels/UTM default bridge
-		# 192.168.56.x - VirtualBox host-only
-		# 172.17.x.x - Docker default bridge
-		if address.begins_with("192.168.64.") or address.begins_with("192.168.56.") or address.begins_with("172.17."):
-			_debug_log("  Skipping %s (VM bridge - not reachable externally)" % address)
-			continue
-		
-		# Prioritize real network interfaces
-		# Priority 1: Standard home/office LAN (192.168.x.x except VM bridges, 10.x.x.x)
-		if address.begins_with("192.168."):
-			ipv4_candidates.append({"ip": address, "priority": 1, "reason": "192.168.x.x LAN"})
-			_debug_log("  IPv4 Candidate: %s (priority 1 - 192.168.x.x LAN)" % address)
-		elif address.begins_with("10."):
-			ipv4_candidates.append({"ip": address, "priority": 1, "reason": "10.x.x.x LAN"})
-			_debug_log("  IPv4 Candidate: %s (priority 1 - 10.x.x.x LAN)" % address)
-		# Priority 2: 172.16-31.x.x private range
-		elif address.begins_with("172."):
-			var second_octet := parts[1].to_int()
-			if second_octet >= 16 and second_octet <= 31:
-				ipv4_candidates.append({"ip": address, "priority": 2, "reason": "172.x private"})
-				_debug_log("  IPv4 Candidate: %s (priority 2 - 172.x private)" % address)
-		# Priority 3: Any other non-localhost IPv4 (could be public/institutional network)
-		else:
-			ipv4_candidates.append({"ip": address, "priority": 3, "reason": "other IPv4"})
-			_debug_log("  IPv4 Candidate: %s (priority 3 - other network IP)" % address)
-	
-	# Prefer IPv4 if we have good candidates
-	if ipv4_candidates.size() > 0:
-		ipv4_candidates.sort_custom(func(a, b): return a["priority"] < b["priority"])
-		var best = ipv4_candidates[0]
-		_debug_log("  SELECTED IPv4: %s (%s)" % [best["ip"], best["reason"]])
-		return best["ip"]
-	
-	# Fall back to IPv6 global addresses (common on university/modern networks)
-	if ipv6_candidates.size() > 0:
-		var best = ipv6_candidates[0]
-		# Return IPv6 in a format that can be used directly
-		# Note: For connection, IPv6 addresses need brackets in URLs but ENet handles raw
-		_debug_log("  SELECTED IPv6: %s (%s)" % [best["ip"], best["reason"]])
-		_debug_log("  NOTE: IPv6-only network detected. Both devices must support IPv6.")
-		return best["ip"]
-
-	# Fallback to localhost
-	_debug_log("  WARNING: No network IP found! Falling back to 127.0.0.1")
-	_debug_log("  This means networking will ONLY work on the same machine!")
-	return "127.0.0.1"
-
-const DEBUG_NETWORKING := true
-
-func _debug_log(message: String) -> void:
-	if DEBUG_NETWORKING:
-		var timestamp := Time.get_time_string_from_system()
-		print("[Net %s] %s" % [timestamp, message])
-		
-func _connect_signals() -> void:
-	# Disconnect first to avoid duplicates
-	_disconnect_signals()
-	# Then connect
-	multiplayer.peer_connected.connect(_on_peer_connected)
-	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
-
-func _disconnect_signals() -> void:
-	if multiplayer.peer_connected.is_connected(_on_peer_connected):
-		multiplayer.peer_connected.disconnect(_on_peer_connected)
-	if multiplayer.peer_disconnected.is_connected(_on_peer_disconnected):
-		multiplayer.peer_disconnected.disconnect(_on_peer_disconnected)
-
-func _on_peer_connected(id: int) -> void:
-	# Only server handles spawns
-	if multiplayer.is_server():
-		get_tree().call_group("game", "server_spawn_player", id)
-
-func _on_peer_disconnected(id: int) -> void:
-	# Only server handles despawns
-	if multiplayer.is_server():
-		get_tree().call_group("game", "server_despawn_player", id)
-		if player_names.has(id):
-			player_names.erase(id)
-			_sync_player_names()
-		if player_races.has(id):
-			player_races.erase(id)
-			_sync_player_races()
-
-## Internal cleanup (doesn't emit left_game signal)
-func _cleanup_connection() -> void:
-	_disconnect_signals()
-	if multiplayer.multiplayer_peer:
-		multiplayer.multiplayer_peer.close()
-	multiplayer.multiplayer_peer = null
-	peer = null
-	player_names.clear()
-	player_races.clear()
-	player_rolls.clear()
-
-## Disconnect from multiplayer session
-func disconnect_from_game() -> void:
-	_cleanup_connection()
-	left_game.emit()
-
-## Submit local player's name to the host
-func submit_player_name(player_name: String) -> void:
-	var cleaned := player_name.strip_edges()
-	if cleaned.is_empty():
-		return
-	
-	if multiplayer.is_server():
-		_set_player_name(multiplayer.get_unique_id(), cleaned)
-		_sync_player_names()
-	else:
-		set_player_name.rpc_id(1, cleaned)
-
-## Submit local player's race to the host.
-## Pass "" to unselect.
-func submit_player_race(race: String) -> void:
-	var cleaned := race.strip_edges()
-	if multiplayer.is_server():
-		_server_try_set_player_race(multiplayer.get_unique_id(), cleaned)
-		_sync_player_races()
-	else:
-		set_player_race.rpc_id(1, cleaned)
-
-@rpc("any_peer", "reliable")
-func set_player_name(player_name: String) -> void:
-	if not multiplayer.is_server():
-		return
-	
-	var cleaned := player_name.strip_edges()
-	if cleaned.is_empty():
-		return
-	
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_set_player_name(id, cleaned)
-	_sync_player_names()
-
-@rpc("authority", "call_local", "reliable")
-func sync_player_names(names: Dictionary) -> void:
-	player_names = names.duplicate(true)
-	player_names_updated.emit()
-
-func _set_player_name(id: int, player_name: String) -> void:
-	player_names[id] = player_name
-
-func _sync_player_names() -> void:
-	sync_player_names.rpc(player_names)
-
-func _server_try_set_player_race(id: int, race: String) -> void:
-	# Unselect
-	if race.is_empty():
-		if player_races.has(id):
-			player_races.erase(id)
-		return
-	# Validate
-	if not RACES.has(race):
-		return
-	# Enforce "one race per player"
-	for pid in player_races.keys():
-		if int(pid) != id and String(player_races[pid]) == race:
-			return
-	player_races[id] = race
-
-func _sync_player_races() -> void:
-	sync_player_races.rpc(player_races)
-
-@rpc("any_peer", "reliable")
-func set_player_race(race: String) -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_try_set_player_race(id, race.strip_edges())
-	_sync_player_races()
-
-@rpc("authority", "call_local", "reliable")
-func sync_player_races(races: Dictionary) -> void:
-	player_races = races.duplicate(true)
-	player_races_updated.emit()
-
-## RPC: Start the multiplayer race selection screen (called by host).
 @rpc("authority", "call_local", "reliable")
 func start_race_select() -> void:
 	if multiplayer.is_server():
-		_sync_player_races()
+		PlayerDataSync._sync_player_races()
 	App.go("res://scenes/ui/MultiplayerRaceSelect.tscn")
 
-## RPC: Start the game (called by host, transitions everyone to GameIntro scene)
 @rpc("authority", "call_local", "reliable")
 func start_game() -> void:
 	App.setup_multiplayer_game()
-	# Host initializes phase state for all participants
-	if multiplayer.is_server():
-		host_init_resource_phase()
-	App.go("res://scenes/ui/GameIntro.tscn")
-
-## Host: Initialize resource phase for all participants (call at game start and when returning to resource)
-func host_init_resource_phase() -> void:
-	if not multiplayer.is_server():
-		return
-
-	reset_phase_sync_state()
-	current_phase = 0
-	_init_phase_done_state()
-
-	var all_peers := _get_all_peer_ids()
-	var total := all_peers.size()
-	print("[Net] Host init resource phase with ", total, " participants: ", all_peers)
-
-	# Broadcast initial state to all clients
-	rpc_set_phase.rpc(0)
-	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate()) # <<< ADD THIS
-	rpc_sync_done_counts.rpc(0, total)
-
-## Host generates rolls for all players and syncs to everyone
-func host_generate_and_sync_rolls() -> void:
-	if not multiplayer.is_server():
-		push_warning("Only host can generate rolls")
-		return
-	
-	player_rolls.clear()
-	
-	# Generate initial rolls for all players
-	for pid in player_races.keys():
-		player_rolls[pid] = randi_range(1, 20)
-	
-	# Resolve ties by rerolling until all rolls are unique
-	_resolve_roll_ties()
-	
-	print("Host generated rolls: ", player_rolls)
-	
-	# Sync to all clients
-	_sync_player_rolls()
-
-func _resolve_roll_ties() -> void:
-	var max_attempts := 20
-	var attempts := 0
-	
-	while attempts < max_attempts:
-		var has_ties := false
-		var roll_counts := {}  # roll_value -> array of player ids
-		
-		# Count occurrences of each roll
-		for pid in player_rolls.keys():
-			var roll_val: int = player_rolls[pid]
-			if not roll_counts.has(roll_val):
-				roll_counts[roll_val] = []
-			roll_counts[roll_val].append(pid)
-		
-		# Find and resolve ties
-		for roll_val in roll_counts.keys():
-			if roll_counts[roll_val].size() > 1:
-				has_ties = true
-				print("Tie at roll ", roll_val, " - rerolling for: ", roll_counts[roll_val])
-				# Reroll for all tied players
-				for pid in roll_counts[roll_val]:
-					player_rolls[pid] = randi_range(1, 20)
-		
-		if not has_ties:
-			break
-		attempts += 1
-	
-	if attempts >= max_attempts:
-		push_warning("Could not fully resolve roll ties after ", max_attempts, " attempts")
-
-func _sync_player_rolls() -> void:
-	sync_player_rolls.rpc(player_rolls)
-
-@rpc("authority", "call_local", "reliable")
-func sync_player_rolls(rolls: Dictionary) -> void:
-	player_rolls = rolls.duplicate(true)
-	print("Received synced rolls: ", player_rolls)
-	
-	# Update App.game_players with the synced rolls
-	for i in range(App.game_players.size()):
-		var pid = App.game_players[i].get("id", -1)
-		if player_rolls.has(pid):
-			App.game_players[i]["roll"] = player_rolls[pid]
-			print("Updated player ", App.game_players[i].get("name"), " roll to ", player_rolls[pid])
-	
-	player_rolls_updated.emit()
-
-## Request host to generate rolls (called by GameIntro when ready)
-func request_roll_generation() -> void:
-	if multiplayer.is_server():
-		host_generate_and_sync_rolls()
-	else:
-		# Client requests host to generate
-		request_rolls_from_host.rpc_id(1)
-
-@rpc("any_peer", "reliable")
-func request_rolls_from_host() -> void:
-	if multiplayer.is_server():
-		host_generate_and_sync_rolls()
-
-## ========== CARD BATTLE MULTIPLAYER ==========
-## Server-authoritative state for the card battle scene.
-## peer_id -> { slot_index (0-2) -> { "path": String, "frame": int } }
-var battle_placed_cards: Dictionary = {}
-## peer_id -> true when that player has pressed Start Battle
-var battle_ready_peers: Dictionary = {}
-## Emitted when any player's card placement changes (for remote display)
-signal battle_cards_updated
-## Emitted when server broadcasts that all players are ready and battle should start
-signal battle_start_requested
-## Emitted when a player leaves the battle (peer_id)
-signal battle_player_left(peer_id: int)
-
-## Clear battle state when leaving battle scene
-func clear_battle_state() -> void:
-	battle_placed_cards.clear()
-	battle_ready_peers.clear()
-
-## Request to place a card (client -> server). Server validates and broadcasts.
-func request_place_battle_card(slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
-	if multiplayer.is_server():
-		_server_place_battle_card(multiplayer.get_unique_id(), slot_index, sprite_frames_path, frame_index)
-	else:
-		place_battle_card.rpc_id(1, slot_index, sprite_frames_path, frame_index)
-
-## Request to remove a card from a slot
-func request_remove_battle_card(slot_index: int) -> void:
-	if multiplayer.is_server():
-		_server_remove_battle_card(multiplayer.get_unique_id(), slot_index)
-	else:
-		remove_battle_card.rpc_id(1, slot_index)
-
-@rpc("any_peer", "reliable")
-func place_battle_card(slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_place_battle_card(id, slot_index, sprite_frames_path, frame_index)
-
-func _server_place_battle_card(peer_id: int, slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
-	if slot_index < 0 or slot_index > 2:
-		return
-	if not battle_placed_cards.has(peer_id):
-		battle_placed_cards[peer_id] = {}
-	battle_placed_cards[peer_id][slot_index] = {"path": sprite_frames_path, "frame": frame_index}
-	sync_battle_cards.rpc(battle_placed_cards)
-
-@rpc("any_peer", "reliable")
-func remove_battle_card(slot_index: int) -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_remove_battle_card(id, slot_index)
-
-func _server_remove_battle_card(peer_id: int, slot_index: int) -> void:
-	if battle_placed_cards.has(peer_id) and battle_placed_cards[peer_id].has(slot_index):
-		battle_placed_cards[peer_id].erase(slot_index)
-		sync_battle_cards.rpc(battle_placed_cards)
-
-## Request to clear all of my placed cards (e.g. when I lose a battle). Server clears and broadcasts.
-func request_clear_my_battle_cards() -> void:
-	if multiplayer.is_server():
-		_server_clear_battle_cards_for_peer(multiplayer.get_unique_id())
-	else:
-		clear_my_battle_cards.rpc_id(1)
-
-@rpc("any_peer", "reliable")
-func clear_my_battle_cards() -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_clear_battle_cards_for_peer(id)
-
-func _server_clear_battle_cards_for_peer(peer_id: int) -> void:
-	if battle_placed_cards.has(peer_id):
-		battle_placed_cards.erase(peer_id)
-		sync_battle_cards.rpc(battle_placed_cards)
-
-@rpc("authority", "call_local", "reliable")
-func sync_battle_cards(cards: Dictionary) -> void:
-	battle_placed_cards = cards.duplicate(true)
-	battle_cards_updated.emit()
-
-## Request to mark self as ready for battle (Start Battle pressed)
-func request_battle_ready() -> void:
-	if multiplayer.is_server():
-		_server_set_battle_ready(multiplayer.get_unique_id())
-	else:
-		set_battle_ready.rpc_id(1)
-
-@rpc("any_peer", "reliable")
-func set_battle_ready() -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_set_battle_ready(id)
-
-func _server_set_battle_ready(peer_id: int) -> void:
-	battle_ready_peers[peer_id] = true
-	# Check if all players in the game have pressed ready
-	var all_peers: Array = []
-	all_peers.append(multiplayer.get_unique_id())
-	for pid in multiplayer.get_peers():
-		all_peers.append(pid)
-	var all_ready := true
-	for pid in all_peers:
-		if not battle_ready_peers.get(pid, false):
-			all_ready = false
-			break
-	if all_ready:
-		start_battle.rpc()
-
-@rpc("authority", "call_local", "reliable")
-func start_battle() -> void:
-	battle_start_requested.emit()
-
-## Notify server that local player is leaving the battle (for persistence)
-func notify_battle_left() -> void:
-	var my_id := multiplayer.get_unique_id()
-	battle_player_left.emit(my_id)
-	# Persist our cards to BattleStateManager for restoration when returning
-	if BattleStateManager:
-		var territory_id := BattleStateManager.current_territory_id
-		BattleStateManager.clear_local_slots(territory_id)
-		if battle_placed_cards.has(my_id):
-			var placed: Dictionary = battle_placed_cards[my_id]
-			for slot_idx in placed:
-				var data: Dictionary = placed[slot_idx]
-				var path: String = data.get("path", "")
-				var frame: int = int(data.get("frame", 0))
-				if not path.is_empty():
-					BattleStateManager.set_local_slot(int(slot_idx), path, frame, territory_id)
-
-# ========== PHASE SYNC SYSTEM ==========
-
-## Reset all phase-related state for a new game
-func reset_phase_sync_state() -> void:
-	current_phase = 0
-	player_done_state.clear()
-	player_minigame_counts.clear()
-	battle_decision_index = 0
-	battle_decider_peer_id = -1
-	battle_choices.clear()
-	left_queue.clear()
-	right_queue.clear()
-	battle_in_progress = false
-	active_battle_participants.clear()
-	active_battle_side = ""
-	battle_finished_reports.clear()
-
-## Get all connected peer IDs including host
-func _get_all_peer_ids() -> Array:
-	var peers: Array = []
-	peers.append(multiplayer.get_unique_id())
-	for pid in multiplayer.get_peers():
-		peers.append(pid)
-	return peers
-
-## Initialize done state for all players at phase start
-func _init_phase_done_state() -> void:
-	player_done_state.clear()
-	player_minigame_counts.clear()
-	for pid in _get_all_peer_ids():
-		player_done_state[pid] = false
-		player_minigame_counts[pid] = 0
-
-## Count how many players are done
-func _count_done_players() -> int:
-	var count := 0
-	for pid in player_done_state.keys():
-		if player_done_state.get(pid, false):
-			count += 1
-	return count
-
-## Check if all players are done and advance phase if so
-func _check_all_done_and_advance() -> void:
-	if not multiplayer.is_server():
-		return
-	var all_peers := _get_all_peer_ids()
-	var done_count := _count_done_players()
-	
-	# Broadcast updated done state dictionary AND counts to all clients
-	rpc_sync_done_state.rpc(player_done_state.duplicate(), player_minigame_counts.duplicate())
-	rpc_sync_done_counts.rpc(done_count, all_peers.size())
-	
-	if done_count >= all_peers.size():
-		# All done - advance to next phase
-		if current_phase == 0:
-			_server_enter_battle_phase()
-
-## Client requests to increment their minigame count
-func request_increment_minigame() -> void:
-	if multiplayer.is_server():
-		_server_increment_minigame(multiplayer.get_unique_id())
-	else:
-		server_increment_minigame.rpc_id(1)
-
-@rpc("any_peer", "reliable")
-func server_increment_minigame() -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_increment_minigame(id)
-
-func _server_increment_minigame(peer_id: int) -> void:
-	# REJECT if player is already done or count >= 2
-	if player_done_state.get(peer_id, false):
-		print("[Net] REJECTED minigame increment from ", peer_id, " (already done)")
-		return
-	var current_count: int = player_minigame_counts.get(peer_id, 0)
-	if current_count >= 2:
-		print("[Net] REJECTED minigame increment from ", peer_id, " (already at 2)")
-		return
-	
-	var count: int = current_count + 1
-	player_minigame_counts[peer_id] = count
-	print("[Net] Player ", peer_id, " minigame count: ", count)
-	
-	# Auto-mark done at 2 minigames
-	if count >= 2:
-		player_done_state[peer_id] = true
-		print("[Net] Player ", peer_id, " auto-marked done (2 minigames)")
-	
-	_check_all_done_and_advance()
-
-## Client requests to skip (mark done early)
-func request_skip_to_done() -> void:
-	if multiplayer.is_server():
-		_server_mark_done(multiplayer.get_unique_id())
-	else:
-		server_skip_to_done.rpc_id(1)
-
-@rpc("any_peer", "reliable")
-func server_skip_to_done() -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_mark_done(id)
-
-func _server_mark_done(peer_id: int) -> void:
-	player_done_state[peer_id] = true
-	print("[Net] Player ", peer_id, " marked done (skip)")
-	_check_all_done_and_advance()
-
-## Authority broadcasts new phase
-@rpc("authority", "call_local", "reliable")
-func rpc_set_phase(phase_id: int) -> void:
-	current_phase = phase_id
-	phase_changed.emit(phase_id)
-
-## Authority broadcasts done state dictionaries to clients
-@rpc("authority", "call_local", "reliable")
-func rpc_sync_done_state(done_state: Dictionary, minigame_counts: Dictionary) -> void:
-	player_done_state = done_state.duplicate()
-	player_minigame_counts = minigame_counts.duplicate()
-
-## Authority broadcasts done counts
-@rpc("authority", "call_local", "reliable")
-func rpc_sync_done_counts(done: int, total: int) -> void:
-	done_counts_updated.emit(done, total)
-
-## Server enters battle phase
-func _server_enter_battle_phase() -> void:
-	if not multiplayer.is_server():
-		return
-	current_phase = 1
-	rpc_set_phase.rpc(1)
-	_init_battle_phase()
-
-## Initialize battle phase state
-func _init_battle_phase() -> void:
-	battle_decision_index = 0
-	battle_choices.clear()
-	left_queue.clear()
-	right_queue.clear()
-	battle_in_progress = false
-	active_battle_participants.clear()
-	active_battle_side = ""
-	battle_finished_reports.clear()
-	
-	# Initialize all players as UNDECIDED
-	for pid in _get_all_peer_ids():
-		battle_choices[pid] = "UNDECIDED"
-	
-	# Set first decider based on turn order
-	_advance_decider_to_next_eligible()
-
-## Advance to the next eligible decider (skip those who already chose or are in battle)
-func _advance_decider_to_next_eligible() -> void:
-	if not multiplayer.is_server():
-		return
-	
-	# If battle in progress, wait
-	if battle_in_progress:
-		return
-	
-	var turn_order := App.turn_order
-	if turn_order.is_empty():
-		return
-	
-	# Check if both queues are full - auto-skip remaining UNDECIDED
-	if left_queue.size() >= 2 and right_queue.size() >= 2:
-		for pid in battle_choices.keys():
-			if battle_choices[pid] == "UNDECIDED":
-				battle_choices[pid] = "SKIP"
-				print("[Net] Auto-skipped player ", pid, " (both queues full)")
-		_sync_battle_state()
-		_check_battle_phase_complete()
-		return
-	
-	# Find next eligible player
-	var found := false
-	var start_idx := battle_decision_index
-	
-	for i in range(turn_order.size()):
-		var idx := (start_idx + i) % turn_order.size()
-		var player = turn_order[idx]
-		var pid: int = player.get("id", -1)
-		
-		# Skip if already made a choice
-		if battle_choices.get(pid, "UNDECIDED") != "UNDECIDED":
-			continue
-		
-		# Skip if in active battle
-		if active_battle_participants.has(pid):
-			continue
-		
-		# Found eligible player
-		battle_decision_index = idx
-		battle_decider_peer_id = pid
-		found = true
-		break
-	
-	if found:
-		print("[Net] Battle decider set to: ", battle_decider_peer_id)
-		rpc_set_battle_decider.rpc(battle_decider_peer_id)
-		_sync_battle_state()
-	else:
-		# No eligible players - check if phase is complete
-		_check_battle_phase_complete()
-
-## Check if battle phase is complete (all decided and no battle in progress)
-func _check_battle_phase_complete() -> void:
-	if battle_in_progress:
-		return
-	
-	var all_decided := true
-	for pid in battle_choices.keys():
-		if battle_choices[pid] == "UNDECIDED":
-			all_decided = false
-			break
-	
-	if all_decided:
-		print("[Net] Battle phase complete, returning to resource phase")
-		# Use host_init_resource_phase for consistent initialization
-		host_init_resource_phase()
-
-## Authority broadcasts current decider
-@rpc("authority", "call_local", "reliable")
-func rpc_set_battle_decider(peer_id: int) -> void:
-	battle_decider_peer_id = peer_id
-	battle_decider_changed.emit(peer_id)
-
-## Client submits their battle choice
-func request_battle_choice(choice: String) -> void:
-	if multiplayer.is_server():
-		_server_process_battle_choice(multiplayer.get_unique_id(), choice)
-	else:
-		server_battle_choice.rpc_id(1, choice)
-
-@rpc("any_peer", "reliable")
-func server_battle_choice(choice: String) -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_process_battle_choice(id, choice)
-
-func _server_process_battle_choice(peer_id: int, choice: String) -> void:
-	# Validate it's this player's turn
-	if peer_id != battle_decider_peer_id:
-		print("[Net] Rejected choice from ", peer_id, " (not their turn)")
-		return
-	
-	# Validate choice
-	if choice not in ["LEFT", "RIGHT", "SKIP"]:
-		print("[Net] Invalid choice: ", choice)
-		return
-	
-	# Check if queue is full
-	if choice == "LEFT" and left_queue.size() >= 2:
-		print("[Net] Left queue full, rejecting")
-		return
-	if choice == "RIGHT" and right_queue.size() >= 2:
-		print("[Net] Right queue full, rejecting")
-		return
-	
-	# Record choice
-	battle_choices[peer_id] = choice
-	print("[Net] Player ", peer_id, " chose: ", choice)
-	
-	# Add to queue if not skip
-	if choice == "LEFT":
-		left_queue.append(peer_id)
-	elif choice == "RIGHT":
-		right_queue.append(peer_id)
-	
-	_sync_battle_state()
-	
-	# Check if a battle should start (2 players in same queue)
-	if left_queue.size() == 2:
-		_start_paired_battle(left_queue[0], left_queue[1], "LEFT")
-	elif right_queue.size() == 2:
-		_start_paired_battle(right_queue[0], right_queue[1], "RIGHT")
-	else:
-		# Advance to next decider
-		battle_decision_index += 1
-		_advance_decider_to_next_eligible()
-
-## Sync battle state to all clients
-func _sync_battle_state() -> void:
-	var snapshot := {
-		"choices": battle_choices.duplicate(),
-		"left_queue": left_queue.duplicate(),
-		"right_queue": right_queue.duplicate(),
-		"battle_in_progress": battle_in_progress,
-		"active_participants": active_battle_participants.duplicate(),
-		"active_side": active_battle_side,
-	}
-	rpc_sync_battle_state.rpc(snapshot)
-
-@rpc("authority", "call_local", "reliable")
-func rpc_sync_battle_state(snapshot: Dictionary) -> void:
-	battle_choices = snapshot.get("choices", {}).duplicate()
-	left_queue = snapshot.get("left_queue", []).duplicate()
-	right_queue = snapshot.get("right_queue", []).duplicate()
-	battle_in_progress = snapshot.get("battle_in_progress", false)
-	active_battle_participants = snapshot.get("active_participants", []).duplicate()
-	active_battle_side = snapshot.get("active_side", "")
-	battle_choices_updated.emit(snapshot)
-
-## Start a paired battle between two players
-func _start_paired_battle(p1_id: int, p2_id: int, side: String) -> void:
-	if not multiplayer.is_server():
-		return
-	
-	print("[Net] Starting paired battle: ", p1_id, " vs ", p2_id, " on ", side)
-	battle_in_progress = true
-	active_battle_participants = [p1_id, p2_id]
-	active_battle_side = side
-	battle_finished_reports.clear()
-	
-	_sync_battle_state()
-	rpc_start_paired_battle.rpc(p1_id, p2_id, side)
-
-@rpc("authority", "call_local", "reliable")
-func rpc_start_paired_battle(p1_id: int, p2_id: int, side: String) -> void:
-	battle_started.emit(p1_id, p2_id, side)
-
-## Called by battle participants when they finish the battle
-func notify_battle_finished() -> void:
-	if multiplayer.is_server():
-		_server_battle_finished_report(multiplayer.get_unique_id())
-	else:
-		server_battle_finished.rpc_id(1)
-
-@rpc("any_peer", "reliable")
-func server_battle_finished() -> void:
-	if not multiplayer.is_server():
-		return
-	var id := multiplayer.get_remote_sender_id()
-	if id == 0:
-		id = multiplayer.get_unique_id()
-	_server_battle_finished_report(id)
-
-func _server_battle_finished_report(peer_id: int) -> void:
-	if not active_battle_participants.has(peer_id):
-		return
-	
-	battle_finished_reports[peer_id] = true
-	print("[Net] Battle finished report from: ", peer_id)
-	
-	# Check if BOTH participants reported
-	var both_done := true
-	for pid in active_battle_participants:
-		if not battle_finished_reports.get(pid, false):
-			both_done = false
-			break
-	
-	if both_done:
-		print("[Net] Both participants finished, resuming decisions")
-		var p1: int = int(active_battle_participants[0]) if active_battle_participants.size() > 0 else -1
-		var p2: int = int(active_battle_participants[1]) if active_battle_participants.size() > 1 else -1
-		var side: String = String(active_battle_side)
-
-		
-		# Clear the queue that was used
-		if side == "LEFT":
-			left_queue.clear()
-		elif side == "RIGHT":
-			right_queue.clear()
-		
-		# Reset battle state
-		battle_in_progress = false
-		active_battle_participants.clear()
-		active_battle_side = ""
-		battle_finished_reports.clear()
-		
-		_sync_battle_state()
-		rpc_battle_finished.rpc(p1, p2, side)
-		
-		# Resume decisions
-		_advance_decider_to_next_eligible()
-
-@rpc("authority", "call_local", "reliable")
-func rpc_battle_finished(_p1_id: int, _p2_id: int, _side: String) -> void:
-	battle_finished_broadcast.emit()
+	App.go("res://scenes/ui/game_intro.tscn")

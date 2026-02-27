@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://cvb2mp03rdvom"
+path="res://.godot/imported/claim_panel_v1.pxo-84371a63be68d5c02927fd5987edd8be.res"
+
+[deps]
+
+source_file="res://assets/claim_panel_v1.pxo"
+dest_files=["res://.godot/imported/claim_panel_v1.pxo-84371a63be68d5c02927fd5987edd8be.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

@@ -1,9 +1,11 @@
-[gd_scene load_steps=7 format=3 uid="uid://be4idcbjrjt5g"]
+[gd_scene load_steps=11 format=3 uid="uid://be4idcbjrjt5g"]
 
 [ext_resource type="Script" uid="uid://boc3ncb3lcip" path="res://scripts/ui/GameIntro.gd" id="1_script"]
-[ext_resource type="Texture2D" uid="uid://bpfva4dgesxq3" path="res://pictures/map.png" id="2_map"]
+[ext_resource type="Texture2D" uid="uid://ume2mxr7dsd8" path="res://pictures/map.png" id="2_map"]
 [ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="3_iwbf0"]
 [ext_resource type="Script" uid="uid://nry7roh0gj2b" path="res://scripts/TerritoryNode.gd" id="4_35fog"]
+[ext_resource type="Script" uid="uid://cna46rt126dqk" path="res://scripts/ui/game_intro/ClaimTerritoryUI.gd" id="5_claim"]
+[ext_resource type="Script" uid="uid://doenqsxx8bdlc" path="res://scripts/ui/game_intro/SettingsPanelUI.gd" id="6_settings"]
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_D20"]
 bg_color = Color(0, 0, 0, 0)
@@ -14,6 +16,20 @@ corner_radius_bottom_right = 16
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_HandPanel"]
 bg_color = Color(0.1, 0.1, 0.15, 0.85)
 corner_radius_top_right = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ClaimPanelTransparent"]
+bg_color = Color(0, 0, 0, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ClaimLabelBg"]
+bg_color = Color(0, 0, 0, 0.55)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
 
 [node name="GameIntro" type="Control"]
 layout_mode = 3
@@ -56,12 +72,12 @@ mouse_filter = 2
 [node name="TerritoryNode" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 226.0
+offset_left = 234.0
 offset_top = 15.0
-offset_right = 408.0
-offset_bottom = 145.0
+offset_right = 376.0
+offset_bottom = 130.0
 script = ExtResource("4_35fog")
-polygon_points = PackedVector2Array(0, 0, 182, 0, 182, 130, 0, 130, 0, 0)
+polygon_points = PackedVector2Array(0, 0, 142, 0, 142, 115, 0, 115)
 territory_id_override = 1
 region_id_override = 1
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
@@ -76,7 +92,7 @@ offset_bottom = 617.0
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 156, 0, 156, 109, 0, 109)
 territory_id_override = 2
-region_id_override = 5
+region_id_override = 1
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode3" type="Control" parent="TerritoriesContainer"]
@@ -90,6 +106,129 @@ rotation = 2.5132742
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 206.73575, 0, 206.73575, 187.7273)
 territory_id_override = 3
+region_id_override = 2
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode4" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 39.0
+offset_top = 28.0
+offset_right = 221.0
+offset_bottom = 148.0
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 182, 0, 182, 120, 0, 120)
+territory_id_override = 4
+region_id_override = 2
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode5" type="Control" parent="TerritoriesContainer"]
+anchors_preset = 0
+offset_left = 140.00002
+offset_top = 589.0
+offset_right = 337.2862
+offset_bottom = 793.905
+rotation = -0.79761547
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 197.28616, 0, 197.28616, 204.90503)
+territory_id_override = 5
+region_id_override = 3
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode6" type="Control" parent="TerritoriesContainer"]
+anchors_preset = 0
+offset_left = 462.0
+offset_top = 587.0
+offset_right = 658.9595
+offset_bottom = 707.3804
+rotation = -2.4521875
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 196.95947, 0, 196.95947, 120.38037)
+territory_id_override = 6
+region_id_override = 3
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode7" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 908.0193
+offset_top = 607.0718
+offset_right = 1008.8179
+offset_bottom = 714.5448
+rotation = -3.1415927
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 100.798584, 0, 100.798584, 107.47302, 0, 107.47302)
+territory_id_override = 7
+region_id_override = 4
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode8" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 1053.1818
+offset_top = 581.5454
+offset_right = 1193.4089
+offset_bottom = 685.0516
+rotation = -3.1415927
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 140.22717, 0, 140.22717, 103.506165, 0, 103.506165)
+territory_id_override = 8
+region_id_override = 4
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode9" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 796.0
+offset_top = 106.0
+offset_right = 920.2909
+offset_bottom = 203.83215
+rotation = -3.1415927
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 124.290955, 0, 124.290955, 97.83215, 0, 97.83215)
+territory_id_override = 9
+region_id_override = 5
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode10" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 790.0
+offset_top = 276.00003
+offset_right = 870.94934
+offset_bottom = 343.39853
+rotation = -0.79761547
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 80.94934, 0, 80.94934, 67.3985, 0, 67.3985)
+territory_id_override = 10
+region_id_override = 5
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode11" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 790.00006
+offset_top = 411.00003
+offset_right = 912.4414
+offset_bottom = 560.698
+rotation = -0.79761547
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 122.441345, 0, 122.441345, 149.69797)
+territory_id_override = 11
+region_id_override = 6
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode12" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 790.0
+offset_top = 233.0
+offset_right = 900.4614
+offset_bottom = 325.15897
+rotation = -3.1415927
+script = ExtResource("4_35fog")
+polygon_points = PackedVector2Array(0, 0, 110.461426, 0, 110.461426, 92.158966, 0, 92.158966)
+territory_id_override = 12
 region_id_override = 6
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
@@ -98,10 +237,8 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -3.0
-offset_top = -7.0
-offset_right = -3.0
-offset_bottom = -7.0
+offset_top = 1.0
+offset_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
@@ -291,18 +428,18 @@ visible = false
 layout_mode = 1
 offset_left = 10.0
 offset_top = 10.0
-offset_right = 180.0
-offset_bottom = 200.0
+offset_right = 310.0
+offset_bottom = 350.0
 
 [node name="VBoxContainer" type="VBoxContainer" parent="OrderCornerContainer"]
 layout_mode = 2
-theme_override_constants/separation = 5
+theme_override_constants/separation = 12
 
 [node name="TitleLabel" type="Label" parent="OrderCornerContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 20
+theme_override_font_sizes/font_size = 36
 text = "Turn Order"
 horizontal_alignment = 1
 
@@ -512,16 +649,14 @@ vertical_alignment = 1
 [node name="SkipToBattleButton" type="Button" parent="."]
 visible = false
 layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
+anchors_preset = 2
 anchor_top = 1.0
-anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -110.0
-offset_top = -130.0
-offset_right = 110.0
-offset_bottom = -90.0
-grow_horizontal = 2
+offset_left = 20.0
+offset_top = -90.0
+offset_right = 240.0
+offset_bottom = -45.0
+grow_horizontal = 0
 grow_vertical = 0
 theme_override_fonts/font = ExtResource("3_iwbf0")
 theme_override_font_sizes/font_size = 22
@@ -530,16 +665,14 @@ text = "Skip to Battle Phase"
 [node name="MinigamesCounterLabel" type="Label" parent="."]
 visible = false
 layout_mode = 1
-anchors_preset = 7
-anchor_left = 0.5
+anchors_preset = 2
 anchor_top = 1.0
-anchor_right = 0.5
 anchor_bottom = 1.0
-offset_left = -100.0
-offset_top = -160.0
-offset_right = 100.0
-offset_bottom = -135.0
-grow_horizontal = 2
+offset_left = 20.0
+offset_top = -35.0
+offset_right = 200.0
+offset_bottom = -10.0
+grow_horizontal = 0
 grow_vertical = 0
 theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
 theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
@@ -547,7 +680,55 @@ theme_override_constants/outline_size = 3
 theme_override_fonts/font = ExtResource("3_iwbf0")
 theme_override_font_sizes/font_size = 20
 text = "Minigames: 0/2"
+
+[node name="VictoryOverlay" type="ColorRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.15, 0.05, 0.92)
+
+[node name="VictoryLabel" type="Label" parent="VictoryOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -350.0
+offset_top = -60.0
+offset_right = 350.0
+offset_bottom = 60.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(0.9, 0.95, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 56
+text = "Victory!"
 horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="MainMenuButton" type="Button" parent="VictoryOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -120.0
+offset_top = 30.0
+offset_right = 120.0
+offset_bottom = 80.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 24
+text = "Main Menu"
 
 [node name="PhaseOverlay" type="ColorRect" parent="."]
 visible = false
@@ -633,6 +814,7 @@ anchor_right = 1.0
 anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
+script = ExtResource("6_settings")
 
 [node name="SettingsContainer" type="VBoxContainer" parent="SettingsPanel"]
 layout_mode = 1
@@ -738,6 +920,29 @@ theme_override_fonts/font = ExtResource("3_iwbf0")
 theme_override_font_sizes/font_size = 24
 text = "Main Menu"
 
+[node name="CardCountLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -110.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 40
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
 [node name="CardIconButton" type="Button" parent="."]
 visible = false
 layout_mode = 1
@@ -746,15 +951,14 @@ anchor_left = 1.0
 anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = -80.0
-offset_top = -80.0
-offset_right = -15.0
-offset_bottom = -15.0
+offset_left = -110.0
+offset_top = -110.0
+offset_right = -10.0
+offset_bottom = -10.0
 grow_horizontal = 0
 grow_vertical = 0
 theme_override_fonts/font = ExtResource("3_iwbf0")
 theme_override_font_sizes/font_size = 16
-text = "Cards"
 
 [node name="CardIcon" type="TextureRect" parent="CardIconButton"]
 layout_mode = 1
@@ -764,7 +968,7 @@ anchor_bottom = 1.0
 offset_left = 5.0
 offset_top = 5.0
 offset_right = -5.0
-offset_bottom = -15.0
+offset_bottom = -5.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
@@ -815,67 +1019,100 @@ theme_override_constants/separation = 15
 alignment = 1
 
 [node name="ClaimTerritoryPanel" type="PanelContainer" parent="."]
-visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -220.0
-offset_top = -180.0
-offset_right = 220.0
-offset_bottom = 180.0
+offset_left = -1320.0
+offset_top = -270.0
+offset_right = 1320.0
+offset_bottom = 270.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_ClaimPanelTransparent")
+script = ExtResource("5_claim")
+
+[node name="ContentWrap" type="Control" parent="ClaimTerritoryPanel"]
+layout_mode = 2
+
+[node name="PanelBackground" type="TextureRect" parent="ClaimTerritoryPanel/ContentWrap"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+
+[node name="CenterContainer" type="CenterContainer" parent="ClaimTerritoryPanel/ContentWrap"]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="MarginContainer" type="MarginContainer" parent="ClaimTerritoryPanel"]
+[node name="MarginContainer" type="MarginContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer"]
+custom_minimum_size = Vector2(440, 360)
 layout_mode = 2
 theme_override_constants/margin_left = 20
 theme_override_constants/margin_top = 15
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 15
 
-[node name="VBoxContainer" type="VBoxContainer" parent="ClaimTerritoryPanel/MarginContainer"]
+[node name="VBoxContainer" type="VBoxContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="TitleLabel" type="Label" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer"]
+[node name="TitleLabel" type="Label" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("StyleBoxFlat_ClaimLabelBg")
 text = "Claim Territory"
 horizontal_alignment = 1
 
-[node name="SlotsContainer" type="HBoxContainer" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer"]
+[node name="HandLabel" type="Label" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
-theme_override_constants/separation = 10
-alignment = 1
-
-[node name="HandLabel" type="Label" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer"]
-layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 28
+theme_override_styles/normal = SubResource("StyleBoxFlat_ClaimLabelBg")
 text = "Place 1-3 cards (click card, then click a slot)"
 horizontal_alignment = 1
 
-[node name="ClaimHandContainer" type="HBoxContainer" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer"]
-layout_mode = 2
-size_flags_vertical = 3
-theme_override_constants/separation = 8
-alignment = 1
-
-[node name="ButtonsContainer" type="HBoxContainer" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer"]
+[node name="ButtonsContainer" type="HBoxContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
 theme_override_constants/separation = 20
 alignment = 1
 
-[node name="CancelButton" type="Button" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer"]
-layout_mode = 2
-text = "Cancel"
-
-[node name="ClaimButton" type="Button" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer"]
+[node name="ClaimButton" type="Button" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
 layout_mode = 2
 text = "Claim territory"
 
-[node name="PlayMinigameButton" type="Button" parent="ClaimTerritoryPanel/MarginContainer/VBoxContainer/ButtonsContainer"]
+[node name="AttackButton" type="Button" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
+visible = false
+layout_mode = 2
+text = "Attack"
+
+[node name="PlayMinigameButton" type="Button" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsContainer"]
 layout_mode = 2
 text = "Play minigame"
+
+[node name="ClaimTerritoryPanel_ContentWrap_MarginContainer_VBoxContainer#SlotsContainer" type="HBoxContainer" parent="."]
+layout_mode = 0
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="ClaimTerritoryPanel_ContentWrap_MarginContainer_VBoxContainer#ClaimHandContainer" type="HBoxContainer" parent="."]
+layout_mode = 0
+size_flags_vertical = 3
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="ClaimTerritoryPanel_ContentWrap_MarginContainer_VBoxContainer_ButtonsContainer#CancelButton" type="Button" parent="."]
+layout_mode = 0
+text = "Cancel"

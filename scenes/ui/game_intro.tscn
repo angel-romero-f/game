@@ -1,0 +1,1102 @@
+[gd_scene load_steps=11 format=3 uid="uid://c4f2c1607m3nt"]
+
+[ext_resource type="Script" uid="uid://boc3ncb3lcip" path="res://scripts/ui/GameIntro.gd" id="1_c8f5n"]
+[ext_resource type="Texture2D" uid="uid://c0km4c8rjs33o" path="res://pictures/map.png" id="2_vp4a4"]
+[ext_resource type="Script" uid="uid://nry7roh0gj2b" path="res://scripts/TerritoryNode.gd" id="3_vp4a4"]
+[ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="4_84bnw"]
+[ext_resource type="Script" uid="uid://cna46rt126dqk" path="res://scripts/ui/game_intro/ClaimTerritoryUI.gd" id="5_claim"]
+[ext_resource type="Script" uid="uid://doenqsxx8bdlc" path="res://scripts/ui/game_intro/SettingsPanelUI.gd" id="6_settings"]
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_D20"]
+bg_color = Color(0, 0, 0, 0)
+border_color = Color(0, 0, 0, 0)
+corner_radius_top_right = 16
+corner_radius_bottom_right = 16
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_HandPanel"]
+bg_color = Color(0.1, 0.1, 0.15, 0.85)
+corner_radius_top_right = 12
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ClaimPanelTransparent"]
+bg_color = Color(0, 0, 0, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ClaimLabelBg"]
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
+bg_color = Color(0, 0, 0, 0.55)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+
+[node name="GameIntro" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_c8f5n")
+
+[node name="MapBackground" type="TextureRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 10.0
+offset_top = -20.0
+offset_right = 1.0
+offset_bottom = 51.0
+grow_horizontal = 2
+grow_vertical = 2
+texture = ExtResource("2_vp4a4")
+expand_mode = 1
+stretch_mode = 6
+
+[node name="MapOverlay" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.1, 0.1, 0.15, 0.6)
+
+[node name="TerritoriesContainer" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TerritoryNode" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 445.0
+offset_top = 379.0
+offset_right = 579.0
+offset_bottom = 476.0
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 134, 0, 134, 97, 0, 97)
+territory_id_override = 1
+region_id_override = 6
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode2" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 116.0
+offset_top = 47.0
+offset_right = 239.0
+offset_bottom = 154.0
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 123, 0, 123, 107, 0, 107)
+territory_id_override = 2
+region_id_override = 1
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode3" type="Control" parent="TerritoriesContainer"]
+anchors_preset = 0
+offset_left = 209.99998
+offset_top = 624.0
+offset_right = 407.28616
+offset_bottom = 828.905
+rotation = -0.79761547
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 197.28616, 0, 197.28616, 204.90503, 0, 0)
+territory_id_override = 3
+region_id_override = 6
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode4" type="Control" parent="TerritoriesContainer"]
+anchors_preset = 0
+offset_left = 249.0
+offset_top = 147.0
+offset_right = 380.0
+offset_bottom = 245.0
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 131, 0, 131, 98, 0, 98)
+territory_id_override = 4
+region_id_override = 1
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode5" type="Control" parent="TerritoriesContainer"]
+anchors_preset = 0
+offset_left = 134.0
+offset_top = 346.00003
+offset_right = 330.95947
+offset_bottom = 466.3804
+rotation = -0.5864306
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 196.95947, 0, 196.95947, 120.38037, 0, 0)
+territory_id_override = 5
+region_id_override = 1
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode6" type="Control" parent="TerritoriesContainer"]
+anchors_preset = 0
+offset_left = 57.0
+offset_top = 439.0
+offset_right = 188.0
+offset_bottom = 537.0
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 131, 0, 131, 98, 0, 98)
+territory_id_override = 6
+region_id_override = 1
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode7" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 847.0
+offset_top = 145.0
+offset_right = 923.61206
+offset_bottom = 217.1012
+rotation = -3.1415927
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 76.61206, 0, 76.61206, 72.1012, 0, 72.1012)
+territory_id_override = 7
+region_id_override = 6
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode8" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 798.0
+offset_top = 497.0
+offset_right = 938.2272
+offset_bottom = 600.50616
+rotation = -3.1415927
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 140.22717, 0, 140.22717, 103.506165, 0, 103.506165, 0, 0)
+territory_id_override = 8
+region_id_override = 3
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode9" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 532.0
+offset_top = 155.0
+offset_right = 656.2909
+offset_bottom = 252.83215
+rotation = -3.1415927
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 124.290955, 0, 124.290955, 97.83215, 0, 97.83215, 0, 0)
+territory_id_override = 9
+region_id_override = 3
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode10" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 979.0
+offset_top = 489.99997
+offset_right = 1101.4414
+offset_bottom = 639.69794
+rotation = -0.79761547
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 122.441345, 0, 122.441345, 149.69797, 0, 0)
+territory_id_override = 10
+region_id_override = 3
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode11" type="Control" parent="TerritoriesContainer"]
+layout_mode = 1
+anchors_preset = 0
+offset_left = 1021.0
+offset_top = 253.0
+offset_right = 1131.4614
+offset_bottom = 345.15897
+rotation = -3.1415927
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 110.461426, 0, 110.461426, 92.158966, 0, 92.158966)
+territory_id_override = 11
+region_id_override = 6
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="TerritoryNode14" type="Control" parent="TerritoriesContainer"]
+anchors_preset = 0
+offset_left = 712.0
+offset_top = 113.0
+offset_right = 836.2909
+offset_bottom = 210.83215
+rotation = -3.1415927
+script = ExtResource("3_vp4a4")
+polygon_points = PackedVector2Array(0, 0, 124.290955, 0, 124.290955, 97.83215, 0, 97.83215, 0, 0)
+territory_id_override = 12
+region_id_override = 3
+metadata/_custom_type_script = "uid://nry7roh0gj2b"
+
+[node name="ShowcaseContainer" type="CenterContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_top = 1.0
+offset_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ShowcaseContainer"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="RaceImageContainer" type="CenterContainer" parent="ShowcaseContainer/VBoxContainer"]
+layout_mode = 2
+
+[node name="RaceImageBG" type="Panel" parent="ShowcaseContainer/VBoxContainer/RaceImageContainer"]
+custom_minimum_size = Vector2(280, 280)
+layout_mode = 2
+
+[node name="RaceImage" type="TextureRect" parent="ShowcaseContainer/VBoxContainer/RaceImageContainer"]
+custom_minimum_size = Vector2(256, 256)
+layout_mode = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="NameLabel" type="Label" parent="ShowcaseContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 60
+text = "Player Name"
+horizontal_alignment = 1
+
+[node name="D20Container" type="CenterContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="D20Container"]
+layout_mode = 2
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="RollingLabel" type="Label" parent="D20Container/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 36
+text = "Rolling..."
+horizontal_alignment = 1
+
+[node name="D20Sprite" type="Panel" parent="D20Container/VBoxContainer"]
+custom_minimum_size = Vector2(160, 160)
+layout_mode = 2
+size_flags_horizontal = 4
+theme_override_styles/panel = SubResource("StyleBoxFlat_D20")
+
+[node name="D20Anim" type="TextureRect" parent="D20Container/VBoxContainer/D20Sprite"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="D20Label" type="Label" parent="D20Container/VBoxContainer/D20Sprite"]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 68
+text = "D20"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="RollResultLabel" type="Label" parent="D20Container/VBoxContainer"]
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 80
+text = "20"
+horizontal_alignment = 1
+
+[node name="PlayerRollContainer" type="CenterContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="PlayerRollContainer"]
+custom_minimum_size = Vector2(300, 200)
+layout_mode = 2
+
+[node name="VBoxContainer" type="VBoxContainer" parent="PlayerRollContainer/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="RollTextLabel" type="Label" parent="PlayerRollContainer/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 40
+text = "Your Roll"
+horizontal_alignment = 1
+
+[node name="RollValueLabel" type="Label" parent="PlayerRollContainer/Panel/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.2, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 110
+text = "20"
+horizontal_alignment = 1
+
+[node name="OrderCenterContainer" type="CenterContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Panel" type="Panel" parent="OrderCenterContainer"]
+custom_minimum_size = Vector2(400, 350)
+layout_mode = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="OrderCenterContainer/Panel"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+
+[node name="VBoxContainer" type="VBoxContainer" parent="OrderCenterContainer/Panel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 15
+
+[node name="TitleLabel" type="Label" parent="OrderCenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 42
+text = "Turn Order"
+horizontal_alignment = 1
+
+[node name="OrderList" type="VBoxContainer" parent="OrderCenterContainer/Panel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="OrderCornerContainer" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+offset_left = 10.0
+offset_top = 10.0
+offset_right = 310.0
+offset_bottom = 350.0
+
+[node name="VBoxContainer" type="VBoxContainer" parent="OrderCornerContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="OrderCornerContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 36
+text = "Turn Order"
+horizontal_alignment = 1
+
+[node name="MinigameButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -230.0
+offset_top = -80.0
+offset_right = -80.0
+offset_bottom = -30.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "River"
+
+[node name="BridgeMinigameButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -70.0
+offset_top = -80.0
+offset_right = 70.0
+offset_bottom = -30.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "Bridge"
+
+[node name="IceFishingButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = 80.0
+offset_top = -80.0
+offset_right = 230.0
+offset_bottom = -30.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "Ice Fishing"
+
+[node name="PlayMinigamesButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -70.0
+offset_top = -130.0
+offset_right = 70.0
+offset_bottom = -90.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 20
+text = "Random"
+
+[node name="BattleButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 20.0
+offset_top = -25.0
+offset_right = 170.0
+offset_bottom = 25.0
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 26
+text = "Left Battle"
+
+[node name="LeftBattleSelectors" type="VBoxContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 4
+anchor_top = 0.5
+anchor_bottom = 0.5
+offset_left = 20.0
+offset_top = 35.0
+offset_right = 170.0
+offset_bottom = 135.0
+grow_vertical = 2
+theme_override_constants/separation = 5
+
+[node name="BattleButtonRight" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -170.0
+offset_top = -25.0
+offset_right = -20.0
+offset_bottom = 25.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 26
+text = "Right Battle"
+
+[node name="RightBattleSelectors" type="VBoxContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 6
+anchor_left = 1.0
+anchor_top = 0.5
+anchor_right = 1.0
+anchor_bottom = 0.5
+offset_left = -170.0
+offset_top = 35.0
+offset_right = -20.0
+offset_bottom = 135.0
+grow_horizontal = 0
+grow_vertical = 2
+theme_override_constants/separation = 5
+
+[node name="CurrentDeciderLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -200.0
+offset_top = 60.0
+offset_right = 200.0
+offset_bottom = 95.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 4
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 28
+text = "Current decider: Player"
+horizontal_alignment = 1
+
+[node name="SkipBattleDecisionButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -80.0
+offset_top = -80.0
+offset_right = 80.0
+offset_bottom = -40.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "Skip Battling"
+
+[node name="WaitingOverlay" type="ColorRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.05, 0.1, 0.85)
+
+[node name="WaitingLabel" type="Label" parent="WaitingOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -40.0
+offset_right = 300.0
+offset_bottom = 40.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 5
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 36
+text = "Waiting for other players..."
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="SkipToBattleButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -90.0
+offset_right = 240.0
+offset_bottom = -45.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "Skip to Battle Phase"
+
+[node name="MinigamesCounterLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -35.0
+offset_right = 200.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 3
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 20
+text = "Minigames: 0/2"
+
+[node name="PhaseOverlay" type="ColorRect" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.05, 0.1, 0.9)
+
+[node name="PhaseLabel" type="Label" parent="PhaseOverlay"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -300.0
+offset_top = -50.0
+offset_right = 300.0
+offset_bottom = 50.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 64
+text = "Collect Your Resources"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="FinishClaimingButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -130.0
+offset_right = 220.0
+offset_bottom = -80.0
+grow_horizontal = 0
+grow_vertical = 0
+text = "Finish claiming"
+
+[node name="ReadyForBattleButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 20.0
+offset_top = -180.0
+offset_right = 200.0
+offset_bottom = -130.0
+grow_horizontal = 0
+grow_vertical = 0
+text = "Ready for battle"
+
+[node name="SettingsButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -100.0
+offset_top = 10.0
+offset_right = -10.0
+offset_bottom = 50.0
+grow_horizontal = 0
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "Settings"
+
+[node name="SettingsPanel" type="Panel" parent="."]
+process_mode = 3
+visible = false
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("6_settings")
+
+[node name="SettingsContainer" type="VBoxContainer" parent="SettingsPanel"]
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -250.0
+offset_top = -250.0
+offset_right = 250.0
+offset_bottom = 250.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/separation = 10
+
+[node name="SettingsLabel" type="Label" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 40
+text = "Settings"
+horizontal_alignment = 1
+
+[node name="MasterVolume" type="VBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/MasterVolume"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "Master Volume"
+
+[node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/MasterVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="MusicVolume" type="VBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/MusicVolume"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "Music Volume"
+
+[node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/MusicVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="SFXVolume" type="VBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/SFXVolume"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "Game Elements Volume"
+
+[node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/SFXVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="UIVolume" type="VBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="Label" type="Label" parent="SettingsPanel/SettingsContainer/UIVolume"]
+layout_mode = 2
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 22
+text = "UI Volume"
+
+[node name="Slider" type="HSlider" parent="SettingsPanel/SettingsContainer/UIVolume"]
+layout_mode = 2
+max_value = 1.0
+step = 0.01
+value = 0.8
+
+[node name="ButtonContainer" type="HBoxContainer" parent="SettingsPanel/SettingsContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="ResumeButton" type="Button" parent="SettingsPanel/SettingsContainer/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 24
+text = "Close"
+
+[node name="MainMenuButton" type="Button" parent="SettingsPanel/SettingsContainer/ButtonContainer"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 24
+text = "Main Menu"
+
+[node name="CurrentPhaseLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 5
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -250.0
+offset_top = 6.0
+offset_right = 250.0
+offset_bottom = 60.0
+grow_horizontal = 2
+theme_override_colors/font_color = Color(1, 0.85, 0.3, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 56
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="CardIconButton" type="Button" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -110.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 16
+
+[node name="CardIcon" type="TextureRect" parent="CardIconButton"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 5.0
+offset_top = 5.0
+offset_right = -5.0
+offset_bottom = -5.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+stretch_mode = 5
+
+[node name="CardCountLabel" type="Label" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -110.0
+offset_top = -110.0
+offset_right = -10.0
+offset_bottom = -10.0
+grow_horizontal = 0
+grow_vertical = 0
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 6
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 40
+text = "0"
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="HandDisplayPanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 7
+anchor_left = 0.5
+anchor_top = 1.0
+anchor_right = 0.5
+anchor_bottom = 1.0
+offset_left = -280.0
+offset_top = -200.0
+offset_right = 280.0
+offset_bottom = -10.0
+grow_horizontal = 2
+grow_vertical = 0
+theme_override_styles/panel = SubResource("StyleBoxFlat_HandPanel")
+
+[node name="MarginContainer" type="MarginContainer" parent="HandDisplayPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 15
+theme_override_constants/margin_top = 10
+theme_override_constants/margin_right = 15
+theme_override_constants/margin_bottom = 10
+
+[node name="VBoxContainer" type="VBoxContainer" parent="HandDisplayPanel/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 5
+
+[node name="HandLabel" type="Label" parent="HandDisplayPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 0.9, 0.5, 1)
+theme_override_colors/font_outline_color = Color(0, 0, 0, 1)
+theme_override_constants/outline_size = 2
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 70
+text = "Your Hand"
+horizontal_alignment = 1
+
+[node name="HandContainer" type="HBoxContainer" parent="HandDisplayPanel/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 15
+alignment = 1
+
+[node name="ClaimTerritoryPanel" type="PanelContainer" parent="."]
+visible = false
+layout_mode = 1
+anchors_preset = 8
+anchor_left = 0.5
+anchor_top = 0.5
+anchor_right = 0.5
+anchor_bottom = 0.5
+offset_left = -1320.0
+offset_top = -270.0
+offset_right = 1320.0
+offset_bottom = 270.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_styles/panel = SubResource("StyleBoxFlat_ClaimPanelTransparent")
+script = ExtResource("5_claim")
+
+[node name="ContentWrap" type="Control" parent="ClaimTerritoryPanel"]
+layout_mode = 2
+
+[node name="PanelBackground" type="TextureRect" parent="ClaimTerritoryPanel/ContentWrap"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+expand_mode = 1
+
+[node name="CenterContainer" type="CenterContainer" parent="ClaimTerritoryPanel/ContentWrap"]
+layout_mode = 0
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="MarginContainer" type="MarginContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer"]
+custom_minimum_size = Vector2(440, 360)
+layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 15
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 15
+
+[node name="VBoxContainer" type="VBoxContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TitleLabel" type="Label" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("StyleBoxFlat_ClaimLabelBg")
+text = "Claim Territory"
+horizontal_alignment = 1
+
+[node name="SlotsContainer" type="HBoxContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="HandLabel" type="Label" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("4_84bnw")
+theme_override_font_sizes/font_size = 28
+theme_override_styles/normal = SubResource("StyleBoxFlat_ClaimLabelBg")
+text = "Place 1-3 cards (click card, then click a slot)"
+horizontal_alignment = 1
+
+[node name="HandScrollVBox" type="VBoxContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="HandScrollContainer" type="ScrollContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandScrollVBox"]
+layout_mode = 2
+horizontal_scroll_mode = 2
+vertical_scroll_mode = 0
+
+[node name="ClaimHandContainer" type="HBoxContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandScrollVBox/HandScrollContainer"]
+layout_mode = 2
+theme_override_constants/separation = 8
+alignment = 1
+
+[node name="ButtonsCenterWrapper" type="CenterContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="ButtonsContainer" type="HBoxContainer" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper"]
+layout_mode = 2
+theme_override_constants/separation = 20
+alignment = 1
+
+[node name="CancelButton" type="Button" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer"]
+layout_mode = 2
+text = "Cancel"
+
+[node name="ClaimButton" type="Button" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer"]
+layout_mode = 2
+text = "Claim territory"
+
+[node name="AttackButton" type="Button" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer"]
+visible = false
+layout_mode = 2
+text = "Attack"
+
+[node name="PlayMinigameButton" type="Button" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer"]
+layout_mode = 2
+text = "Play minigame"

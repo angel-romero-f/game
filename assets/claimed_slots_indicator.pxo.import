@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://c5y52x6upgm85"
+path="res://.godot/imported/claimed_slots_indicator.pxo-17d35ca63e7d1c895e0a9d2cd39c8aee.res"
+
+[deps]
+
+source_file="res://assets/claimed_slots_indicator.pxo"
+dest_files=["res://.godot/imported/claimed_slots_indicator.pxo-17d35ca63e7d1c895e0a9d2cd39c8aee.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

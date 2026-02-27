@@ -7,4 +7,3 @@ class_name CardAttributeEntry
 @export var sprite_frames: SpriteFrames
 @export var frame_index: int = 0
 @export_enum("air", "water", "fire") var attribute: String = "fire"
-

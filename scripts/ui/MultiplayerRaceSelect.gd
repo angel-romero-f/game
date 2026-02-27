@@ -63,12 +63,12 @@ func _ready() -> void:
 		back_button.pressed.connect(_on_back_pressed)
 
 	# Signals
-	if Net.player_names_updated.is_connected(_refresh_all):
-		Net.player_names_updated.disconnect(_refresh_all)
-	if Net.player_races_updated.is_connected(_refresh_all):
-		Net.player_races_updated.disconnect(_refresh_all)
-	Net.player_names_updated.connect(_refresh_all)
-	Net.player_races_updated.connect(_refresh_all)
+	if PlayerDataSync.player_names_updated.is_connected(_refresh_all):
+		PlayerDataSync.player_names_updated.disconnect(_refresh_all)
+	if PlayerDataSync.player_races_updated.is_connected(_refresh_all):
+		PlayerDataSync.player_races_updated.disconnect(_refresh_all)
+	PlayerDataSync.player_names_updated.connect(_refresh_all)
+	PlayerDataSync.player_races_updated.connect(_refresh_all)
 
 	if multiplayer.peer_connected.is_connected(_on_peer_changed):
 		multiplayer.peer_connected.disconnect(_on_peer_changed)
@@ -86,7 +86,7 @@ func _my_id() -> int:
 	return multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 
 func _my_race() -> String:
-	var r := String(Net.player_races.get(_my_id(), ""))
+	var r := String(PlayerDataSync.player_races.get(_my_id(), ""))
 	return r
 
 func _all_players_have_race_selected() -> bool:
@@ -99,15 +99,15 @@ func _all_players_have_race_selected() -> bool:
 		ids.append(int(peer_id))
 
 	for id in ids:
-		var race := String(Net.player_races.get(id, ""))
+		var race := String(PlayerDataSync.player_races.get(id, ""))
 		if race.is_empty():
 			return false
 
 	return true
 
 func _owner_of(race: String) -> int:
-	for pid in Net.player_races.keys():
-		if String(Net.player_races[pid]) == race:
+	for pid in PlayerDataSync.player_races.keys():
+		if String(PlayerDataSync.player_races[pid]) == race:
 			return int(pid)
 	return 0
 
@@ -115,18 +115,18 @@ func _on_race_pressed(race: String) -> void:
 	if not multiplayer.has_multiplayer_peer():
 		return
 	if _my_race() == race:
-		Net.submit_player_race("")
+		PlayerDataSync.submit_player_race("")
 		App.set_selected_race("")
 	else:
-		Net.submit_player_race(race)
+		PlayerDataSync.submit_player_race(race)
 		App.set_selected_race(race)
 
 func _on_start_pressed() -> void:
 	if multiplayer.is_server():
-		Net.start_game.rpc()
+		PhaseSync.start_game.rpc()
 
 func _on_back_pressed() -> void:
-	Net.disconnect_from_game()
+	NetworkManager.disconnect_from_game()
 	App.go("res://scenes/ui/PlayMenu.tscn")
 
 func _on_card_hover_enter(race: String) -> void:
@@ -255,10 +255,10 @@ func _refresh_players_list() -> void:
 	ids.sort()
 
 	for id in ids:
-		var player_name := String(Net.player_names.get(id, "Player"))
+		var player_name := String(PlayerDataSync.player_names.get(id, "Player"))
 		if id == _my_id():
 			player_name += " (You)"
-		var race := String(Net.player_races.get(id, "—"))
+		var race := String(PlayerDataSync.player_races.get(id, "—"))
 		if race.is_empty():
 			race = "—"
 		players_list.add_item("%s — %s" % [player_name, race])

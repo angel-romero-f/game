@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dp5jur6gejb1r"
+path="res://.godot/imported/territory_indicator.pxo-138ded7b4523526e018a620729a0afe1.res"
+
+[deps]
+
+source_file="res://assets/territory_indicator.pxo"
+dest_files=["res://.godot/imported/territory_indicator.pxo-138ded7b4523526e018a620729a0afe1.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
