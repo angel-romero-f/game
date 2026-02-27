@@ -57,26 +57,28 @@ var _round_results: Array = [] # "win", "lose", "tie" from player perspective
 
 func _ready() -> void:
 	_is_multiplayer = multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0
+	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+	var role := "SERVER" if multiplayer.is_server() else "CLIENT"
+	print("[BattleManager] _ready() START. peer=%d role=%s is_multiplayer=%s" % [my_id, role, str(_is_multiplayer)])
 	_cache_nodes()
 	if _is_multiplayer:
-		# Only clear battle state if starting fresh (no persisted cards)
-		var has_local_slots := false
-		if BattleStateManager:
-			has_local_slots = not BattleStateManager.get_local_slots().is_empty()
-		if not has_local_slots:
-			BattleSync.clear_battle_state()
+		# Server already cleared battle state before scene transition (in BattleSync).
+		# Do NOT clear here — it races with the other player's sync.
 		if BattleSync.battle_cards_updated.is_connected(_on_battle_cards_updated):
 			BattleSync.battle_cards_updated.disconnect(_on_battle_cards_updated)
 		BattleSync.battle_cards_updated.connect(_on_battle_cards_updated)
 		if BattleSync.battle_start_requested.is_connected(_on_battle_start_requested):
 			BattleSync.battle_start_requested.disconnect(_on_battle_start_requested)
 		BattleSync.battle_start_requested.connect(_on_battle_start_requested)
+	else:
+		BattleSync.clear_battle_state()
 	_setup_ui()
 
 	# Wait a couple frames so CardManager has time to initialize
 	await get_tree().process_frame
 	await get_tree().process_frame
 
+	print("[BattleManager] _ready() restoring cards. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
 	# Restore cards after CardManager is ready
 	_restore_and_sync_placed_cards()
 
@@ -86,10 +88,12 @@ func _ready() -> void:
 	# Short delay so BattleSync.battle_placed_cards is synced before we draw opponent backs (avoids wrong count with 3+ players)
 	if _is_multiplayer:
 		await get_tree().create_tween().tween_interval(0.2).finished
+	print("[BattleManager] _ready() placing opponent backs. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
 	_place_opponent_backs()
 	_connect_player_slot_signals()
 	_update_start_button_visibility()
 	state = State.WAITING_FOR_PLAYER
+	print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER")
 
 	# Respace hand cards after everything is set up
 	call_deferred("_respace_hand_cards")
@@ -186,6 +190,8 @@ func _restore_and_sync_placed_cards() -> void:
 					var frame: int = int(data.get("frame"))
 					if not path.is_empty():
 						BattleSync.request_place_battle_card(slot_idx, path, frame)
+				print("[BattleManager] Restore complete (territory). Requesting full sync.")
+				BattleSync.request_full_sync()
 		return
 
 	# Non-territory battle: use local_slots as before
@@ -199,6 +205,8 @@ func _restore_and_sync_placed_cards() -> void:
 				var frame: int = int(data.get("frame"))
 				if not path.is_empty():
 					BattleSync.request_place_battle_card(slot_idx, path, frame)
+			print("[BattleManager] Restore complete (non-territory). Requesting full sync.")
+			BattleSync.request_full_sync()
 
 
 func _debug_slots_summary(slots: Dictionary) -> String:
@@ -282,8 +290,12 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 
 func _on_battle_cards_updated() -> void:
 	## Refresh opponent slots with face-down cards from remote player(s).
+	var state_name: String = ["SETUP", "WAITING_FOR_PLAYER", "WAITING_FOR_ALL_READY", "FLIPPING", "RESOLVED"][clampi(state, 0, 4)]
 	if state == State.WAITING_FOR_PLAYER or state == State.WAITING_FOR_ALL_READY:
+		print("[BattleManager] _on_battle_cards_updated: processing (state=%s)" % state_name)
 		_update_opponent_cards_from_net()
+	else:
+		print("[BattleManager] _on_battle_cards_updated: SKIPPED (state=%s)" % state_name)
 
 
 func _on_battle_start_requested() -> void:
@@ -314,9 +326,11 @@ func _update_opponent_cards_from_net() -> void:
 			other_peer_id = int(pid)
 			break
 	if other_peer_id < 0:
+		print("[BattleManager] _update_opponent_cards_from_net: no opponent found (my_id=%d, keys=%s). Clearing." % [my_id, str(BattleSync.battle_placed_cards.keys())])
 		_clear_opponent_slot_cards()
 		return
 	var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
+	print("[BattleManager] _update_opponent_cards_from_net: my_id=%d opponent=%d opponent_slots=%s" % [my_id, other_peer_id, str(other_cards.keys())])
 	_clear_opponent_slot_cards()
 	var back_frames: SpriteFrames = CARD_BACK_FRAMES
 	var back_frame_index: int = CARD_BACK_FRAME_INDEX
@@ -543,8 +557,10 @@ func _flip_opponent_cards_from_pool() -> void:
 			if int(pid) != my_id:
 				other_peer_id = int(pid)
 				break
+		print("[BattleManager] _flip_opponent_cards: my_id=%d other_peer=%d all_keys=%s" % [my_id, other_peer_id, str(BattleSync.battle_placed_cards.keys())])
 		if other_peer_id >= 0:
 			var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
+			print("[BattleManager] _flip_opponent_cards: opponent slot keys=%s" % str(other_cards.keys()))
 			for slot_idx in range(_opponent_slot_nodes.size()):
 				var slot = _opponent_slot_nodes[slot_idx]
 				if not slot or not other_cards.has(slot_idx):
@@ -556,6 +572,7 @@ func _flip_opponent_cards_from_pool() -> void:
 					var frames: SpriteFrames = load(path) as SpriteFrames
 					if frames:
 						chosen[slot] = {"frames": frames, "frame_index": fidx}
+		print("[BattleManager] _flip_opponent_cards: %d cards chosen for flip" % chosen.size())
 
 	# Single-player territory battle override:
 	# If cards were already placed by _restore_and_sync_placed_cards (stored in _opponent_cards_by_slot)

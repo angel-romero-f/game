@@ -43,6 +43,9 @@ signal battle_finished_broadcast()
 
 ## Clear card battle state when leaving battle scene
 func clear_battle_state() -> void:
+	var caller_role := "SERVER" if multiplayer.is_server() else "CLIENT"
+	var old_keys: Array = battle_placed_cards.keys()
+	print("[BattleSync] clear_battle_state() called by %s (peer %d). Clearing peer keys: %s" % [caller_role, multiplayer.get_unique_id(), str(old_keys)])
 	battle_placed_cards.clear()
 	battle_ready_peers.clear()
 
@@ -89,6 +92,7 @@ func _server_place_battle_card(peer_id: int, slot_index: int, sprite_frames_path
 	if not battle_placed_cards.has(peer_id):
 		battle_placed_cards[peer_id] = {}
 	battle_placed_cards[peer_id][slot_index] = {"path": sprite_frames_path, "frame": frame_index}
+	print("[BattleSync] _server_place_battle_card: peer=%d slot=%d path=%s. Current peers in dict: %s" % [peer_id, slot_index, sprite_frames_path.get_file(), str(battle_placed_cards.keys())])
 	sync_battle_cards.rpc(battle_placed_cards)
 
 @rpc("any_peer", "reliable")
@@ -108,7 +112,30 @@ func _server_remove_battle_card(peer_id: int, slot_index: int) -> void:
 @rpc("authority", "call_local", "reliable")
 func sync_battle_cards(cards: Dictionary) -> void:
 	battle_placed_cards = cards.duplicate(true)
+	var summary: Array[String] = []
+	for pid in battle_placed_cards:
+		var slots: Dictionary = battle_placed_cards[pid]
+		summary.append("peer %s: %d cards" % [str(pid), slots.size()])
+	print("[BattleSync] sync_battle_cards received (peer %d): {%s}" % [multiplayer.get_unique_id(), ", ".join(summary)])
 	battle_cards_updated.emit()
+
+## Client requests the server to re-broadcast the full battle_placed_cards state.
+## Ensures the client has the latest data after scene load.
+func request_full_sync() -> void:
+	if multiplayer.is_server():
+		_server_full_sync()
+	else:
+		_rpc_request_full_sync.rpc_id(1)
+
+@rpc("any_peer", "reliable")
+func _rpc_request_full_sync() -> void:
+	if not multiplayer.is_server():
+		return
+	_server_full_sync()
+
+func _server_full_sync() -> void:
+	print("[BattleSync] _server_full_sync: re-broadcasting battle_placed_cards (peers: %s)" % str(battle_placed_cards.keys()))
+	sync_battle_cards.rpc(battle_placed_cards)
 
 # ---------- BATTLE READY ----------
 
@@ -152,6 +179,11 @@ func _server_set_battle_ready(peer_id: int) -> void:
 
 @rpc("authority", "call_local", "reliable")
 func start_battle() -> void:
+	var summary: Array[String] = []
+	for pid in battle_placed_cards:
+		var slots: Dictionary = battle_placed_cards[pid]
+		summary.append("peer %s: %d cards" % [str(pid), slots.size()])
+	print("[BattleSync] start_battle RPC on peer %d. battle_placed_cards: {%s}" % [multiplayer.get_unique_id(), ", ".join(summary)])
 	battle_start_requested.emit()
 
 # ---------- BATTLE LEFT / PERSISTENCE ----------
@@ -211,6 +243,7 @@ func _server_handle_start_territory_battle(attacker_id: int, territory_id: int) 
 		return
 
 	print("[BattleSync] Starting Territory Battle: ID=", territory_id, " Attacker=", attacker_id, " Defender=", defender_id)
+	clear_battle_state()
 	start_territory_battle.rpc(territory_id, attacker_id, defender_id)
 
 @rpc("authority", "call_local", "reliable")
@@ -386,6 +419,7 @@ func _start_paired_battle(p1_id: int, p2_id: int, side: String) -> void:
 		return
 
 	print("[BattleSync] Starting paired battle: ", p1_id, " vs ", p2_id, " on ", side)
+	clear_battle_state()
 	battle_in_progress = true
 	active_battle_participants = [p1_id, p2_id]
 	active_battle_side = side
