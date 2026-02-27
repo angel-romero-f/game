@@ -9,10 +9,22 @@ signal panel_closed()
 signal minigame_requested(territory_id: int, region_id: int)
 
 const UI_FONT := preload("res://fonts/m5x7.ttf")
-const CLAIM_PANEL_FULL_OFFSET := Vector4(-220.0, -180.0, 220.0, 180.0)
+## Panel art size: 4x width * 1.5 length (2640), 1.5x height (540). Content is centered inside this.
+const CLAIM_PANEL_FULL_OFFSET := Vector4(-575.0, -270.0, 575.0, 320.0)
 const CLAIM_PANEL_PLAY_ONLY_OFFSET := Vector4(-160.0, -55.0, 160.0, 55.0)
+## Size of the inner content area (cards + text), centered on the panel art.
+const CLAIM_PANEL_CONTENT_SIZE := Vector2(440.0, 360.0)
 const CLAIMED_SLOTS_INDICATOR_PATH := "res://assets/claimed_slots_indicator.pxo"
-const CARD_SIZE_CLAIM := Vector2(180, 270)  # ~3x original 60x90
+## First frame of this .pxo is used as the claim panel background (resized to fit, drawn translucent).
+const CLAIM_PANEL_ART_PATH := "res://assets/claim_panel_v1.pxo"
+## Transparency of the panel art (0.0 = invisible, 1.0 = opaque).
+const CLAIM_PANEL_ART_ALPHA := 1
+## Inset of the panel art from the panel edges in pixels (left, top, right, bottom). Use to shift or shrink the art.
+const CLAIM_PANEL_ART_OFFSET := Vector4(0.0, 0.0, 0.0, 0.0)
+const CARD_SIZE_CLAIM := Vector2(260, 390)  # ~3x original 60x90
+## Max cards visible at once in the claim hand; slider scrolls through the rest.
+const CLAIM_HAND_CARDS_VISIBLE := 3
+const CLAIM_HAND_SEPARATION := 8
 const RACE_FRAME_BASE: Dictionary = { "elf": 1, "orc": 4, "fairy": 7, "infernal": 10 }
 const HIGHLIGHT_COLOR := Color(0.4, 0.85, 0.4, 0.5)
 const DARKEN_MODULATE := 0.45
@@ -24,6 +36,7 @@ var _territory_claim_state: Node
 # Node references (resolved from children)
 var claim_slots_container: HBoxContainer
 var claim_hand_container: HBoxContainer
+var claim_hand_scroll: ScrollContainer
 var claim_buttons_container: Control  # ButtonsContainer (hide in defending preview)
 var claim_cancel_button: Button
 var claim_button: Button
@@ -51,14 +64,29 @@ func initialize(territory_mgr: TerritoryManager, tcs: Node) -> void:
 	_territory_claim_state = tcs
 
 func _ready() -> void:
-	claim_slots_container = get_node_or_null("MarginContainer/VBoxContainer/SlotsContainer") as HBoxContainer
-	claim_hand_container = get_node_or_null("MarginContainer/VBoxContainer/ClaimHandContainer") as HBoxContainer
-	claim_buttons_container = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer") as Control
-	claim_cancel_button = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer/CancelButton") as Button
-	claim_button = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer/ClaimButton") as Button
-	claim_attack_button = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer/AttackButton") as Button
-	claim_play_minigame_button = get_node_or_null("MarginContainer/VBoxContainer/ButtonsContainer/PlayMinigameButton") as Button
+	claim_slots_container = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/SlotsContainer") as HBoxContainer
+	var hand_scroll_vbox: Node = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandScrollVBox")
+	if hand_scroll_vbox:
+		claim_hand_scroll = hand_scroll_vbox.get_node_or_null("HandScrollContainer") as ScrollContainer
+		claim_hand_container = claim_hand_scroll.get_node_or_null("ClaimHandContainer") as HBoxContainer if claim_hand_scroll else null
+	else:
+		claim_hand_container = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ClaimHandContainer") as HBoxContainer
+	if not claim_hand_container:
+		claim_hand_container = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ClaimHandContainer") as HBoxContainer
+	claim_buttons_container = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer") as Control
+	claim_cancel_button = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer/CancelButton") as Button
+	claim_button = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer/ClaimButton") as Button
+	claim_attack_button = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer/AttackButton") as Button
+	claim_play_minigame_button = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/ButtonsCenterWrapper/ButtonsContainer/PlayMinigameButton") as Button
 
+	_apply_claim_panel_art()
+
+	# Limit visible hand to 3 cards; slider scrolls horizontally
+	if claim_hand_scroll:
+		var w: float = CLAIM_HAND_CARDS_VISIBLE * CARD_SIZE_CLAIM.x + (CLAIM_HAND_CARDS_VISIBLE - 1) * CLAIM_HAND_SEPARATION
+		claim_hand_scroll.custom_minimum_size = Vector2(w, CARD_SIZE_CLAIM.y)
+		claim_hand_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		claim_hand_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
 	if claim_cancel_button:
 		claim_cancel_button.pressed.connect(_on_cancel_clicked)
 	if claim_button:
@@ -69,6 +97,34 @@ func _ready() -> void:
 		claim_play_minigame_button.pressed.connect(_on_play_minigame_pressed)
 
 	_setup_message_panel()
+
+func _apply_claim_panel_art() -> void:
+	var bg: TextureRect = get_node_or_null("ContentWrap/PanelBackground") as TextureRect
+	if not bg:
+		return
+	var sf: SpriteFrames = load(CLAIM_PANEL_ART_PATH) as SpriteFrames
+	if sf and sf.has_animation("default") and sf.get_frame_count("default") > 0:
+		bg.texture = sf.get_frame_texture("default", 0)
+	bg.modulate = Color(1.0, 1.0, 1.0, CLAIM_PANEL_ART_ALPHA)
+	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
+	bg.offset_left = CLAIM_PANEL_ART_OFFSET.x
+	bg.offset_top = CLAIM_PANEL_ART_OFFSET.y
+	bg.offset_right = -CLAIM_PANEL_ART_OFFSET.z
+	bg.offset_bottom = -CLAIM_PANEL_ART_OFFSET.w
+
+func _apply_panel_style_for_phase(sub_phase: int) -> void:
+	## In resource collection (minigame) phase use the original black translucent box; otherwise use pixel art background.
+	var is_resource_collection: bool = (sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+	var bg: TextureRect = get_node_or_null("ContentWrap/PanelBackground") as TextureRect
+	if bg:
+		bg.visible = not is_resource_collection
+	var style := StyleBoxFlat.new()
+	if is_resource_collection:
+		style.bg_color = Color(0.1, 0.1, 0.15, 0.85)
+		style.set_corner_radius_all(12)
+	else:
+		style.bg_color = Color(0, 0, 0, 0)
+	add_theme_stylebox_override("panel", style)
 
 func _setup_message_panel() -> void:
 	message_panel = get_parent().get_node_or_null("MessagePanel") as PanelContainer
@@ -133,6 +189,7 @@ func _setup_message_panel() -> void:
 # ---------- PUBLIC API ----------
 
 func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -> void:
+	_apply_panel_style_for_phase(map_sub_phase)
 	claim_panel_play_only_mode = false
 	claim_preview_mode = false
 	if BattleStateManager:
@@ -141,19 +198,31 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 	offset_top = CLAIM_PANEL_FULL_OFFSET.y
 	offset_right = CLAIM_PANEL_FULL_OFFSET.z
 	offset_bottom = CLAIM_PANEL_FULL_OFFSET.w
+	# Restore default margins and minimum size for full claim/attack panel.
+	var full_margin: MarginContainer = get_node_or_null("ContentWrap/CenterContainer/MarginContainer") as MarginContainer
+	if full_margin:
+		full_margin.custom_minimum_size = Vector2(440, 360)
+		full_margin.add_theme_constant_override("margin_top", 15)
+		full_margin.add_theme_constant_override("margin_bottom", 15)
 	_deselect_current()
 	current_claim_territory_id = territory_id
 	claim_highlighted_indices.clear()
-	var title_label: Label = get_node_or_null("MarginContainer/VBoxContainer/TitleLabel") as Label
+	var root_vbox: VBoxContainer = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer") as VBoxContainer
+	if root_vbox:
+		root_vbox.alignment = BoxContainer.ALIGNMENT_BEGIN
+	var title_label: Label = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/TitleLabel") as Label
 	if title_label:
 		title_label.text = "Claim Territory"
 	if claim_slots_container:
 		claim_slots_container.visible = false
-	var hand_label: Control = get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	var hand_label: Control = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandLabel")
 	if hand_label:
 		hand_label.visible = true
 	if claim_hand_container:
 		claim_hand_container.visible = true
+	var hand_scroll_vbox_show: Control = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandScrollVBox") as Control
+	if hand_scroll_vbox_show:
+		hand_scroll_vbox_show.visible = true
 	if claim_cancel_button:
 		claim_cancel_button.visible = true
 		claim_cancel_button.text = "Cancel"
@@ -227,7 +296,7 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 		if claim_attack_button:
 			claim_attack_button.visible = false
 	if hand_label and hand_label is Label:
-		(hand_label as Label).text = "Click 1-3 cards then press attack" if claim_panel_attack_mode else "Click 1-3 cards then press claim"
+		(hand_label as Label).text = "Click 1-3 cards then Press Attack" if claim_panel_attack_mode else "Click 1-3 cards then press claim"
 	if claim_panel_attack_mode:
 		_populate_claim_slots()
 	_populate_claim_hand()
@@ -268,6 +337,7 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 		indicator.show_selection_glow()
 
 func open_play_only_panel(territory_id: int) -> void:
+	_apply_panel_style_for_phase(PhaseController.map_sub_phase)
 	_deselect_current()
 	current_claim_territory_id = territory_id
 	claim_panel_play_only_mode = true
@@ -276,16 +346,28 @@ func open_play_only_panel(territory_id: int) -> void:
 	offset_top = CLAIM_PANEL_PLAY_ONLY_OFFSET.y
 	offset_right = CLAIM_PANEL_PLAY_ONLY_OFFSET.z
 	offset_bottom = CLAIM_PANEL_PLAY_ONLY_OFFSET.w
-	var title_label: Label = get_node_or_null("MarginContainer/VBoxContainer/TitleLabel") as Label
+	var play_margin: MarginContainer = get_node_or_null("ContentWrap/CenterContainer/MarginContainer") as MarginContainer
+	if play_margin:
+		play_margin.custom_minimum_size = Vector2(0, 0)
+		play_margin.add_theme_constant_override("margin_top", 10)
+		play_margin.add_theme_constant_override("margin_bottom", 10)
+	var title_label: Label = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/TitleLabel") as Label
+	var root_vbox: VBoxContainer = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer") as VBoxContainer
+	if root_vbox:
+		root_vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+		root_vbox.add_theme_constant_override("separation", 6)
 	if title_label:
 		title_label.text = "Collect resources"
 	if claim_slots_container:
 		claim_slots_container.visible = false
-	var hand_label: Control = get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	var hand_label: Control = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandLabel")
 	if hand_label:
 		hand_label.visible = false
 	if claim_hand_container:
 		claim_hand_container.visible = false
+	var hand_scroll_vbox: Control = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandScrollVBox") as Control
+	if hand_scroll_vbox:
+		hand_scroll_vbox.visible = false
 	if claim_button:
 		claim_button.visible = false
 	if claim_cancel_button:
@@ -323,7 +405,7 @@ func close_panel() -> void:
 	offset_bottom = CLAIM_PANEL_FULL_OFFSET.w
 	if claim_slots_container:
 		claim_slots_container.visible = true
-	var hand_label: Control = get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	var hand_label: Control = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandLabel")
 	if hand_label:
 		hand_label.visible = true
 	if claim_hand_container:
@@ -344,12 +426,12 @@ func show_defending_preview(territory_id: int) -> void:
 	claim_preview_mode = true
 	current_claim_territory_id = territory_id
 	claim_highlighted_indices.clear()
-	var title_label: Label = get_node_or_null("MarginContainer/VBoxContainer/TitleLabel") as Label
+	var title_label: Label = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/TitleLabel") as Label
 	if title_label:
 		title_label.text = "Cards Defending Territory"
 	if claim_slots_container:
 		claim_slots_container.visible = false
-	var hand_label: Control = get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	var hand_label: Control = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandLabel")
 	if hand_label:
 		hand_label.visible = false
 	if claim_buttons_container:
@@ -387,7 +469,7 @@ func close_preview() -> void:
 	current_claim_territory_id = -1
 	if claim_buttons_container:
 		claim_buttons_container.visible = true
-	var hand_label: Control = get_node_or_null("MarginContainer/VBoxContainer/HandLabel")
+	var hand_label: Control = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandLabel")
 	if hand_label:
 		hand_label.visible = true
 	if claim_slots_container:
@@ -575,6 +657,9 @@ func _update_attack_button_state() -> void:
 	claim_attack_button.disabled = (n < 1 or n > 3)
 
 func _populate_claim_hand() -> void:
+	var saved_scroll: int = 0
+	if claim_hand_scroll:
+		saved_scroll = claim_hand_scroll.scroll_horizontal
 	for child in claim_hand_container.get_children():
 		child.queue_free()
 	var all_highlighted := claim_highlighted_indices.size() >= 3
@@ -616,6 +701,10 @@ func _populate_claim_hand() -> void:
 		panel.add_child(tex)
 		panel.gui_input.connect(_on_hand_card_gui_input.bind(i))
 		claim_hand_container.add_child(panel)
+
+	# Restore scroll position so selecting a card doesn't jump the slider
+	if claim_hand_scroll:
+		claim_hand_scroll.scroll_horizontal = saved_scroll
 
 func _on_hand_card_gui_input(event: InputEvent, hand_index: int) -> void:
 	if event is InputEventMouseButton:

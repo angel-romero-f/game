@@ -259,6 +259,9 @@ func _on_claim_failed(_territory_id: int, reason: String) -> void:
 
 func _on_map_sub_phase_changed(sub_phase: int) -> void:
 	map_sub_phase = sub_phase
+	# After last battle we enter resource collection; refresh indicators so card counts are correct
+	if sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+		refresh_territory_claimed_visuals()
 
 func on_finish_claiming_pressed() -> void:
 	if claim_ui:
