@@ -14,6 +14,7 @@ signal minigame_selection_started
 
 enum OverlayState { NONE, PHASE_TRANSITION, WAITING, D20_ROLLING }
 var _overlay_state: OverlayState = OverlayState.NONE
+var _pending_phase_overlay: bool = false  # True when a phase RPC arrived before intro_complete
 var is_phase_overlay_animating: bool = false
 var is_waiting_for_others: bool = false
 var local_done_count: int = 0
@@ -164,7 +165,7 @@ func _update_current_phase_label() -> void:
 				var is_active := false
 				if is_collect and child.name.begins_with("Collect"):
 					is_active = true
-				elif not is_collect and child.name.begins_with("Claim"):
+				elif not is_collect and child.name.begins_with("Command"):
 					is_active = true
 				if is_active:
 					label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
@@ -177,6 +178,9 @@ func show_phase_transition_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		apply_phase_ui()
 		return
+	# Prevent double overlay if one is already animating
+	if is_phase_overlay_animating:
+		return
 	# Hide top phase indicator during overlay to avoid redundant text.
 	if current_phase_label:
 		current_phase_label.visible = false
@@ -187,9 +191,9 @@ func show_phase_transition_overlay() -> void:
 	phase_overlay.modulate.a = 0.0
 	is_phase_overlay_animating = true
 	var tween := create_tween()
-	tween.tween_property(phase_overlay, "modulate:a", 1.0, 0.4)
-	tween.tween_interval(1.5)
-	tween.tween_property(phase_overlay, "modulate:a", 0.0, 0.4)
+	tween.tween_property(phase_overlay, "modulate:a", 1.0, 0.2)
+	tween.tween_interval(0.8)
+	tween.tween_property(phase_overlay, "modulate:a", 0.0, 0.2)
 	tween.tween_callback(_on_phase_transition_finished)
 
 func _on_phase_transition_finished() -> void:
@@ -482,31 +486,39 @@ func _on_net_phase_changed(phase_id: int) -> void:
 	if phase_id == 2:
 		App.minigames_completed_this_phase = 0
 	if not intro_complete:
+		# RPC arrived before intro sequence finished — mark for deferred overlay
+		_pending_phase_overlay = true
 		return
 	var phase_actually_changed := (App.current_game_phase != prev_phase)
+	# If the phase was already pre-set by _on_intro_completed's sync_app_game_phase(),
+	# check _pending_phase_overlay to catch that case
+	if _pending_phase_overlay:
+		phase_actually_changed = true
+		_pending_phase_overlay = false
 	# Sub-phase changes within CLAIM_CONQUER shouldn't re-show the phase overlay.
 	# But a real transition INTO CLAIM_CONQUER from another phase should.
 	if App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and prev_phase == App.GamePhase.CLAIM_CONQUER:
 		phase_actually_changed = false
-	is_waiting_for_others = false
-	set_overlay_state(OverlayState.NONE)
-	if turn_banner_label:
-		turn_banner_label.visible = false
-	# Hide ALL game buttons immediately to prevent flashing during overlay
-	minigame_button.visible = false
-	bridge_minigame_button.visible = false
-	ice_fishing_button.visible = false
-	play_minigames_button.visible = false
-	skip_to_battle_button.visible = false
-	minigames_counter_label.visible = false
-	battle_button.visible = false
-	_hide_battle_selection_ui()
-	minigame_button.disabled = false
-	bridge_minigame_button.disabled = false
-	ice_fishing_button.disabled = false
-	play_minigames_button.disabled = false
-	skip_to_battle_button.disabled = false
 	if phase_actually_changed:
+		is_waiting_for_others = false
+		set_overlay_state(OverlayState.NONE)
+		if turn_banner_label:
+			turn_banner_label.visible = false
+		# Hide ALL game buttons immediately to prevent flashing during overlay
+		minigame_button.visible = false
+		bridge_minigame_button.visible = false
+		ice_fishing_button.visible = false
+		play_minigames_button.visible = false
+		skip_to_battle_button.visible = false
+		minigames_counter_label.visible = false
+		battle_button.visible = false
+		_hide_battle_selection_ui()
+		minigame_button.disabled = false
+		bridge_minigame_button.disabled = false
+		ice_fishing_button.disabled = false
+		play_minigames_button.disabled = false
+		skip_to_battle_button.disabled = false
+
 		# Set phase_transition_text based on the new phase
 		match App.current_game_phase:
 			App.GamePhase.CARD_COMMAND:

@@ -295,14 +295,40 @@ func _ready() -> void:
 		intro_complete = true
 		territory_ui.intro_complete = true
 		phase_ui.intro_complete = true
-		var map_sub_phase: int = flow_ui.skip_to_game_ready()
-		# In multiplayer, the server may have already transitioned (e.g. RESOURCE_COLLECTION → CLAIMING)
-		# while we were in a minigame scene. Use the authoritative PhaseController state.
+		
+		var missed_phase_transition := false
+		var current_phase_as_enum: int
+		
+		# In multiplayer, the server may have transitioned while we were away.
+		# Sync BEFORE skip_to_game_ready so returning logic uses correct phase!
 		if App.is_multiplayer:
+			match PhaseController.current_phase:
+				0: current_phase_as_enum = App.GamePhase.CARD_COMMAND
+				1: current_phase_as_enum = App.GamePhase.CLAIM_CONQUER
+				2: current_phase_as_enum = App.GamePhase.CARD_COLLECTION
+				_: current_phase_as_enum = App.GamePhase.CARD_COMMAND
+				
+			if current_phase_as_enum != App.current_game_phase:
+				missed_phase_transition = true
+				
 			PhaseController.sync_app_game_phase()
+			
+		var map_sub_phase: int = flow_ui.skip_to_game_ready()
+		
+		if App.is_multiplayer:
 			map_sub_phase = PhaseController.map_sub_phase
+			
 		phase_ui.map_sub_phase = map_sub_phase
 		territory_ui.map_sub_phase = map_sub_phase
+		
+		# Refresh territory indicators to pick up card count changes after battles
+		territory_ui.refresh_territory_claimed_visuals()
+		
+		# Show overlay if we missed the phase transition while in battle
+		if missed_phase_transition:
+			App.show_phase_transition = true
+			phase_ui.show_phase_transition_overlay()
+			
 		return
 
 	intro_ui.start_intro()
@@ -351,6 +377,9 @@ func _on_intro_completed() -> void:
 		phase_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		territory_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		App.phase_transition_text = "Collect"
+
+	# Refresh territory indicators to pick up card count changes after battles
+	territory_ui.refresh_territory_claimed_visuals()
 
 	App.show_phase_transition = true
 	phase_ui.show_phase_transition_overlay()
@@ -534,7 +563,7 @@ func _create_phase_indicator_bar() -> HBoxContainer:
 	bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_theme_constant_override("separation", 6)
-	var names: Array[String] = ["Claim & Contest", "Collect"]
+	var names: Array[String] = ["Command & Contest", "Collect"]
 	for i in names.size():
 		if i > 0:
 			var sep := Label.new()
