@@ -23,7 +23,8 @@ const CARD_BACK_FRAMES: SpriteFrames = preload("res://assets/cardback.pxo")
 const CARD_BACK_FRAME_INDEX := 0
 
 ## UI node paths (created in scene).
-@export var start_button_path: NodePath = NodePath("BattleUI/UI/StartBattleButton")
+@export var timer_label_path: NodePath = NodePath("BattleUI/UI/TimerLabel")
+@export var timer_sub_label_path: NodePath = NodePath("BattleUI/UI/TimerSubLabel")
 @export var result_label_path: NodePath = NodePath("BattleUI/UI/ResultLabel")
 @export var continue_label_path: NodePath = NodePath("BattleUI/UI/ContinueLabel")
 @export var leave_button_path: NodePath = NodePath("BattleUI/UI/LeaveButton")
@@ -40,7 +41,8 @@ const CARD_BACK_FRAME_INDEX := 0
 var _player_slot_nodes: Array = []
 var _opponent_slot_nodes: Array = []
 
-var _start_button: Button
+var _timer_label: Label
+var _timer_sub_label: Label
 var _result_label: Label
 var _continue_label: Label
 var _leave_button: Button
@@ -53,6 +55,9 @@ var _is_multiplayer: bool = false
 # --- Added (minimal): prevent double-reporting finish in multiplayer (SPACE + Leave, etc.)
 var _reported_battle_finished: bool = false
 var _round_results: Array = [] # "win", "lose", "tie" from player perspective
+
+var battle_timer: float = 10.0
+var is_timer_active: bool = false
 
 
 func _ready() -> void:
@@ -91,9 +96,14 @@ func _ready() -> void:
 	print("[BattleManager] _ready() placing opponent backs. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
 	_place_opponent_backs()
 	_connect_player_slot_signals()
-	_update_start_button_visibility()
 	state = State.WAITING_FOR_PLAYER
-	print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER")
+	# Start timer immediately
+	battle_timer = 10.0
+	is_timer_active = true
+	_update_timer_visibility()
+	if _timer_label:
+		_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(battle_timer)
+	print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER, timer started")
 
 	# Respace hand cards after everything is set up
 	call_deferred("_respace_hand_cards")
@@ -112,7 +122,8 @@ func _cache_nodes() -> void:
 	for slot_name in opponent_slots:
 		_opponent_slot_nodes.append(root.get_node_or_null(NodePath(String(slot_name))) if root else null)
 
-	_start_button = (root.get_node_or_null(start_button_path) if root else null) as Button
+	_timer_label = (root.get_node_or_null(timer_label_path) if root else null) as Label
+	_timer_sub_label = (root.get_node_or_null(timer_sub_label_path) if root else null) as Label
 	_result_label = (root.get_node_or_null(result_label_path) if root else null) as Label
 	_continue_label = (root.get_node_or_null(continue_label_path) if root else null) as Label
 	if not _result_label:
@@ -302,8 +313,7 @@ func _on_battle_start_requested() -> void:
 	## Battle runs only when both players have pressed Ready in the card battle scene (not when Attack is pressed in GameIntro).
 	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
 		return
-	if _start_button:
-		_start_button.visible = false
+	_update_timer_visibility()
 	state = State.FLIPPING
 	await _flip_opponent_cards_from_pool()
 	# Short delay so both clients have synced opponent cards before resolving (fixes wrong result text for one player)
@@ -378,11 +388,10 @@ func _clear_opponent_slot_cards() -> void:
 
 
 func _setup_ui() -> void:
-	if _start_button:
-		_start_button.visible = false
-		_start_button.text = "Ready"
-		if not _start_button.pressed.is_connected(_on_start_battle_pressed):
-			_start_button.pressed.connect(_on_start_battle_pressed)
+	if _timer_label:
+		_timer_label.visible = false
+	if _timer_sub_label:
+		_timer_sub_label.visible = false
 
 	if _result_label:
 		_result_label.visible = false
@@ -435,7 +444,7 @@ func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
 		# Respace hand cards (which will also update deck visibility)
 		call_deferred("_respace_hand_cards")
 
-	_update_start_button_visibility()
+	_update_timer_visibility()
 
 
 func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
@@ -456,7 +465,7 @@ func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
 		call_deferred("_respace_hand_cards")
 
 	# Reset deck spawned flag so it can be used again
-	_update_start_button_visibility()
+	_update_timer_visibility()
 
 
 func _player_ready() -> bool:
@@ -470,10 +479,43 @@ func _player_ready() -> bool:
 	return true
 
 
-func _update_start_button_visibility() -> void:
-	if not _start_button:
+func _update_timer_visibility() -> void:
+	var visible_now = (state == State.WAITING_FOR_PLAYER and is_timer_active)
+	if _timer_label:
+		_timer_label.visible = visible_now
+	if _timer_sub_label:
+		_timer_sub_label.visible = visible_now
+
+func _process(delta: float) -> void:
+	if not is_timer_active or state != State.WAITING_FOR_PLAYER:
 		return
-	_start_button.visible = state == State.WAITING_FOR_PLAYER
+		
+	battle_timer -= delta
+	if _timer_label:
+		_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(max(0, battle_timer))
+		
+	if battle_timer <= 0.0:
+		is_timer_active = false
+		_update_timer_visibility()
+		_trigger_battle_start()
+
+func _trigger_battle_start() -> void:
+	if state != State.WAITING_FOR_PLAYER:
+		return
+
+	if _is_multiplayer:
+		BattleSync.request_battle_ready()
+		state = State.WAITING_FOR_ALL_READY
+		return
+
+	state = State.FLIPPING
+	await _flip_opponent_cards_from_pool()
+	# Short delay so both clients have synced opponent cards before resolving (fixes wrong result text for one player)
+	await get_tree().create_tween().tween_interval(0.2).finished
+	_resolve_battle()
+	_show_result()
+	state = State.RESOLVED
+	_apply_battle_resolution_state()
 
 
 func _place_opponent_backs() -> void:
@@ -520,28 +562,8 @@ func _place_opponent_backs() -> void:
 
 
 func _on_start_battle_pressed() -> void:
-	## Ready button in card battle scene: in multiplayer we wait for all peers to press Ready; in single player we run battle immediately.
-	if state != State.WAITING_FOR_PLAYER:
-		return
-
-	if _is_multiplayer:
-		BattleSync.request_battle_ready()
-		if _start_button:
-			_start_button.visible = false
-		state = State.WAITING_FOR_ALL_READY
-		return
-
-	if _start_button:
-		_start_button.visible = false
-
-	state = State.FLIPPING
-	await _flip_opponent_cards_from_pool()
-	# Short delay so both clients have synced opponent cards before resolving (fixes wrong result text for one player)
-	await get_tree().create_tween().tween_interval(0.2).finished
-	_resolve_battle()
-	_show_result()
-	state = State.RESOLVED
-	_apply_battle_resolution_state()
+	# Deprecated manual trigger function
+	pass
 
 
 func _flip_opponent_cards_from_pool() -> void:
