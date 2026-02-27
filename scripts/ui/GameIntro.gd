@@ -234,6 +234,10 @@ func _ready() -> void:
 	phase_ui.enter_battle_scene.connect(_on_enter_battle_scene)
 	phase_ui.minigame_selection_started.connect(start_selection_timer)
 
+	# Refresh card count immediately when cards are placed on territories
+	if claim_ui and claim_ui.has_signal("claim_submitted"):
+		claim_ui.claim_submitted.connect(func(_tid, _cards): hand_ui.update_card_count())
+
 	# TerritorySystemUI → PhaseSystemUI
 	territory_ui.phase_ui_update_requested.connect(phase_ui.apply_phase_ui)
 	territory_ui.animate_buttons_requested.connect(phase_ui.animate_phase_buttons)
@@ -295,6 +299,7 @@ func _ready() -> void:
 		# In multiplayer, the server may have already transitioned (e.g. RESOURCE_COLLECTION → CLAIMING)
 		# while we were in a minigame scene. Use the authoritative PhaseController state.
 		if App.is_multiplayer:
+			PhaseController.sync_app_game_phase()
 			map_sub_phase = PhaseController.map_sub_phase
 		phase_ui.map_sub_phase = map_sub_phase
 		territory_ui.map_sub_phase = map_sub_phase

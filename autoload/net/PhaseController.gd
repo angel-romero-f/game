@@ -100,9 +100,8 @@ func finish_claiming_turn() -> void:
 		has_battles = true
 		App.is_territory_battle_attacker = true
 		if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
-			print("[DEBUG] Battles found! Sending queue to host: ", App.pending_territory_battle_ids)
-			BattleSync.send_territory_battle_queue(App.pending_territory_battle_ids.duplicate())
-			App.pending_territory_battle_ids.clear()
+			print("[DEBUG] Battles found! Starting battle sequence.")
+			App.on_battle_completed()  # Pops first battle and starts it
 		else:
 			print("[DEBUG] Battles found! calling App.on_battle_completed() to start first battle.")
 			App.on_battle_completed()

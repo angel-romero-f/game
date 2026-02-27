@@ -43,7 +43,10 @@ func skip_to_game_ready() -> int:
 		App.is_territory_battle_attacker = false
 
 		if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-			PhaseSync.request_end_claiming_turn()
+			if App.current_game_phase == App.GamePhase.CARD_COMMAND:
+				PhaseSync.request_end_card_command_turn()
+			else:
+				PhaseSync.request_end_claiming_turn()
 		else:
 			if App.current_turn_index < App.turn_order.size():
 				var current_id = App.current_turn_player_id

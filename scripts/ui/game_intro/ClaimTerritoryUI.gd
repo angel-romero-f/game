@@ -160,7 +160,10 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 
 	var is_claimed: bool = _territory_claim_state and _territory_claim_state.call("is_claimed", territory_id)
 	var tid_str := str(territory_id)
-	claim_panel_attack_mode = is_claimed and (App.current_game_phase == App.GamePhase.CLAIM_CONQUER)
+	claim_panel_attack_mode = is_claimed and (
+		App.current_game_phase == App.GamePhase.CARD_COMMAND
+		or App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+	)
 
 	if claim_panel_attack_mode:
 		var defs: Dictionary = BattleStateManager.get_defending_slots(tid_str) if BattleStateManager else {}
@@ -185,7 +188,7 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 		var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
 		var is_owner: bool = owner_id != null and int(local_id) == int(owner_id)
 		if claim_attack_button:
-			claim_attack_button.visible = not is_owner and (map_sub_phase == PhaseController.MapSubPhase.CLAIMING)
+			claim_attack_button.visible = not is_owner
 		if claim_slots_container:
 			claim_slots_container.visible = true
 		if title_label:

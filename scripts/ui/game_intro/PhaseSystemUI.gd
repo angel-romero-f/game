@@ -39,6 +39,7 @@ var ready_for_battle_button: Button
 var settings_button: Button
 var card_icon_button: Button
 var current_phase_label: Label
+var phase_indicator_bar: HBoxContainer
 
 # Component references
 var battle_ui: Node  # BattleSelectionUI
@@ -62,6 +63,7 @@ func initialize(nodes: Dictionary, refs: Dictionary) -> void:
 	settings_button = nodes.get("settings_button")
 	card_icon_button = nodes.get("card_icon_button")
 	current_phase_label = nodes.get("current_phase_label")
+	phase_indicator_bar = nodes.get("phase_indicator_bar")
 	battle_ui = refs.get("battle_ui")
 	claim_ui = refs.get("claim_ui")
 
@@ -120,8 +122,11 @@ func _update_turn_banner() -> void:
 		turn_banner_label.visible = false
 		return
 	var my_id := multiplayer.get_unique_id()
-	if PhaseController.current_turn_peer_id == my_id or PhaseController.current_turn_peer_id == -1:
+	if PhaseController.current_turn_peer_id == -1:
 		turn_banner_label.visible = false
+	elif PhaseController.current_turn_peer_id == my_id:
+		turn_banner_label.text = "Your Turn"
+		turn_banner_label.visible = true
 	else:
 		var turn_name := _get_player_name_for_peer(PhaseController.current_turn_peer_id)
 		turn_banner_label.text = "%s's Turn" % turn_name
@@ -130,19 +135,41 @@ func _update_turn_banner() -> void:
 # ---------- CURRENT PHASE LABEL ----------
 
 func _update_current_phase_label() -> void:
-	if not current_phase_label:
-		return
-	match App.current_game_phase:
-		App.GamePhase.CARD_COMMAND:
-			current_phase_label.text = "Command & Contest"
-		App.GamePhase.CLAIM_CONQUER:
-			if map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+	# Update standalone phase label if available
+	if current_phase_label:
+		match App.current_game_phase:
+			App.GamePhase.CARD_COMMAND:
+				current_phase_label.text = "Command & Contest"
+			App.GamePhase.CLAIM_CONQUER:
+				if map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
+					current_phase_label.text = "Collect"
+				else:
+					current_phase_label.text = "Command & Conquest"
+			App.GamePhase.CARD_COLLECTION:
 				current_phase_label.text = "Collect"
-			else:
-				current_phase_label.text = "Command & Conquest"
-		App.GamePhase.CARD_COLLECTION:
-			current_phase_label.text = "Collect"
-	current_phase_label.visible = true
+		current_phase_label.visible = true
+	# Update phase indicator bar if available
+	if phase_indicator_bar:
+		phase_indicator_bar.visible = true
+		var is_collect := (
+			App.current_game_phase == App.GamePhase.CARD_COLLECTION
+			or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+				and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+		)
+		for child in phase_indicator_bar.get_children():
+			if child is PanelContainer:
+				var label: Label = child.get_child(0) if child.get_child_count() > 0 else null
+				if not label:
+					continue
+				var is_active := false
+				if is_collect and child.name.begins_with("Collect"):
+					is_active = true
+				elif not is_collect and child.name.begins_with("Claim"):
+					is_active = true
+				if is_active:
+					label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
+				else:
+					label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1.0))
 
 # ---------- PHASE TRANSITION OVERLAY ----------
 
@@ -153,6 +180,8 @@ func show_phase_transition_overlay() -> void:
 	# Hide top phase indicator during overlay to avoid redundant text.
 	if current_phase_label:
 		current_phase_label.visible = false
+	if phase_indicator_bar:
+		phase_indicator_bar.visible = false
 	phase_label.text = App.phase_transition_text
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
@@ -184,8 +213,7 @@ func apply_phase_ui() -> void:
 		App.GamePhase.CARD_COLLECTION:
 			_apply_card_collection_ui()
 	settings_button.visible = true
-	if App.player_card_collection.size() > 0:
-		card_icon_button.visible = true
+	card_icon_button.visible = true
 	# Always update and show the phase label
 	_update_current_phase_label()
 	phase_ui_applied.emit()
@@ -411,6 +439,13 @@ func on_skip_to_battle_pressed() -> void:
 		App.GamePhase.CARD_COMMAND:
 			skip_to_battle_button.visible = false
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+				# Check for pending battles (attacks on enemy territories)
+				if BattleStateManager:
+					App.pending_territory_battle_ids = BattleStateManager.get_territory_ids_with_battle()
+				if App.pending_territory_battle_ids.size() > 0:
+					App.is_territory_battle_attacker = true
+					App.on_battle_completed()  # Pops first battle and starts it
+					return  # Battles resolve first; turn advances when returning
 				PhaseSync.request_end_card_command_turn()
 				# Keep non-active players on the board with turn banner guidance; no gray waiting screen.
 				set_overlay_state(OverlayState.NONE)
@@ -446,8 +481,9 @@ func _on_net_phase_changed(phase_id: int) -> void:
 	if not intro_complete:
 		return
 	var phase_actually_changed := (App.current_game_phase != prev_phase)
-	# CLAIM_CONQUER transitions are sub-phase-driven; handled via rpc_map_sub_phase.
-	if App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER:
+	# Sub-phase changes within CLAIM_CONQUER shouldn't re-show the phase overlay.
+	# But a real transition INTO CLAIM_CONQUER from another phase should.
+	if App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and prev_phase == App.GamePhase.CLAIM_CONQUER:
 		phase_actually_changed = false
 	is_waiting_for_others = false
 	set_overlay_state(OverlayState.NONE)
@@ -467,7 +503,7 @@ func _on_net_phase_changed(phase_id: int) -> void:
 
 func _on_turn_changed(_peer_id: int) -> void:
 	if intro_complete and not is_phase_overlay_animating:
-		_update_turn_banner()
+		apply_phase_ui()
 		if multiplayer.has_multiplayer_peer():
 			print("[CLIENT PhaseSystemUI] Turn changed → peer %d" % _peer_id)
 
