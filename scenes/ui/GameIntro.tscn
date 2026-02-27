@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://be4idcbjrjt5g"]
+[gd_scene load_steps=11 format=3 uid="uid://be4idcbjrjt5g"]
 
 [ext_resource type="Script" uid="uid://boc3ncb3lcip" path="res://scripts/ui/GameIntro.gd" id="1_script"]
 [ext_resource type="Texture2D" uid="uid://ume2mxr7dsd8" path="res://pictures/map.png" id="2_map"]
@@ -19,6 +19,17 @@ corner_radius_top_right = 12
 
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ClaimPanelTransparent"]
 bg_color = Color(0, 0, 0, 0)
+
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_ClaimLabelBg"]
+bg_color = Color(0, 0, 0, 0.55)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 12.0
+content_margin_top = 6.0
+content_margin_right = 12.0
+content_margin_bottom = 6.0
 
 [node name="GameIntro" type="Control"]
 layout_mode = 3
@@ -1059,13 +1070,19 @@ theme_override_constants/separation = 12
 
 [node name="TitleLabel" type="Label" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
 theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 22
+theme_override_font_sizes/font_size = 36
+theme_override_styles/normal = SubResource("StyleBoxFlat_ClaimLabelBg")
 text = "Claim Territory"
 horizontal_alignment = 1
 
 [node name="HandLabel" type="Label" parent="ClaimTerritoryPanel/ContentWrap/CenterContainer/MarginContainer/VBoxContainer"]
 layout_mode = 2
+theme_override_colors/font_color = Color(1, 1, 1, 1)
+theme_override_fonts/font = ExtResource("3_iwbf0")
+theme_override_font_sizes/font_size = 28
+theme_override_styles/normal = SubResource("StyleBoxFlat_ClaimLabelBg")
 text = "Place 1-3 cards (click card, then click a slot)"
 horizontal_alignment = 1
 
