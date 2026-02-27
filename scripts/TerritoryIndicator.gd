@@ -180,6 +180,7 @@ func _gui_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 			if territory_data:
+				print("[TerritoryIndicator] Clicked territory_id=%d  region_id=%d  position=%s" % [territory_id, get_region_id(), global_position])
 				territory_selected.emit(territory_data.territory_id)
 
 
