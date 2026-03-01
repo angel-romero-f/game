@@ -11,12 +11,12 @@ extends Node
 ## Authoritative region mapping: territory_id -> region_id
 ## 6 regions, 2 territories each. Overrides scene file values.
 const TERRITORY_REGIONS: Dictionary = {
-	1: 1, 2: 1,
-	3: 2, 4: 2,
-	5: 3, 6: 3,
-	7: 4, 8: 4,
-	9: 5, 10: 5,
-	11: 6, 12: 6
+	2: 1, 4: 1,
+	5: 2, 6: 2,
+	3: 3, 1: 3,
+	8: 4, 10: 4,
+	11: 5, 7: 5,
+	9: 6, 12: 6
 }
 
 ## Dictionary: territory_id -> TerritoryIndicator (the interactive indicator)
