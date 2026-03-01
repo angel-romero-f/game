@@ -36,6 +36,11 @@ const MAX_MINIGAMES_PER_PHASE: int = 2
 ## Set before launching minigame scene; cleared after awarding or on loss.
 var pending_minigame_reward: Dictionary = {}  # {"path": String, "frame": int}
 
+## Region bonus: active when the player owns both territories in a region and plays a minigame there.
+var region_bonus_active: bool = false
+var pending_bonus_reward: Dictionary = {}  # {"path": String, "frame": int}
+var region_bonus_used_this_phase: bool = false
+
 ## Flag to show phase transition overlay when returning to GameIntro
 var show_phase_transition: bool = false
 var phase_transition_text: String = ""
@@ -80,6 +85,9 @@ var game_victor_id: int = -1
 func enter_card_command_phase() -> void:
 	current_game_phase = GamePhase.CARD_COMMAND
 	minigames_completed_this_phase = 0
+	region_bonus_active = false
+	pending_bonus_reward.clear()
+	region_bonus_used_this_phase = false
 	phase_transition_text = "Command & Contest"
 	show_phase_transition = true
 	print("[HOST Phase] Entering CARD_COMMAND")
@@ -88,6 +96,9 @@ func enter_card_command_phase() -> void:
 func enter_claim_conquer_phase() -> void:
 	current_game_phase = GamePhase.CLAIM_CONQUER
 	minigames_completed_this_phase = 0
+	region_bonus_active = false
+	pending_bonus_reward.clear()
+	region_bonus_used_this_phase = false
 	phase_transition_text = "Collect"
 	show_phase_transition = true
 	print("[HOST Phase] Entering CLAIM_CONQUER")
@@ -96,6 +107,9 @@ func enter_claim_conquer_phase() -> void:
 func enter_card_collection_phase() -> void:
 	current_game_phase = GamePhase.CARD_COLLECTION
 	minigames_completed_this_phase = 0
+	region_bonus_active = false
+	pending_bonus_reward.clear()
+	region_bonus_used_this_phase = false
 	phase_transition_text = "Collect"
 	show_phase_transition = true
 	print("[HOST Phase] Entering CARD_COLLECTION")
@@ -289,9 +303,11 @@ func can_play_minigame() -> bool:
 	return minigames_completed_this_phase < MAX_MINIGAMES_PER_PHASE
 
 func reset_phase_state() -> void:
-	## Reset phase state for a new game
 	current_game_phase = GamePhase.CARD_COMMAND
 	minigames_completed_this_phase = 0
+	region_bonus_active = false
+	pending_bonus_reward.clear()
+	region_bonus_used_this_phase = false
 	show_phase_transition = false
 	phase_transition_text = ""
 	current_turn_player_id = -1
@@ -609,15 +625,31 @@ func pre_roll_minigame_reward() -> void:
 	minigame_time_remaining = -1.0
 	print("[Cards] Pre-rolled reward: %s frame %d" % [pending_minigame_reward.get("path", ""), pending_minigame_reward.get("frame", 0)])
 
+## Pre-roll a bonus reward card for the region bonus (called when player owns full region).
+func pre_roll_bonus_reward() -> void:
+	var card_pool: Array = MIXED_CARD_POOL.duplicate()
+	if card_pool.is_empty():
+		pending_bonus_reward = {}
+		return
+	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
+	pending_bonus_reward = {"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))}
+	print("[Cards] Pre-rolled region bonus reward: %s frame %d" % [pending_bonus_reward.get("path", ""), pending_bonus_reward.get("frame", 0)])
+
 ## Award the pre-rolled reward card (called on minigame WIN instead of add_card_from_minigame_win).
+## Also awards the region bonus card if the player owns the full region.
 func add_card_from_pending_reward() -> void:
 	if pending_minigame_reward.is_empty():
-		# Fallback if no pending reward was rolled
 		add_card_from_minigame_win()
-		return
-	player_card_collection.append(pending_minigame_reward.duplicate())
-	print("[Cards] Awarded pending reward card. Collection size: ", player_card_collection.size())
-	pending_minigame_reward.clear()
+	else:
+		player_card_collection.append(pending_minigame_reward.duplicate())
+		print("[Cards] Awarded pending reward card. Collection size: ", player_card_collection.size())
+		pending_minigame_reward.clear()
+
+	if region_bonus_active and not pending_bonus_reward.is_empty():
+		player_card_collection.append(pending_bonus_reward.duplicate())
+		print("[Cards] Awarded region bonus card! Collection size: ", player_card_collection.size())
+		pending_bonus_reward.clear()
+	region_bonus_active = false
 ## ---------- END PLAYER HAND SYSTEM ----------
 
 func reset_lives() -> void:

@@ -79,7 +79,7 @@ offset_bottom = 130.0
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 142, 0, 142, 115, 0, 115)
 territory_id_override = 1
-region_id_override = 1
+region_id_override = 3
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode2" type="Control" parent="TerritoriesContainer"]
@@ -106,7 +106,7 @@ rotation = 2.5132742
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 206.73575, 0, 206.73575, 187.7273)
 territory_id_override = 3
-region_id_override = 2
+region_id_override = 3
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode4" type="Control" parent="TerritoriesContainer"]
@@ -119,7 +119,7 @@ offset_bottom = 148.0
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 182, 0, 182, 120, 0, 120)
 territory_id_override = 4
-region_id_override = 2
+region_id_override = 1
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode5" type="Control" parent="TerritoriesContainer"]
@@ -132,7 +132,7 @@ rotation = -0.79761547
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 197.28616, 0, 197.28616, 204.90503)
 territory_id_override = 5
-region_id_override = 3
+region_id_override = 2
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode6" type="Control" parent="TerritoriesContainer"]
@@ -145,7 +145,7 @@ rotation = -2.4521875
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 196.95947, 0, 196.95947, 120.38037)
 territory_id_override = 6
-region_id_override = 3
+region_id_override = 2
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode7" type="Control" parent="TerritoriesContainer"]
@@ -159,7 +159,7 @@ rotation = -3.1415927
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 100.798584, 0, 100.798584, 107.47302, 0, 107.47302)
 territory_id_override = 7
-region_id_override = 4
+region_id_override = 5
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode8" type="Control" parent="TerritoriesContainer"]
@@ -187,7 +187,7 @@ rotation = -3.1415927
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 124.290955, 0, 124.290955, 97.83215, 0, 97.83215)
 territory_id_override = 9
-region_id_override = 5
+region_id_override = 6
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode10" type="Control" parent="TerritoriesContainer"]
@@ -201,7 +201,7 @@ rotation = -0.79761547
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 80.94934, 0, 80.94934, 67.3985, 0, 67.3985)
 territory_id_override = 10
-region_id_override = 5
+region_id_override = 4
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode11" type="Control" parent="TerritoriesContainer"]
@@ -215,7 +215,7 @@ rotation = -0.79761547
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 122.441345, 0, 122.441345, 149.69797)
 territory_id_override = 11
-region_id_override = 6
+region_id_override = 5
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode12" type="Control" parent="TerritoriesContainer"]

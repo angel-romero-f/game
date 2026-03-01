@@ -537,6 +537,8 @@ func _on_selection_timeout() -> void:
 	print("[GameIntro] Selection timed out — forfeiting this minigame chance")
 	App.minigame_time_remaining = -1.0
 	App.pending_minigame_reward.clear()
+	App.pending_bonus_reward.clear()
+	App.region_bonus_active = false
 	App.on_minigame_completed()
 	# Only refresh UI if the player can still play another game in the collect phase
 	var minigame_count: int = App.minigames_completed_this_phase

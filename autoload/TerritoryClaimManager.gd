@@ -184,6 +184,18 @@ func apply_saved_claims(territory_manager: TerritoryManager) -> void:
 			if cards[slot_idx] != null:
 				territory.place_card(owner_id, cards[slot_idx], slot_idx)
 
+## Returns true if the given player owns every territory in the specified region.
+func player_owns_full_region(player_id: int, region_id: int) -> bool:
+	if not _territory_claim_state:
+		return false
+	for tid in TerritoryManager.TERRITORY_REGIONS:
+		if TerritoryManager.TERRITORY_REGIONS[tid] != region_id:
+			continue
+		var owner_id: Variant = _territory_claim_state.call("get_owner_id", tid)
+		if owner_id == null or int(owner_id) != int(player_id):
+			return false
+	return true
+
 ## Launch a territory-specific minigame based on the territory's region.
 func launch_territory_minigame(territory_id: int, region_id: int) -> void:
 	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "scene": "" })
@@ -192,4 +204,12 @@ func launch_territory_minigame(territory_id: int, region_id: int) -> void:
 		App.pending_return_map_sub_phase = PhaseController.MapSubPhase.RESOURCE_COLLECTION
 		App.returning_from_territory_minigame = true
 		App.pre_roll_minigame_reward()
+
+		var local_id: int = _get_local_id()
+		var eligible := not App.region_bonus_used_this_phase and player_owns_full_region(local_id, region_id)
+		App.region_bonus_active = eligible
+		if eligible:
+			App.pre_roll_bonus_reward()
+			App.region_bonus_used_this_phase = true
+
 		App.go(scene_path)

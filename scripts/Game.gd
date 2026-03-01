@@ -108,6 +108,8 @@ func handle_continue():
 		App.minigame_time_remaining = -1.0
 		App.reset_lives()
 		App.pending_minigame_reward.clear()
+		App.pending_bonus_reward.clear()
+		App.region_bonus_active = false
 		App.on_minigame_completed()
 		_return_to_map()
 	else:

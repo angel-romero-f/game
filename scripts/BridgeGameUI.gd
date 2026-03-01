@@ -111,12 +111,14 @@ func _build_reward_preview() -> void:
 		return
 	if frame < 0 or frame >= sf.get_frame_count("default"):
 		return
+	var has_bonus := App.region_bonus_active and not App.pending_bonus_reward.is_empty()
+	var panel_right := 190 if has_bonus else 100
 	_reward_panel = PanelContainer.new()
 	_reward_panel.name = "RewardPreviewPanel"
 	_reward_panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
 	_reward_panel.offset_left = 8
 	_reward_panel.offset_top = 8
-	_reward_panel.offset_right = 100
+	_reward_panel.offset_right = panel_right
 	_reward_panel.offset_bottom = 160
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color(0.05, 0.05, 0.15, 0.82)
@@ -128,19 +130,36 @@ func _build_reward_preview() -> void:
 	vbox.add_theme_constant_override("separation", 2)
 	_reward_panel.add_child(vbox)
 	var lbl := Label.new()
-	lbl.text = "If you win:"
+	lbl.text = "Region Bonus! Win 2:" if has_bonus else "If you win:"
 	if _pixel_font:
 		lbl.add_theme_font_override("font", _pixel_font)
 	lbl.add_theme_font_size_override("font_size", 13)
 	lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
 	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	vbox.add_child(lbl)
+	var cards_container := HBoxContainer.new()
+	cards_container.add_theme_constant_override("separation", 4)
+	cards_container.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(cards_container)
 	var tex_rect := TextureRect.new()
 	tex_rect.texture = sf.get_frame_texture("default", frame)
 	tex_rect.custom_minimum_size = Vector2(80, 112)
 	tex_rect.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	tex_rect.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	vbox.add_child(tex_rect)
+	cards_container.add_child(tex_rect)
+	if has_bonus:
+		var bonus := App.pending_bonus_reward
+		var b_path: String = bonus.get("path", "")
+		var b_frame: int = int(bonus.get("frame", 0))
+		if b_path != "" and ResourceLoader.exists(b_path):
+			var b_sf := load(b_path) as SpriteFrames
+			if b_sf and b_sf.has_animation("default") and b_frame >= 0 and b_frame < b_sf.get_frame_count("default"):
+				var b_tex := TextureRect.new()
+				b_tex.texture = b_sf.get_frame_texture("default", b_frame)
+				b_tex.custom_minimum_size = Vector2(80, 112)
+				b_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+				b_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				cards_container.add_child(b_tex)
 	$UI.add_child(_reward_panel)
 
 func update_timer_display(time_left: float) -> void:
