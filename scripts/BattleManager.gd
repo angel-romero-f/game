@@ -534,11 +534,14 @@ func _on_battle_start_requested() -> void:
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
 	_add_attribute_indicators_to_player_cards()
+	print("[BattleManager] _on_battle_start_requested: starting bump sequence")
 	await _animate_card_bump_sequence()
+	print("[BattleManager] _on_battle_start_requested: bump sequence complete, showing result")
 	_show_result()
 	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
+	print("[BattleManager] _on_battle_start_requested: calling _start_auto_return")
 	_start_auto_return()
 
 
@@ -767,11 +770,14 @@ func _trigger_battle_start() -> void:
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
 	_add_attribute_indicators_to_player_cards()
+	print("[BattleManager] _trigger_battle_start: starting bump sequence")
 	await _animate_card_bump_sequence()
+	print("[BattleManager] _trigger_battle_start: bump sequence complete, showing result")
 	_show_result()
 	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
+	print("[BattleManager] _trigger_battle_start: calling _start_auto_return")
 	_start_auto_return()
 
 
@@ -780,6 +786,7 @@ func _animate_card_bump_sequence() -> void:
 	## After each bump the round loser's card disappears; on tie the attacker's card disappears (defender keeps).
 	## After all bumps, if the overall battle loser still has visible cards, the winner's remaining cards bump once more and then the loser's remaining cards vanish.
 	## Pairing: player_slots=[PL(0), PM(1), PR(2)], opponent_slots=[OR(0), OM(1), OL(2)]
+	print("[BattleManager] _animate_card_bump_sequence START")
 	var bump_pairs: Array = [
 		[0, 2],  # PL + OL
 		[1, 1],  # PM + OM
@@ -789,6 +796,7 @@ func _animate_card_bump_sequence() -> void:
 	var bump_duration := 0.15
 
 	var local_is_defender := _is_local_defender()
+	print("[BattleManager] local_is_defender=%s, _round_results=%s" % [str(local_is_defender), str(_round_results)])
 
 	for pair in bump_pairs:
 		var p_idx: int = pair[0]
@@ -798,9 +806,17 @@ func _animate_card_bump_sequence() -> void:
 		var pcard: Node = pslot.snapped_card if pslot and pslot.get("snapped_card") else null
 		var ocard: Node = _opponent_cards_by_slot.get(oslot, null) if oslot else null
 
+		var has_pcard: bool = pcard != null and is_instance_valid(pcard)
+		var has_ocard: bool = ocard != null and is_instance_valid(ocard)
+		print("[BattleManager] Bump pair p_idx=%d o_idx=%d has_pcard=%s has_ocard=%s" % [p_idx, o_idx, str(has_pcard), str(has_ocard)])
+
+		if not has_pcard and not has_ocard:
+			print("[BattleManager] Skipping bump pair %d — no cards" % p_idx)
+			continue
+
 		# Record starting positions before bump
-		var p_start: Vector2 = pcard.global_position if pcard and is_instance_valid(pcard) else Vector2.ZERO
-		var o_start: Vector2 = ocard.global_position if ocard and is_instance_valid(ocard) else Vector2.ZERO
+		var p_start: Vector2 = pcard.global_position if has_pcard else Vector2.ZERO
+		var o_start: Vector2 = ocard.global_position if has_ocard else Vector2.ZERO
 
 		# Bump out
 		var tween: Tween = create_tween()
@@ -808,12 +824,13 @@ func _animate_card_bump_sequence() -> void:
 		tween.set_trans(Tween.TRANS_CUBIC)
 		tween.set_parallel(true)
 
-		if pcard and is_instance_valid(pcard):
+		if has_pcard:
 			tween.tween_property(pcard, "global_position", p_start + Vector2(0, -bump_distance), bump_duration)
-		if ocard and is_instance_valid(ocard):
+		if has_ocard:
 			tween.tween_property(ocard, "global_position", o_start + Vector2(0, bump_distance), bump_duration)
 
 		await tween.finished
+		print("[BattleManager] Bump out finished for pair p_idx=%d" % p_idx)
 
 		# Return to starting positions
 		var return_tween: Tween = create_tween()
@@ -821,51 +838,56 @@ func _animate_card_bump_sequence() -> void:
 		return_tween.set_trans(Tween.TRANS_CUBIC)
 		return_tween.set_parallel(true)
 
-		if pcard and is_instance_valid(pcard):
+		var return_has_targets := false
+		if has_pcard and is_instance_valid(pcard):
 			return_tween.tween_property(pcard, "global_position", p_start, bump_duration)
-		if ocard and is_instance_valid(ocard):
+			return_has_targets = true
+		if has_ocard and is_instance_valid(ocard):
 			return_tween.tween_property(ocard, "global_position", o_start, bump_duration)
+			return_has_targets = true
 
-		await return_tween.finished
+		if return_has_targets:
+			await return_tween.finished
+		else:
+			return_tween.kill()
+			print("[BattleManager] Return tween had no targets for pair p_idx=%d, killed" % p_idx)
+		print("[BattleManager] Bump return finished for pair p_idx=%d" % p_idx)
 
 		# Determine round result for this player slot index
 		var round_result: String = _round_results[p_idx] if p_idx < _round_results.size() else "tie"
+		print("[BattleManager] Round result for p_idx=%d: %s" % [p_idx, round_result])
 
 		if round_result == "win":
-			# Player won this round -> opponent card disappears
-			if ocard and is_instance_valid(ocard):
-				_fade_out_card(ocard)
+			if has_ocard and is_instance_valid(ocard):
+				await _fade_out_card(ocard)
 		elif round_result == "lose":
-			# Opponent won this round -> player card disappears
-			if pcard and is_instance_valid(pcard):
-				_fade_out_card(pcard)
+			if has_pcard and is_instance_valid(pcard):
+				await _fade_out_card(pcard)
 		else:
-			# Tie: defender's card stays, attacker's card disappears
-			# local_is_defender means player cards are the defender's side
 			if local_is_defender:
-				if ocard and is_instance_valid(ocard):
-					_fade_out_card(ocard)
+				if has_ocard and is_instance_valid(ocard):
+					await _fade_out_card(ocard)
 			else:
-				if pcard and is_instance_valid(pcard):
-					_fade_out_card(pcard)
+				if has_pcard and is_instance_valid(pcard):
+					await _fade_out_card(pcard)
 
+		print("[BattleManager] Fade complete for pair p_idx=%d" % p_idx)
 		# Brief pause between pairs
 		await get_tree().create_tween().tween_interval(0.25).finished
 
 	# After all per-round bumps: check if the overall loser still has visible cards
 	var overall_result := _get_battle_result()
+	print("[BattleManager] All bumps done. overall_result=%s" % overall_result)
 	if overall_result == "lose":
-		# Player lost overall — opponent's remaining cards bump down, then player's remaining cards vanish
 		await _final_winner_bump_and_clear("opponent")
 	elif overall_result == "win":
-		# Player won overall — player's remaining cards bump up, then opponent's remaining cards vanish
 		await _final_winner_bump_and_clear("player")
-	# On overall tie, defender wins for card-loss purposes — attacker's remaining cards vanish
 	elif overall_result == "tie":
 		if local_is_defender:
 			await _final_winner_bump_and_clear("player")
 		else:
 			await _final_winner_bump_and_clear("opponent")
+	print("[BattleManager] _animate_card_bump_sequence DONE")
 
 
 func _is_local_defender() -> bool:
@@ -884,17 +906,22 @@ func _is_local_defender() -> bool:
 func _fade_out_card(card: Node) -> void:
 	## Quickly fade out and hide a card.
 	if not card or not is_instance_valid(card):
+		print("[BattleManager] _fade_out_card: card invalid, skipping")
 		return
+	print("[BattleManager] _fade_out_card: fading card %s" % card.name)
 	var fade_tween: Tween = create_tween()
 	fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
 	await fade_tween.finished
-	card.visible = false
+	if is_instance_valid(card):
+		card.visible = false
+	print("[BattleManager] _fade_out_card: done for %s" % card.name)
 
 
 func _final_winner_bump_and_clear(winner_side: String) -> void:
 	## After per-round results, if the overall loser still has visible cards:
 	## 1. Winner's remaining visible cards all bump at once (player up / opponent down).
 	## 2. Then the loser's remaining visible cards vanish.
+	print("[BattleManager] _final_winner_bump_and_clear START winner_side=%s" % winner_side)
 	var bump_distance := 10.0
 	var bump_duration := 0.15
 
@@ -902,7 +929,6 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 	var loser_cards: Array = []
 
 	if winner_side == "opponent":
-		# Opponent won -> opponent cards bump, player cards vanish
 		for slot in _opponent_slot_nodes:
 			var card: Node = _opponent_cards_by_slot.get(slot, null)
 			if card and is_instance_valid(card) and card.visible:
@@ -913,7 +939,6 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 				if card and is_instance_valid(card) and card.visible:
 					loser_cards.append(card)
 	else:
-		# Player won -> player cards bump, opponent cards vanish
 		for slot in _player_slot_nodes:
 			if slot and slot.get("snapped_card"):
 				var card: Node = slot.snapped_card
@@ -924,7 +949,10 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 			if card and is_instance_valid(card) and card.visible:
 				loser_cards.append(card)
 
+	print("[BattleManager] winner_cards=%d loser_cards=%d" % [winner_cards.size(), loser_cards.size()])
+
 	if loser_cards.is_empty():
+		print("[BattleManager] _final_winner_bump_and_clear: no loser cards, returning early")
 		return
 
 	# Winner cards bump out then return
@@ -939,27 +967,44 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 		bump_tween.set_parallel(true)
 		var bump_dir: float = -bump_distance if winner_side == "player" else bump_distance
 		for card in winner_cards:
-			bump_tween.tween_property(card, "global_position", card.global_position + Vector2(0, bump_dir), bump_duration)
+			if is_instance_valid(card):
+				bump_tween.tween_property(card, "global_position", card.global_position + Vector2(0, bump_dir), bump_duration)
 		await bump_tween.finished
+		print("[BattleManager] _final_winner_bump_and_clear: winner bump done")
 
 		var return_tween: Tween = create_tween()
 		return_tween.set_ease(Tween.EASE_IN_OUT)
 		return_tween.set_trans(Tween.TRANS_CUBIC)
 		return_tween.set_parallel(true)
+		var return_count := 0
 		for i in range(winner_cards.size()):
-			return_tween.tween_property(winner_cards[i], "global_position", start_positions[i], bump_duration)
-		await return_tween.finished
+			if is_instance_valid(winner_cards[i]):
+				return_tween.tween_property(winner_cards[i], "global_position", start_positions[i], bump_duration)
+				return_count += 1
+		if return_count > 0:
+			await return_tween.finished
+		else:
+			return_tween.kill()
+		print("[BattleManager] _final_winner_bump_and_clear: winner return done")
 
 	# Loser's remaining cards vanish
+	print("[BattleManager] _final_winner_bump_and_clear: fading %d loser cards" % loser_cards.size())
 	var fade_tween: Tween = create_tween()
 	fade_tween.set_parallel(true)
+	var fade_count := 0
 	for card in loser_cards:
-		fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
-	await fade_tween.finished
+		if is_instance_valid(card):
+			fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
+			fade_count += 1
+	if fade_count > 0:
+		await fade_tween.finished
+	else:
+		fade_tween.kill()
 	for card in loser_cards:
 		if card and is_instance_valid(card):
 			card.visible = false
 	await get_tree().create_tween().tween_interval(0.15).finished
+	print("[BattleManager] _final_winner_bump_and_clear DONE")
 
 
 func _place_opponent_backs() -> void:
