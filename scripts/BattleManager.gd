@@ -533,8 +533,9 @@ func _on_battle_start_requested() -> void:
 	# Short delay so both clients have synced opponent cards before resolving (fixes wrong result text for one player)
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
-	_show_result()
 	_add_attribute_indicators_to_player_cards()
+	await _animate_card_bump_sequence()
+	_show_result()
 	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
@@ -732,7 +733,25 @@ func _process(delta: float) -> void:
 	if battle_timer <= 0.0:
 		is_timer_active = false
 		_update_timer_visibility()
+		_auto_snap_dragged_card()
 		_trigger_battle_start()
+
+func _auto_snap_dragged_card() -> void:
+	## If the player is dragging a card when the timer expires, force it into the nearest available slot.
+	var root: Node = get_parent()
+	if root == null:
+		root = get_tree().current_scene
+	var card_manager: Node = root.get_node_or_null("CardManager") if root else null
+	if card_manager == null or card_manager.dragged_card == null:
+		return
+	var card: Node2D = card_manager.dragged_card
+	var card_pos: Vector2 = card.global_position
+	var nearest_slot: Node2D = card_manager._find_nearest_slot(card_pos) if card_manager.has_method("_find_nearest_slot") else null
+	if nearest_slot:
+		card_manager._snap_card_to_slot(card, nearest_slot)
+	card_manager.dragged_card = null
+	card_manager.drag_offset = Vector2.ZERO
+
 
 func _trigger_battle_start() -> void:
 	if state != State.WAITING_FOR_PLAYER:
@@ -745,14 +764,202 @@ func _trigger_battle_start() -> void:
 
 	state = State.FLIPPING
 	await _flip_opponent_cards_from_pool()
-	# Short delay so both clients have synced opponent cards before resolving (fixes wrong result text for one player)
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
-	_show_result()
 	_add_attribute_indicators_to_player_cards()
+	await _animate_card_bump_sequence()
+	_show_result()
+	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
 	_start_auto_return()
+
+
+func _animate_card_bump_sequence() -> void:
+	## Sequential bump: PL+OL, then PM+OM, then PR+OR. Player cards move up, opponent cards move down.
+	## After each bump the round loser's card disappears; on tie the attacker's card disappears (defender keeps).
+	## After all bumps, if the overall battle loser still has visible cards, the winner's remaining cards bump once more and then the loser's remaining cards vanish.
+	## Pairing: player_slots=[PL(0), PM(1), PR(2)], opponent_slots=[OR(0), OM(1), OL(2)]
+	var bump_pairs: Array = [
+		[0, 2],  # PL + OL
+		[1, 1],  # PM + OM
+		[2, 0],  # PR + OR
+	]
+	var bump_distance := 10.0
+	var bump_duration := 0.15
+
+	var local_is_defender := _is_local_defender()
+
+	for pair in bump_pairs:
+		var p_idx: int = pair[0]
+		var o_idx: int = pair[1]
+		var pslot: Node = _player_slot_nodes[p_idx] if p_idx < _player_slot_nodes.size() else null
+		var oslot: Node = _opponent_slot_nodes[o_idx] if o_idx < _opponent_slot_nodes.size() else null
+		var pcard: Node = pslot.snapped_card if pslot and pslot.get("snapped_card") else null
+		var ocard: Node = _opponent_cards_by_slot.get(oslot, null) if oslot else null
+
+		# Record starting positions before bump
+		var p_start: Vector2 = pcard.global_position if pcard and is_instance_valid(pcard) else Vector2.ZERO
+		var o_start: Vector2 = ocard.global_position if ocard and is_instance_valid(ocard) else Vector2.ZERO
+
+		# Bump out
+		var tween: Tween = create_tween()
+		tween.set_ease(Tween.EASE_OUT)
+		tween.set_trans(Tween.TRANS_CUBIC)
+		tween.set_parallel(true)
+
+		if pcard and is_instance_valid(pcard):
+			tween.tween_property(pcard, "global_position", p_start + Vector2(0, -bump_distance), bump_duration)
+		if ocard and is_instance_valid(ocard):
+			tween.tween_property(ocard, "global_position", o_start + Vector2(0, bump_distance), bump_duration)
+
+		await tween.finished
+
+		# Return to starting positions
+		var return_tween: Tween = create_tween()
+		return_tween.set_ease(Tween.EASE_IN_OUT)
+		return_tween.set_trans(Tween.TRANS_CUBIC)
+		return_tween.set_parallel(true)
+
+		if pcard and is_instance_valid(pcard):
+			return_tween.tween_property(pcard, "global_position", p_start, bump_duration)
+		if ocard and is_instance_valid(ocard):
+			return_tween.tween_property(ocard, "global_position", o_start, bump_duration)
+
+		await return_tween.finished
+
+		# Determine round result for this player slot index
+		var round_result: String = _round_results[p_idx] if p_idx < _round_results.size() else "tie"
+
+		if round_result == "win":
+			# Player won this round -> opponent card disappears
+			if ocard and is_instance_valid(ocard):
+				_fade_out_card(ocard)
+		elif round_result == "lose":
+			# Opponent won this round -> player card disappears
+			if pcard and is_instance_valid(pcard):
+				_fade_out_card(pcard)
+		else:
+			# Tie: defender's card stays, attacker's card disappears
+			# local_is_defender means player cards are the defender's side
+			if local_is_defender:
+				if ocard and is_instance_valid(ocard):
+					_fade_out_card(ocard)
+			else:
+				if pcard and is_instance_valid(pcard):
+					_fade_out_card(pcard)
+
+		# Brief pause between pairs
+		await get_tree().create_tween().tween_interval(0.25).finished
+
+	# After all per-round bumps: check if the overall loser still has visible cards
+	var overall_result := _get_battle_result()
+	if overall_result == "lose":
+		# Player lost overall — opponent's remaining cards bump down, then player's remaining cards vanish
+		await _final_winner_bump_and_clear("opponent")
+	elif overall_result == "win":
+		# Player won overall — player's remaining cards bump up, then opponent's remaining cards vanish
+		await _final_winner_bump_and_clear("player")
+	# On overall tie, defender wins for card-loss purposes — attacker's remaining cards vanish
+	elif overall_result == "tie":
+		if local_is_defender:
+			await _final_winner_bump_and_clear("player")
+		else:
+			await _final_winner_bump_and_clear("opponent")
+
+
+func _is_local_defender() -> bool:
+	## Check if the local player is the defender in the current battle.
+	var tid: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+	if tid.is_empty() or tid.begins_with("battle_"):
+		return true  # Non-territory battles: local player is treated as defender by default
+	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+	if tcs and tcs.has_method("get_owner_id"):
+		var owner_id: Variant = tcs.call("get_owner_id", int(tid))
+		var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+		return int(owner_id) == my_id
+	return true
+
+
+func _fade_out_card(card: Node) -> void:
+	## Quickly fade out and hide a card.
+	if not card or not is_instance_valid(card):
+		return
+	var fade_tween: Tween = create_tween()
+	fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
+	await fade_tween.finished
+	card.visible = false
+
+
+func _final_winner_bump_and_clear(winner_side: String) -> void:
+	## After per-round results, if the overall loser still has visible cards:
+	## 1. Winner's remaining visible cards all bump at once (player up / opponent down).
+	## 2. Then the loser's remaining visible cards vanish.
+	var bump_distance := 10.0
+	var bump_duration := 0.15
+
+	var winner_cards: Array = []
+	var loser_cards: Array = []
+
+	if winner_side == "opponent":
+		# Opponent won -> opponent cards bump, player cards vanish
+		for slot in _opponent_slot_nodes:
+			var card: Node = _opponent_cards_by_slot.get(slot, null)
+			if card and is_instance_valid(card) and card.visible:
+				winner_cards.append(card)
+		for slot in _player_slot_nodes:
+			if slot and slot.get("snapped_card"):
+				var card: Node = slot.snapped_card
+				if card and is_instance_valid(card) and card.visible:
+					loser_cards.append(card)
+	else:
+		# Player won -> player cards bump, opponent cards vanish
+		for slot in _player_slot_nodes:
+			if slot and slot.get("snapped_card"):
+				var card: Node = slot.snapped_card
+				if card and is_instance_valid(card) and card.visible:
+					winner_cards.append(card)
+		for slot in _opponent_slot_nodes:
+			var card: Node = _opponent_cards_by_slot.get(slot, null)
+			if card and is_instance_valid(card) and card.visible:
+				loser_cards.append(card)
+
+	if loser_cards.is_empty():
+		return
+
+	# Winner cards bump out then return
+	if not winner_cards.is_empty():
+		var start_positions: Array = []
+		for card in winner_cards:
+			start_positions.append(card.global_position)
+
+		var bump_tween: Tween = create_tween()
+		bump_tween.set_ease(Tween.EASE_OUT)
+		bump_tween.set_trans(Tween.TRANS_CUBIC)
+		bump_tween.set_parallel(true)
+		var bump_dir: float = -bump_distance if winner_side == "player" else bump_distance
+		for card in winner_cards:
+			bump_tween.tween_property(card, "global_position", card.global_position + Vector2(0, bump_dir), bump_duration)
+		await bump_tween.finished
+
+		var return_tween: Tween = create_tween()
+		return_tween.set_ease(Tween.EASE_IN_OUT)
+		return_tween.set_trans(Tween.TRANS_CUBIC)
+		return_tween.set_parallel(true)
+		for i in range(winner_cards.size()):
+			return_tween.tween_property(winner_cards[i], "global_position", start_positions[i], bump_duration)
+		await return_tween.finished
+
+	# Loser's remaining cards vanish
+	var fade_tween: Tween = create_tween()
+	fade_tween.set_parallel(true)
+	for card in loser_cards:
+		fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
+	await fade_tween.finished
+	for card in loser_cards:
+		if card and is_instance_valid(card):
+			card.visible = false
+	await get_tree().create_tween().tween_interval(0.15).finished
 
 
 func _place_opponent_backs() -> void:
