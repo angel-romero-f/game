@@ -9,6 +9,7 @@ const PhaseSystemUIScript := preload("res://scripts/ui/game_intro/PhaseSystemUI.
 const TerritorySystemUIScript := preload("res://scripts/ui/game_intro/TerritorySystemUI.gd")
 const PlayerHandUIScript := preload("res://scripts/ui/game_intro/PlayerHandUI.gd")
 const GameFlowUIScript := preload("res://scripts/ui/game_intro/GameFlowUI.gd")
+const TurnOrderBarUIScript := preload("res://scripts/ui/game_intro/TurnOrderBarUI.gd")
 
 # Component instances
 var intro_ui: Node
@@ -17,16 +18,13 @@ var phase_ui: Node
 var territory_ui: Node
 var hand_ui: Node
 var flow_ui: Node
+var turn_order_bar: Node
 var claim_ui: PanelContainer  # Script-on-node (ClaimTerritoryUI)
 var settings_panel: Panel      # Script-on-node (SettingsPanelUI)
 
 var intro_complete: bool = false
 var is_paused: bool = false
 var settings_button: Button
-var order_corner_panel: PanelContainer
-var order_corner_title_button: Button
-var order_corner_vbox: VBoxContainer
-var turn_order_expanded: bool = false
 
 # Minigame selection timer
 var _selection_timer: float = 0.0
@@ -50,9 +48,6 @@ func _ready() -> void:
 	var player_roll_container := $PlayerRollContainer as CenterContainer
 	var order_center_container := $OrderCenterContainer as CenterContainer
 	var order_list_center := $OrderCenterContainer/Panel/MarginContainer/VBoxContainer/OrderList as VBoxContainer
-	var order_corner_container := $OrderCornerContainer/VBoxContainer as VBoxContainer
-	order_corner_panel = $OrderCornerContainer as PanelContainer
-	order_corner_vbox = order_corner_container
 	var minigame_button := $MinigameButton as Button
 	var bridge_minigame_button := $BridgeMinigameButton as Button
 	var ice_fishing_button := $IceFishingButton as Button
@@ -88,7 +83,6 @@ func _ready() -> void:
 	showcase_container.modulate.a = 1.0
 	d20_container.visible = false
 	order_center_container.visible = false
-	order_corner_container.get_parent().visible = false
 	for btn in [minigame_button, bridge_minigame_button, ice_fishing_button, play_minigames_button,
 				battle_button, skip_to_battle_button, battle_button_right]:
 		btn.visible = false
@@ -150,6 +144,11 @@ func _ready() -> void:
 		"card_count_label": card_count_label,
 	})
 
+	turn_order_bar = TurnOrderBarUIScript.new()
+	turn_order_bar.name = "TurnOrderBarUI"
+	add_child(turn_order_bar)
+	turn_order_bar.initialize(self)
+
 	intro_ui = IntroSequenceUIScript.new()
 	intro_ui.name = "IntroSequenceUI"
 	add_child(intro_ui)
@@ -165,7 +164,6 @@ func _ready() -> void:
 		"player_roll_container": player_roll_container,
 		"order_center_container": order_center_container,
 		"order_list_center": order_list_center,
-		"order_corner_container": order_corner_container,
 		"map_overlay": map_overlay,
 	})
 	intro_ui.intro_completed.connect(_on_intro_completed)
@@ -243,7 +241,11 @@ func _ready() -> void:
 
 	# Refresh card count immediately when cards are placed on territories
 	if claim_ui and claim_ui.has_signal("claim_submitted"):
-		claim_ui.claim_submitted.connect(func(_tid, _cards): hand_ui.update_card_count())
+		claim_ui.claim_submitted.connect(func(_tid, _cards):
+			hand_ui.update_card_count()
+			if turn_order_bar:
+				turn_order_bar.update_card_count()
+		)
 
 	# TerritorySystemUI → PhaseSystemUI
 	territory_ui.phase_ui_update_requested.connect(phase_ui.apply_phase_ui)
@@ -254,7 +256,11 @@ func _ready() -> void:
 	flow_ui.delayed_battle_transition_needed.connect(territory_ui.start_delayed_battle_transition)
 	flow_ui.collect_resources_needed.connect(territory_ui.show_collect_resources_overlay)
 	flow_ui.phase_ui_refresh_needed.connect(_on_flow_phase_ui_refresh)
-	flow_ui.card_won.connect(hand_ui.show_card_icon_button)
+	flow_ui.card_won.connect(func():
+		hand_ui.show_card_icon_button()
+		if turn_order_bar:
+			turn_order_bar.update_card_count()
+	)
 	flow_ui.show_next_player_turn.connect(_on_show_next_player_turn)
 
 	# ---------- Button connections ----------
@@ -291,9 +297,15 @@ func _ready() -> void:
 	if WinConditionManager and not WinConditionManager.player_won.is_connected(_on_player_won):
 		WinConditionManager.player_won.connect(_on_player_won)
 
+	# Card count sync → turn order bar
+	if not PhaseController.card_counts_updated.is_connected(_on_card_counts_updated):
+		PhaseController.card_counts_updated.connect(_on_card_counts_updated)
+
 	# Multiplayer net signals
 	if App.is_multiplayer:
 		phase_ui.connect_net_signals()
+		if not PhaseController.turn_changed.is_connected(_on_turn_order_bar_turn_changed):
+			PhaseController.turn_changed.connect(_on_turn_order_bar_turn_changed)
 
 	# ---------- Return-from-scene check ----------
 
@@ -330,6 +342,9 @@ func _ready() -> void:
 		
 		# Refresh territory indicators to pick up card count changes after battles
 		territory_ui.refresh_territory_claimed_visuals()
+		
+		# Refresh card counts in the turn order bar (collection may have changed in minigame/battle)
+		App._notify_card_count_changed()
 		
 		# Show overlay if we missed the phase transition while in battle
 		if missed_phase_transition:
@@ -397,6 +412,9 @@ func _on_intro_completed() -> void:
 func _on_phase_ui_applied() -> void:
 	territory_ui.update_territory_interaction()
 	hand_ui.update_card_count()
+	if turn_order_bar:
+		turn_order_bar.update_card_count()
+		_sync_turn_order_bar_highlight()
 	# Stop the selection timer if we've left the collect phase
 	var in_collect_phase := (
 		App.current_game_phase == App.GamePhase.CARD_COLLECTION
@@ -559,41 +577,43 @@ func _get_local_player_id() -> Variant:
 	return 1
 
 func _on_corner_order_ready() -> void:
-	# Replace TitleLabel with a clickable Button inside the panel
-	var title_label: Label = order_corner_vbox.get_node_or_null("TitleLabel")
-	if title_label:
-		title_label.queue_free()
-	var font: Font = load("res://fonts/m5x7.ttf")
-	order_corner_title_button = Button.new()
-	order_corner_title_button.name = "TitleButton"
-	order_corner_title_button.text = "Turn Order  >"
-	order_corner_title_button.add_theme_font_override("font", font)
-	order_corner_title_button.add_theme_font_size_override("font_size", 36)
-	order_corner_title_button.add_theme_color_override("font_color", Color(1, 0.85, 0.3, 1))
-	order_corner_title_button.flat = true
-	order_corner_title_button.pressed.connect(_on_turn_order_toggle_pressed)
-	order_corner_vbox.add_child(order_corner_title_button)
-	order_corner_vbox.move_child(order_corner_title_button, 0)
-	# Start collapsed — hide list items
-	turn_order_expanded = false
-	_apply_turn_order_collapsed()
-	order_corner_panel.visible = true
+	if turn_order_bar:
+		turn_order_bar.build_turn_order(App.turn_order)
+		_sync_turn_order_bar_highlight()
 
-func _on_turn_order_toggle_pressed() -> void:
-	turn_order_expanded = not turn_order_expanded
-	if turn_order_expanded:
-		order_corner_title_button.text = "Turn Order  v"
-		for i in range(1, order_corner_vbox.get_child_count()):
-			order_corner_vbox.get_child(i).visible = true
-		order_corner_panel.offset_bottom = order_corner_panel.offset_top + 340.0
+func _on_card_counts_updated() -> void:
+	if turn_order_bar:
+		turn_order_bar.update_card_count()
+
+func _on_turn_order_bar_turn_changed(peer_id: int) -> void:
+	if not turn_order_bar:
+		return
+	if _is_collect_phase():
+		turn_order_bar.clear_highlight()
+	elif peer_id >= 0:
+		turn_order_bar.highlight_current_turn(peer_id)
+
+func _sync_turn_order_bar_highlight() -> void:
+	if not turn_order_bar:
+		return
+	if _is_collect_phase():
+		turn_order_bar.clear_highlight()
+		return
+	var active_id: int = -1
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		active_id = PhaseController.current_turn_peer_id
 	else:
-		_apply_turn_order_collapsed()
+		if App.current_turn_index >= 0 and App.current_turn_index < App.turn_order.size():
+			active_id = int(App.turn_order[App.current_turn_index].get("id", -1))
+	if active_id >= 0:
+		turn_order_bar.highlight_current_turn(active_id)
 
-func _apply_turn_order_collapsed() -> void:
-	order_corner_title_button.text = "Turn Order  >"
-	for i in range(1, order_corner_vbox.get_child_count()):
-		order_corner_vbox.get_child(i).visible = false
-	order_corner_panel.offset_bottom = order_corner_panel.offset_top + 55.0
+func _is_collect_phase() -> bool:
+	return (
+		App.current_game_phase == App.GamePhase.CARD_COLLECTION
+		or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+			and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+	)
 
 func _create_phase_indicator_bar() -> HBoxContainer:
 	var font: Font = load("res://fonts/m5x7.ttf")

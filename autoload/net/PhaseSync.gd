@@ -50,6 +50,8 @@ func host_init_card_command_phase() -> void:
 	rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
 	rpc_sync_done_counts.rpc(0, total)
 	rpc_map_sub_phase.rpc(0)  # Reset map sub-phase to CLAIMING
+	if not PhaseController.player_card_counts.is_empty():
+		rpc_sync_card_counts.rpc(PhaseController.player_card_counts.duplicate())
 	rpc_set_phase.rpc(0)  # Must be last - triggers UI update
 
 ## Host: Initialize Card Collection phase (after all players finish their turns)
@@ -259,6 +261,35 @@ func rpc_sync_done_counts(done: int, total: int) -> void:
 @rpc("authority", "call_local", "reliable")
 func rpc_map_sub_phase(sub_phase: int) -> void:
 	PhaseController.set_map_sub_phase(sub_phase)
+
+# ---------- CARD COUNT SYNC ----------
+
+## Client reports its card count to the server; server broadcasts all counts.
+func report_card_count() -> void:
+	var count := App.player_card_collection.size()
+	if not multiplayer.has_multiplayer_peer():
+		return
+	if multiplayer.is_server():
+		_server_receive_card_count(multiplayer.get_unique_id(), count)
+	else:
+		server_receive_card_count.rpc_id(1, count)
+
+@rpc("any_peer", "reliable")
+func server_receive_card_count(count: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var id := multiplayer.get_remote_sender_id()
+	if id == 0:
+		id = multiplayer.get_unique_id()
+	_server_receive_card_count(id, count)
+
+func _server_receive_card_count(peer_id: int, count: int) -> void:
+	PhaseController.player_card_counts[peer_id] = count
+	rpc_sync_card_counts.rpc(PhaseController.player_card_counts.duplicate())
+
+@rpc("authority", "call_local", "reliable")
+func rpc_sync_card_counts(counts: Dictionary) -> void:
+	PhaseController.apply_card_counts(counts)
 
 # ---------- CLAIM & CONQUER PHASE TRANSITIONS ----------
 
