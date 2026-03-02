@@ -326,6 +326,7 @@ func on_ready_for_battle_pressed() -> void:
 	transition_to_next_round()
 
 func transition_to_next_round() -> void:
+	App._notify_card_count_changed()
 	PhaseController.enter_next_claiming_round()
 	map_sub_phase = PhaseController.map_sub_phase
 	phase_ui_update_requested.emit()

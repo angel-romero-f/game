@@ -28,7 +28,6 @@ var rolling_label: Label
 var player_roll_container: CenterContainer
 var order_center_container: CenterContainer
 var order_list_center: VBoxContainer
-var order_corner_container: VBoxContainer
 var map_overlay: ColorRect
 
 # Animation state
@@ -46,7 +45,6 @@ var _d20_frame_timer: float = 0.0
 
 # Order display items
 var order_items_center: Array = []
-var order_items_corner: Array = []
 
 func initialize(nodes: Dictionary) -> void:
 	showcase_container = nodes.get("showcase_container")
@@ -60,7 +58,6 @@ func initialize(nodes: Dictionary) -> void:
 	player_roll_container = nodes.get("player_roll_container")
 	order_center_container = nodes.get("order_center_container")
 	order_list_center = nodes.get("order_list_center")
-	order_corner_container = nodes.get("order_corner_container")
 	map_overlay = nodes.get("map_overlay")
 
 func start_intro() -> void:
@@ -70,20 +67,11 @@ func start_intro() -> void:
 	showcase_timer = 0.0
 
 func skip_intro() -> void:
-	## Skip all intro animations — just build corner order display.
+	## Skip all intro animations — signal the bottom bar to build.
 	showcase_container.visible = false
 	d20_container.visible = false
 	order_center_container.visible = false
 	map_overlay.modulate.a = 0.0
-	var corner_parent = order_corner_container.get_parent()
-	corner_parent.visible = false
-	for child in order_corner_container.get_children():
-		if child.name != "TitleLabel":
-			child.queue_free()
-	for i in range(App.turn_order.size()):
-		var player = App.turn_order[i]
-		var item := _create_order_item(player, i + 1, false)
-		order_corner_container.add_child(item)
 	corner_order_ready.emit()
 	current_phase = Phase.GAME_READY
 
@@ -283,17 +271,6 @@ func _minimize_to_corner() -> void:
 
 func _show_corner_order() -> void:
 	order_center_container.visible = false
-	var corner_parent = order_corner_container.get_parent()
-	corner_parent.visible = false
-	for child in order_corner_container.get_children():
-		if child.name != "TitleLabel":
-			child.queue_free()
-	order_items_corner.clear()
-	for i in range(App.turn_order.size()):
-		var player = App.turn_order[i]
-		var item := _create_order_item(player, i + 1, false)
-		order_corner_container.add_child(item)
-		order_items_corner.append(item)
 	var map_tween := create_tween()
 	map_tween.tween_property(map_overlay, "modulate:a", 0.0, 0.8)
 	await map_tween.finished

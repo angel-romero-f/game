@@ -174,7 +174,7 @@ func request_increment_minigame() -> void: PhaseSync.request_increment_minigame(
 func request_skip_to_done() -> void: PhaseSync.request_skip_to_done()
 
 func reset_phase_sync_state() -> void:
-	PhaseController.reset()
+	PhaseController.full_reset()
 	BattleSync.reset_battle_state()
 
 # ---------- BATTLE METHODS (delegated to BattleSync) ----------

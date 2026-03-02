@@ -579,6 +579,7 @@ func remove_placed_cards_from_collection_for_slots(placed_slots: Dictionary, rea
 				break
 	if removed > 0:
 		print("[Cards] Removed ", removed, " placed cards from collection (", reason, ")")
+		_notify_card_count_changed()
 
 
 ## Backwards-compatible helper using legacy battle_placed_cards.
@@ -605,6 +606,7 @@ func initialize_player_card_collection() -> void:
 		var c: Dictionary = card_pool[i].duplicate()
 		player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
 	print("[Cards] Initialized collection with ", player_card_collection.size(), " cards")
+	_notify_card_count_changed()
 
 ## Add a random card when player wins a minigame
 func add_card_from_minigame_win() -> void:
@@ -614,6 +616,7 @@ func add_card_from_minigame_win() -> void:
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
 	player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
 	print("[Cards] Added card from minigame win. Collection size: ", player_card_collection.size())
+	_notify_card_count_changed()
 
 ## Pre-roll (deterministically pick) the reward card before the minigame scene loads.
 ## Stores it in pending_minigame_reward so the minigame UI can preview it.
@@ -653,6 +656,18 @@ func add_card_from_pending_reward() -> void:
 		print("[Cards] Awarded region bonus card! Collection size: ", player_card_collection.size())
 		pending_bonus_reward.clear()
 	region_bonus_active = false
+	_notify_card_count_changed()
+
+func _notify_card_count_changed() -> void:
+	if is_multiplayer and get_tree().get_multiplayer().has_multiplayer_peer():
+		PhaseSync.report_card_count()
+	else:
+		var count := player_card_collection.size()
+		var players: Array = game_players if not game_players.is_empty() else turn_order
+		for p in players:
+			PhaseController.player_card_counts[int(p.get("id", -1))] = count
+		if not players.is_empty():
+			PhaseController.card_counts_updated.emit()
 ## ---------- END PLAYER HAND SYSTEM ----------
 
 func reset_lives() -> void:
