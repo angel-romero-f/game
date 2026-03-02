@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://cjhahcjhtdu5i"
+path="res://.godot/imported/river_boat_territory.pxo-80ffae4b033c8a59ac70362d2c026a8d.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/river_boat_territory.pxo"
+dest_files=["res://.godot/imported/river_boat_territory.pxo-80ffae4b033c8a59ac70362d2c026a8d.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

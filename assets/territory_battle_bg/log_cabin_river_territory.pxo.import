@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dwcn121pm1a55"
+path="res://.godot/imported/log_cabin_river_territory.pxo-75be1a056460384c609a23a8aee01488.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/log_cabin_river_territory.pxo"
+dest_files=["res://.godot/imported/log_cabin_river_territory.pxo-75be1a056460384c609a23a8aee01488.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

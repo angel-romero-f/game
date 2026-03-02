@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://bd26ipllpr8i1"
+path="res://.godot/imported/orc_fb.pxo-b7bb4a3fbd3496a7acf4b301873ec332.res"
+
+[deps]
+
+source_file="res://assets/orc_fb.pxo"
+dest_files=["res://.godot/imported/orc_fb.pxo-b7bb4a3fbd3496a7acf4b301873ec332.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

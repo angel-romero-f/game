@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://b2sttvg5d3p37"
+path="res://.godot/imported/cloud_territory.pxo-cd1277da352f1d9d974eee9b60bc5573.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/cloud_territory.pxo"
+dest_files=["res://.godot/imported/cloud_territory.pxo-cd1277da352f1d9d974eee9b60bc5573.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

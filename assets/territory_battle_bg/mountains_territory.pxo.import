@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://bt414gp6uh6tt"
+path="res://.godot/imported/mountains_territory.pxo-08eb5ac48cd598f7287d53330c578313.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/mountains_territory.pxo"
+dest_files=["res://.godot/imported/mountains_territory.pxo-08eb5ac48cd598f7287d53330c578313.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

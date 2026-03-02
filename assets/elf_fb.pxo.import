@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dmh2djlrrpg56"
+path="res://.godot/imported/elf_fb.pxo-97e2d77215f939e26b855e40a1893ae0.res"
+
+[deps]
+
+source_file="res://assets/elf_fb.pxo"
+dest_files=["res://.godot/imported/elf_fb.pxo-97e2d77215f939e26b855e40a1893ae0.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

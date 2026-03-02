@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dp84270hd38qn"
+path="res://.godot/imported/burnt_town_territory.pxo-77bb1d85a9eeab7dc319c8bc575c8014.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/burnt_town_territory.pxo"
+dest_files=["res://.godot/imported/burnt_town_territory.pxo-77bb1d85a9eeab7dc319c8bc575c8014.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

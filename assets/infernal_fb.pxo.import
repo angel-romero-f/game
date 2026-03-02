@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://c2obqbppgnwk6"
+path="res://.godot/imported/infernal_fb.pxo-242b264dc478b0079cfd8c02982093e6.res"
+
+[deps]
+
+source_file="res://assets/infernal_fb.pxo"
+dest_files=["res://.godot/imported/infernal_fb.pxo-242b264dc478b0079cfd8c02982093e6.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

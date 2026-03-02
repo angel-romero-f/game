@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://cwbck4iupvk2g"
+path="res://.godot/imported/fairy_fb.pxo-b23cad6f73fc0310e44c6e9ff5b92dbf.res"
+
+[deps]
+
+source_file="res://assets/fairy_fb.pxo"
+dest_files=["res://.godot/imported/fairy_fb.pxo-b23cad6f73fc0310e44c6e9ff5b92dbf.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
