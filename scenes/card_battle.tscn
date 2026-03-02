@@ -107,6 +107,7 @@ grow_vertical = 2
 mouse_filter = 2
 
 [node name="TimerLabel" type="Label" parent="BattleUI/UI"]
+visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -126,6 +127,7 @@ text = "Countdown to Coordinate Your Combat: 10"
 horizontal_alignment = 1
 
 [node name="TimerSubLabel" type="Label" parent="BattleUI/UI"]
+visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5
@@ -144,16 +146,15 @@ text = "When the count hits 0, the cards flip and the battles commence."
 horizontal_alignment = 1
 
 [node name="ResultLabel" type="Label" parent="BattleUI/UI"]
-visible = false
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.5
 anchor_top = 0.46
 anchor_right = 0.5
 anchor_bottom = 0.46
-offset_left = -350.0
+offset_left = -393.0
 offset_top = -30.0
-offset_right = 350.0
+offset_right = 307.0
 offset_bottom = 80.0
 grow_horizontal = 2
 grow_vertical = 2
@@ -166,7 +167,6 @@ vertical_alignment = 1
 autowrap_mode = 2
 
 [node name="ContinueLabel" type="Label" parent="BattleUI/UI"]
-visible = false
 layout_mode = 1
 anchors_preset = -1
 anchor_left = 0.5

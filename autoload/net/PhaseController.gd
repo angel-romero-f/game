@@ -18,12 +18,15 @@ var map_sub_phase: int = MapSubPhase.CLAIMING
 var player_done_state: Dictionary = {}
 # Per-player minigame counts: {peer_id: int}
 var player_minigame_counts: Dictionary = {}
+# Per-player card counts: {peer_id: int}
+var player_card_counts: Dictionary = {}
 # Active turn peer and position
 var current_turn_peer_id: int = -1
 var current_turn_index: int = 0
 
 signal phase_changed(phase_id: int)
 signal turn_changed(peer_id: int)
+signal card_counts_updated
 @warning_ignore("unused_signal")
 signal done_counts_updated(done_count: int, total: int)
 signal map_sub_phase_changed(sub_phase: int)
@@ -143,7 +146,17 @@ func enter_next_claiming_round() -> void:
 	App.minigames_completed_this_phase = 0
 	set_map_sub_phase(MapSubPhase.CLAIMING)
 
-## Reset all phase state for a new game or new round
+## Apply card counts received from server
+func apply_card_counts(counts: Dictionary) -> void:
+	player_card_counts = counts.duplicate()
+	card_counts_updated.emit()
+
+## Update a single player's card count
+func set_card_count(peer_id: int, count: int) -> void:
+	player_card_counts[peer_id] = count
+	card_counts_updated.emit()
+
+## Reset phase state for a new round (preserves card counts)
 func reset() -> void:
 	current_phase = 0
 	map_sub_phase = MapSubPhase.CLAIMING
@@ -151,3 +164,8 @@ func reset() -> void:
 	player_minigame_counts.clear()
 	current_turn_peer_id = -1
 	current_turn_index = 0
+
+## Full reset for a brand new game
+func full_reset() -> void:
+	reset()
+	player_card_counts.clear()
