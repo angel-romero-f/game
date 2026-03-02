@@ -94,6 +94,10 @@ func initialize_territory_system() -> void:
 	if territory_manager and not territory_manager.defending_cards_preview_requested.is_connected(_on_defending_preview_requested):
 		territory_manager.defending_cards_preview_requested.connect(_on_defending_preview_requested)
 
+	# Connect TerritorySync contest blink signal (multiplayer)
+	if TerritorySync and not TerritorySync.territory_contest_blink_started.is_connected(_on_territory_contest_blink_started):
+		TerritorySync.territory_contest_blink_started.connect(_on_territory_contest_blink_started)
+
 func get_territory_manager() -> TerritoryManager:
 	return territory_manager
 
@@ -244,6 +248,19 @@ func _on_claim_submitted(territory_id: int, cards: Array) -> void:
 func _on_attack_submitted(territory_id: int, cards: Array) -> void:
 	## Attack only registers attacking cards; it does NOT start or resolve a battle. The battle runs in the card_battle scene after both players press Ready.
 	TerritoryClaimManager.register_attack(territory_id, cards)
+
+	# Count non-null attacking cards
+	var attacker_card_count := 0
+	for c in cards:
+		if c != null:
+			attacker_card_count += 1
+
+	# Start contest blink on this territory's disc
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		TerritorySync.request_territory_contest_blink(territory_id, attacker_card_count)
+	else:
+		_start_blink_on_territory(territory_id, _get_local_player_id(), attacker_card_count)
+
 	if claim_ui:
 		claim_ui.close_panel()
 	update_territory_interaction()
@@ -266,6 +283,7 @@ func _on_map_sub_phase_changed(sub_phase: int) -> void:
 func on_finish_claiming_pressed() -> void:
 	if claim_ui:
 		claim_ui.close_panel()
+	_stop_all_contest_blinks()
 	PhaseController.finish_claiming_turn()
 
 func _on_claiming_turn_finished(has_battles: bool) -> void:
@@ -369,3 +387,35 @@ func _get_local_player_id() -> Variant:
 		if p.get("is_local", false):
 			return p.get("id", 1)
 	return 1
+
+
+# ---------- CONTEST BLINK HELPERS ----------
+
+func _on_territory_contest_blink_started(territory_id: int, attacker_id: int, attacker_card_count: int) -> void:
+	_start_blink_on_territory(territory_id, attacker_id, attacker_card_count)
+
+
+func _start_blink_on_territory(territory_id: int, attacker_id: int, attacker_card_count: int) -> void:
+	if not territory_manager:
+		return
+	var indicator: TerritoryIndicator = territory_manager.territories.get(territory_id, null)
+	if not indicator:
+		return
+	# Look up attacker's race from game_players
+	var attacker_race := ""
+	for p in App.game_players:
+		if int(p.get("id", -999)) == int(attacker_id):
+			attacker_race = str(p.get("race", "")).to_lower().strip_edges()
+			break
+	if attacker_race.is_empty():
+		return
+	indicator.start_contest_blink(attacker_race, attacker_card_count)
+
+
+func _stop_all_contest_blinks() -> void:
+	if not territory_manager:
+		return
+	for tid_key in territory_manager.territories:
+		var indicator: TerritoryIndicator = territory_manager.territories[tid_key]
+		if indicator.is_contest_blinking():
+			indicator.stop_contest_blink()

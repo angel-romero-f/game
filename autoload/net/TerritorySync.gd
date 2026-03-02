@@ -5,6 +5,7 @@ extends Node
 
 signal territory_claimed(territory_id: int, owner_id: int, cards: Array)
 signal territory_claim_rejected(territory_id: int, claimer_name: String)
+signal territory_contest_blink_started(territory_id: int, attacker_id: int, attacker_card_count: int)
 
 ## Any peer requests to claim a territory; server validates and broadcasts
 func request_claim_territory(territory_id: int, owner_id: int, cards: Array) -> void:
@@ -99,3 +100,30 @@ func rpc_territory_claimed(territory_id: int, owner_id: int, cards: Array) -> vo
 @rpc("authority", "reliable")
 func rpc_claim_rejected(territory_id: int, claimer_name: String) -> void:
 	territory_claim_rejected.emit(territory_id, claimer_name)
+
+# ---------- CONTEST BLINK ----------
+
+## Any peer requests to start contest blink on a territory (after Attack is clicked).
+func request_territory_contest_blink(territory_id: int, attacker_card_count: int) -> void:
+	if multiplayer.is_server():
+		_server_process_contest_blink(multiplayer.get_unique_id(), territory_id, attacker_card_count)
+	else:
+		server_contest_blink.rpc_id(1, territory_id, attacker_card_count)
+
+@rpc("any_peer", "reliable")
+func server_contest_blink(territory_id: int, attacker_card_count: int) -> void:
+	if not multiplayer.is_server():
+		return
+	var sender_id := multiplayer.get_remote_sender_id()
+	if sender_id == 0:
+		sender_id = multiplayer.get_unique_id()
+	_server_process_contest_blink(sender_id, territory_id, attacker_card_count)
+
+func _server_process_contest_blink(attacker_id: int, territory_id: int, attacker_card_count: int) -> void:
+	if not multiplayer.is_server():
+		return
+	rpc_territory_contest_blink.rpc(territory_id, attacker_id, attacker_card_count)
+
+@rpc("authority", "call_local", "reliable")
+func rpc_territory_contest_blink(territory_id: int, attacker_id: int, attacker_card_count: int) -> void:
+	territory_contest_blink_started.emit(territory_id, attacker_id, attacker_card_count)

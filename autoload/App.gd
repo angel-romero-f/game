@@ -82,6 +82,9 @@ var pending_territory_battle_defender_id: int = -1
 ## Set when a player wins (5/6 regions). GameIntro checks this to show victory overlay.
 var game_victor_id: int = -1
 
+## True when the local player is a spectator (not attacker or defender) in a territory battle.
+var is_battle_spectator: bool = false
+
 func enter_card_command_phase() -> void:
 	current_game_phase = GamePhase.CARD_COMMAND
 	minigames_completed_this_phase = 0
@@ -969,6 +972,8 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 		"opponent_race": opponent_race
 	}
 	
+	is_battle_spectator = not is_attacker and not is_defender
+
 	if is_attacker:
 		print("[App] I am the ATTACKER. Loading attacking slots.")
 		var atts: Dictionary = BattleStateManager._get_state(tid_str).get("attacking_slots", {})
@@ -986,5 +991,5 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 		go("res://scenes/card_battle.tscn")
 			
 	else:
-		print("[App] I am a SPECTATOR (not attacker or defender). Staying in current scene.")
-		# Optionally show an overlay "Battle in Progress: Player X vs Player Y"
+		print("[App] I am a SPECTATOR. Entering battle scene as spectator.")
+		go("res://scenes/card_battle.tscn")

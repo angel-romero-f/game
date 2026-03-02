@@ -31,6 +31,14 @@ var _glow_alpha: float = 0.0
 var _hover_timer: Timer = null
 const HOVER_PREVIEW_DELAY_SEC := 1.0
 
+# ---------- CONTEST BLINK ----------
+var _contest_blink_active: bool = false
+var _contest_blink_show_attacker: bool = false
+var _contest_blink_timer: float = 0.0
+var _contest_attacker_race: String = ""
+var _contest_attacker_card_count: int = 0
+const CONTEST_BLINK_INTERVAL := 0.5
+
 
 func _ready() -> void:
 	custom_minimum_size = INDICATOR_SIZE
@@ -243,3 +251,56 @@ func update_claimed_visual() -> void:
 func notify_card_placed(player_id: int) -> void:
 	if territory_data:
 		card_placed.emit(territory_data.territory_id, player_id)
+
+
+# ---------- CONTEST BLINK API ----------
+
+func start_contest_blink(attacker_race: String, attacker_card_count: int) -> void:
+	_contest_attacker_race = attacker_race.to_lower()
+	_contest_attacker_card_count = attacker_card_count
+	_contest_blink_timer = 0.0
+	_contest_blink_show_attacker = false
+	_contest_blink_active = true
+
+
+func stop_contest_blink() -> void:
+	_contest_blink_active = false
+	_contest_blink_show_attacker = false
+	_update_sprite_frame()  # Reset to owner view
+
+
+func is_contest_blinking() -> bool:
+	return _contest_blink_active
+
+
+func _process(delta: float) -> void:
+	if not _contest_blink_active:
+		return
+	_contest_blink_timer += delta
+	if _contest_blink_timer >= CONTEST_BLINK_INTERVAL:
+		_contest_blink_timer -= CONTEST_BLINK_INTERVAL
+		_contest_blink_show_attacker = not _contest_blink_show_attacker
+		_apply_contest_blink_frame()
+
+
+func _apply_contest_blink_frame() -> void:
+	if not _texture_rect or not _sprite_frames:
+		return
+	if not _sprite_frames.has_animation("default"):
+		return
+	var frame_idx: int
+	if _contest_blink_show_attacker:
+		frame_idx = _get_attacker_frame_index()
+	else:
+		frame_idx = _get_frame_index()
+	var count := _sprite_frames.get_frame_count("default")
+	frame_idx = clampi(frame_idx, 0, maxi(0, count - 1))
+	_texture_rect.texture = _sprite_frames.get_frame_texture("default", frame_idx)
+
+
+func _get_attacker_frame_index() -> int:
+	if _contest_attacker_race.is_empty() or not RACE_FRAME_BASE.has(_contest_attacker_race):
+		return 0
+	if _contest_attacker_card_count <= 0:
+		return 0
+	return RACE_FRAME_BASE[_contest_attacker_race] + clampi(_contest_attacker_card_count, 1, 3) - 1

@@ -66,6 +66,7 @@ var _opponent_sprite: Sprite2D
 var _opponent_cards_by_slot: Dictionary = {} # slot -> card
 
 var _is_multiplayer: bool = false
+var _is_spectator: bool = false
 
 # --- Added (minimal): prevent double-reporting finish in multiplayer (SPACE + Leave, etc.)
 var _reported_battle_finished: bool = false
@@ -74,55 +75,81 @@ var _round_results: Array = [] # "win", "lose", "tie" from player perspective
 var battle_timer: float = 10.0
 var is_timer_active: bool = false
 
+# Auto-return to map after battle resolves
+var _auto_return_active: bool = false
+var _auto_return_timer: float = 0.0
+const AUTO_RETURN_DELAY := 5.0
+
+# Spectator state
+var _spectator_status_label: Label = null
+var _spectator_winner_role: String = ""  # "attacker" or "defender"
+var _spectator_winner_id: int = -1
+
 
 func _ready() -> void:
 	_is_multiplayer = multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0
+	_is_spectator = App.is_battle_spectator
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
 	var role := "SERVER" if multiplayer.is_server() else "CLIENT"
-	print("[BattleManager] _ready() START. peer=%d role=%s is_multiplayer=%s" % [my_id, role, str(_is_multiplayer)])
+	print("[BattleManager] _ready() START. peer=%d role=%s is_multiplayer=%s is_spectator=%s" % [my_id, role, str(_is_multiplayer), str(_is_spectator)])
 	_cache_nodes()
-	_apply_race_textures()
+
+	if _is_spectator:
+		_apply_spectator_race_textures()
+	else:
+		_apply_race_textures()
+
 	if _is_multiplayer:
 		# Server already cleared battle state before scene transition (in BattleSync).
 		# Do NOT clear here — it races with the other player's sync.
 		if BattleSync.battle_cards_updated.is_connected(_on_battle_cards_updated):
 			BattleSync.battle_cards_updated.disconnect(_on_battle_cards_updated)
-		BattleSync.battle_cards_updated.connect(_on_battle_cards_updated)
+		if not _is_spectator:
+			BattleSync.battle_cards_updated.connect(_on_battle_cards_updated)
 		if BattleSync.battle_start_requested.is_connected(_on_battle_start_requested):
 			BattleSync.battle_start_requested.disconnect(_on_battle_start_requested)
 		BattleSync.battle_start_requested.connect(_on_battle_start_requested)
 	else:
 		BattleSync.clear_battle_state()
-	_setup_ui()
 
-	# Wait a couple frames so CardManager has time to initialize
-	await get_tree().process_frame
-	await get_tree().process_frame
+	if _is_spectator:
+		_setup_spectator_ui()
+	else:
+		_setup_ui()
 
-	print("[BattleManager] _ready() restoring cards. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
-	# Restore cards after CardManager is ready
-	_restore_and_sync_placed_cards()
+	if not _is_spectator:
+		# Wait a couple frames so CardManager has time to initialize
+		await get_tree().process_frame
+		await get_tree().process_frame
 
-	# Wait another frame for cards to be properly registered
-	await get_tree().process_frame
+		print("[BattleManager] _ready() restoring cards. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
+		# Restore cards after CardManager is ready
+		_restore_and_sync_placed_cards()
 
-	# Short delay so BattleSync.battle_placed_cards is synced before we draw opponent backs (avoids wrong count with 3+ players)
-	if _is_multiplayer:
-		await get_tree().create_tween().tween_interval(0.2).finished
-	print("[BattleManager] _ready() placing opponent backs. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
-	_place_opponent_backs()
-	_connect_player_slot_signals()
+		# Wait another frame for cards to be properly registered
+		await get_tree().process_frame
+
+		# Short delay so BattleSync.battle_placed_cards is synced before we draw opponent backs (avoids wrong count with 3+ players)
+		if _is_multiplayer:
+			await get_tree().create_tween().tween_interval(0.2).finished
+		print("[BattleManager] _ready() placing opponent backs. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
+		_place_opponent_backs()
+		_connect_player_slot_signals()
+
 	state = State.WAITING_FOR_PLAYER
-	# Start timer immediately
-	battle_timer = 10.0
-	is_timer_active = true
-	_update_timer_visibility()
-	if _timer_label:
-		_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(battle_timer)
-	print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER, timer started")
 
-	# Respace hand cards after everything is set up
-	call_deferred("_respace_hand_cards")
+	if not _is_spectator:
+		# Start timer immediately
+		battle_timer = 10.0
+		is_timer_active = true
+		_update_timer_visibility()
+		if _timer_label:
+			_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(battle_timer)
+		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER, timer started")
+		# Respace hand cards after everything is set up
+		call_deferred("_respace_hand_cards")
+	else:
+		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER (SPECTATOR mode)")
 
 
 func _cache_nodes() -> void:
@@ -199,6 +226,104 @@ func _race_scale_multiplier(race: String) -> float:
 	if r == "fairy":
 		return 1.0 / 1.5
 	return 1.0
+
+
+func _apply_spectator_race_textures() -> void:
+	## Spectator: top sprite = Defender (back facing), bottom sprite = Attacker (front facing).
+	var attacker_id := App.pending_territory_battle_attacker_id
+	var defender_id := App.pending_territory_battle_defender_id
+	var attacker_race := "Fairy"
+	var defender_race := "Fairy"
+	for p in App.game_players:
+		if int(p.get("id", -1)) == attacker_id:
+			var r: String = p.get("race", "")
+			attacker_race = r if r and r != "Unknown" else "Fairy"
+		if int(p.get("id", -1)) == defender_id:
+			var r: String = p.get("race", "")
+			defender_race = r if r and r != "Unknown" else "Fairy"
+	var player_base_scale: Vector2 = _player_sprite.scale if _player_sprite else Vector2.ONE
+	var opponent_base_scale: Vector2 = _opponent_sprite.scale if _opponent_sprite else Vector2.ONE
+	# Bottom sprite = Attacker (front facing, frame 1)
+	_set_sprite_from_race(_player_sprite, attacker_race, 1, DefaultRace.USE_GAME, player_base_scale)
+	# Top sprite = Defender (back facing, frame 0)
+	_set_sprite_from_race(_opponent_sprite, defender_race, 0, DefaultRace.USE_GAME, opponent_base_scale)
+
+
+func _setup_spectator_ui() -> void:
+	## Spectator UI: hide timer, hide cards/slots, show battle status text.
+	# Hide timer labels
+	if _timer_label:
+		_timer_label.visible = false
+	if _timer_sub_label:
+		_timer_sub_label.visible = false
+	# Hide continue label
+	if _continue_label:
+		_continue_label.visible = false
+	# Show leave button
+	if _leave_button:
+		_leave_button.visible = true
+		if not _leave_button.pressed.is_connected(_on_leave_pressed):
+			_leave_button.pressed.connect(_on_leave_pressed)
+	# Hide debug button
+	if _debug_add_card_button:
+		_debug_add_card_button.visible = false
+
+	# Hide all card slot nodes (player and opponent) so spectators see no card outlines
+	for slot in _player_slot_nodes:
+		if slot:
+			slot.visible = false
+	for slot in _opponent_slot_nodes:
+		if slot:
+			slot.visible = false
+
+	# Hide hand cards container (CanvasLayer has no 'visible'; hide its children)
+	var root := get_parent()
+	if root == null:
+		root = get_tree().current_scene
+	if root:
+		var hand_container := root.get_node_or_null("HandCardsLayer/HandCardsContainer") as Node2D
+		if hand_container:
+			hand_container.visible = false
+
+	# Look up names for attacker and defender
+	var attacker_name := _get_player_name(App.pending_territory_battle_attacker_id)
+	var defender_name := _get_player_name(App.pending_territory_battle_defender_id)
+
+	# Use the result label for spectator battle status (centered on screen)
+	if _result_label:
+		_result_label.text = "%s and %s are battling" % [defender_name, attacker_name]
+		_result_label.add_theme_font_size_override("font_size", 48)
+		_result_label.add_theme_color_override("font_color", Color.WHITE)
+		_result_label.visible = true
+
+
+func _get_player_name(peer_id: int) -> String:
+	for p in App.game_players:
+		if int(p.get("id", -1)) == peer_id:
+			return str(p.get("name", "Player"))
+	return "Player"
+
+
+func _get_player_race(peer_id: int) -> String:
+	for p in App.game_players:
+		if int(p.get("id", -1)) == peer_id:
+			var r: String = p.get("race", "")
+			if r and r != "Unknown":
+				return r
+	return ""
+
+
+func _get_race_color(race: String) -> Color:
+	match race:
+		"Elf":
+			return Color(1, 0.9, 0.2, 1)       # Yellow
+		"Orc":
+			return Color(0.2, 0.8, 0.2, 1)     # Green
+		"Fairy":
+			return Color(0.7, 0.3, 0.9, 1)     # Purple
+		"Infernal":
+			return Color(0.9, 0.2, 0.2, 1)     # Red
+	return Color.WHITE
 
 
 func _set_sprite_from_race(sprite: Sprite2D, race: String, frame_index: int, default_race: DefaultRace, base_scale: Vector2) -> void:
@@ -397,6 +522,11 @@ func _on_battle_start_requested() -> void:
 	## Battle runs only when both players have pressed Ready in the card battle scene (not when Attack is pressed in GameIntro).
 	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
 		return
+
+	if _is_spectator:
+		_spectator_on_battle_start()
+		return
+
 	_update_timer_visibility()
 	state = State.FLIPPING
 	await _flip_opponent_cards_from_pool()
@@ -408,6 +538,7 @@ func _on_battle_start_requested() -> void:
 	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
+	_start_auto_return()
 
 
 func _report_battle_resolved() -> void:
@@ -583,6 +714,14 @@ func _update_timer_visibility() -> void:
 		_timer_sub_label.visible = visible_now
 
 func _process(delta: float) -> void:
+	# Auto-return to map countdown
+	if _auto_return_active:
+		_auto_return_timer -= delta
+		if _auto_return_timer <= 0.0:
+			_auto_return_active = false
+			_auto_leave_battle()
+			return
+
 	if not is_timer_active or state != State.WAITING_FOR_PLAYER:
 		return
 		
@@ -613,6 +752,7 @@ func _trigger_battle_start() -> void:
 	_add_attribute_indicators_to_player_cards()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
+	_start_auto_return()
 
 
 func _place_opponent_backs() -> void:
@@ -912,24 +1052,46 @@ func _show_result() -> void:
 		if _result_label.text.is_empty():
 			_result_label.text = "Tie (0)"
 			print("[BattleManager] _show_result: result text was empty, set fallback \"Tie (0)\"")
+		_result_label.add_theme_font_size_override("font_size", 48)
+		# Color the result text to match the winner's race
+		var winner_color := _determine_winner_color()
+		_result_label.add_theme_color_override("font_color", winner_color)
 		_result_label.visible = true
 		if _result_label.text:
 			print("[BattleManager] _show_result: ResultLabel.visible=true, text=\"%s\"" % _result_label.text)
 		else:
 			print("[BattleManager] _show_result: ResultLabel.visible=true but text is empty")
+	# Hide continue label — auto-return handles the transition
 	if _continue_label:
-		_continue_label.visible = true
+		_continue_label.visible = false
 	# Ensure visibility is applied after any other updates this frame
 	call_deferred("_apply_result_visibility")
+
+
+func _determine_winner_color() -> Color:
+	## Determine the winner's race color based on battle result.
+	var result := _get_battle_result()
+	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
+	var winner_id: int = -1
+	if result == "win":
+		winner_id = my_id
+	elif result == "lose":
+		# Opponent won
+		if my_id == App.pending_territory_battle_attacker_id:
+			winner_id = App.pending_territory_battle_defender_id
+		else:
+			winner_id = App.pending_territory_battle_attacker_id
+	else:
+		# Tie → defender wins for territory purposes
+		winner_id = App.pending_territory_battle_defender_id
+	var winner_race := _get_player_race(winner_id)
+	return _get_race_color(winner_race)
 
 
 func _apply_result_visibility() -> void:
 	if _result_label and not _result_label.visible:
 		_result_label.visible = true
 		print("[BattleManager] _apply_result_visibility: re-applied ResultLabel.visible=true")
-	if _continue_label and not _continue_label.visible:
-		_continue_label.visible = true
-		print("[BattleManager] _apply_result_visibility: re-applied ContinueLabel.visible=true")
 
 
 func _add_attribute_indicators_to_player_cards() -> void:
@@ -1116,6 +1278,119 @@ func _apply_battle_resolution_state() -> void:
 					tcs.call("set_claim", int(tid_str), int(owner_id), cards)
 
 
+# ---------- SPECTATOR BATTLE RESOLUTION ----------
+
+func _spectator_on_battle_start() -> void:
+	## Called when both battlers are ready and we are spectating.
+	## Compute battle result from BattleSync.battle_placed_cards and display winner.
+	state = State.FLIPPING
+	# Short delay to allow synced data to settle
+	await get_tree().create_tween().tween_interval(0.5).finished
+
+	var result := _spectator_resolve_from_sync()
+	_spectator_winner_role = result.get("winner", "defender")
+	_spectator_winner_id = int(result.get("winner_id", -1))
+
+	var winner_name := _get_player_name(_spectator_winner_id)
+	var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+
+	var text := "%s Won" % winner_name
+	if _spectator_winner_role == "defender":
+		text += "\n%s keeps claim of this territory." % winner_name
+	else:
+		text += "\n%s now has claim of this territory." % winner_name
+
+	if _result_label:
+		_result_label.text = text
+		_result_label.add_theme_font_size_override("font_size", 48)
+		var winner_race := _get_player_race(_spectator_winner_id)
+		_result_label.add_theme_color_override("font_color", _get_race_color(winner_race))
+		_result_label.visible = true
+
+	state = State.RESOLVED
+	_start_auto_return()
+	print("[BattleManager] Spectator resolved: %s (id=%d) won territory %s" % [winner_name, _spectator_winner_id, tid_str])
+
+
+func _spectator_resolve_from_sync() -> Dictionary:
+	## Resolve the battle from BattleSync.battle_placed_cards without needing card nodes.
+	## Uses the same pairing and attribute logic as _resolve_battle.
+	var attacker_id := BattleSync.territory_battle_attacker_id
+	var defender_id := BattleSync.territory_battle_defender_id
+
+	var attacker_cards: Dictionary = BattleSync.battle_placed_cards.get(attacker_id, {})
+	var defender_cards: Dictionary = BattleSync.battle_placed_cards.get(defender_id, {})
+
+	var defender_wins := 0
+	var attacker_wins := 0
+
+	# Same pairing as _resolve_battle: PR vs OR, PM vs OM, PL vs OL
+	# From defender perspective: defender[2] vs attacker[0], defender[1] vs attacker[1], defender[0] vs attacker[2]
+	var defender_indices := [2, 1, 0]
+	var attacker_indices := [0, 1, 2]
+
+	for pair_idx in range(3):
+		var d_idx: int = defender_indices[pair_idx]
+		var a_idx: int = attacker_indices[pair_idx]
+
+		var d_data: Dictionary = defender_cards.get(d_idx, {})
+		var a_data: Dictionary = attacker_cards.get(a_idx, {})
+
+		var d_power: float = 0.0
+		var a_power: float = 0.0
+
+		if not d_data.is_empty():
+			d_power = float(int(d_data.get("frame", 0)) + 1)
+		if not a_data.is_empty():
+			a_power = float(int(a_data.get("frame", 0)) + 1)
+
+		# Get attributes from sprite frames paths
+		var da := _get_attribute_from_path(d_data.get("path", ""))
+		var aa := _get_attribute_from_path(a_data.get("path", ""))
+
+		var d_modifier: float = 0.0
+		var a_modifier: float = 0.0
+
+		if da != "unknown" and aa != "unknown" and da != aa:
+			if attribute_config and attribute_config.has_method("get_attribute"):
+				var da_beats = attribute_config.beats.get(da, null)
+				if da_beats == aa:
+					d_modifier = 0.5
+					a_modifier = -0.5
+				else:
+					var aa_beats = attribute_config.beats.get(aa, null)
+					if aa_beats == da:
+						a_modifier = 0.5
+						d_modifier = -0.5
+
+		var d_final := d_power + d_modifier
+		var a_final := a_power + a_modifier
+
+		if d_final > a_final:
+			defender_wins += 1
+		elif a_final > d_final:
+			attacker_wins += 1
+
+	# Overall: defender wins ties (same as _resolve_battle)
+	var defender_points := defender_wins - attacker_wins
+
+	if defender_points >= 0:
+		return {"winner": "defender", "winner_id": defender_id}
+	else:
+		return {"winner": "attacker", "winner_id": attacker_id}
+
+
+func _get_attribute_from_path(path: String) -> String:
+	if path.is_empty():
+		return "unknown"
+	var sf: SpriteFrames = load(path) as SpriteFrames
+	if sf == null:
+		return "unknown"
+	if attribute_config and attribute_config.has_method("get_attribute"):
+		return String(attribute_config.call("get_attribute", sf, 0))
+	return "unknown"
+
+
 func _clear_player_slots() -> void:
 	## Clear all player slots: remove cards, reset slot state
 	var root := get_tree().current_scene
@@ -1138,9 +1413,48 @@ func _clear_player_slots() -> void:
 				card.queue_free()
 
 
+func _start_auto_return() -> void:
+	_auto_return_active = true
+	_auto_return_timer = AUTO_RETURN_DELAY
+	print("[BattleManager] Auto-return started. Returning to map in %.1f seconds." % AUTO_RETURN_DELAY)
+
+
+func _auto_leave_battle() -> void:
+	## Automatically called after the auto-return timer expires. Mirrors _on_leave_pressed logic for RESOLVED state.
+	print("[BattleManager] Auto-return timer expired. Leaving battle.")
+	if _is_spectator:
+		App.is_battle_spectator = false
+		BattleSync.clear_battle_state()
+		App.switch_to_main_music()
+		App.on_battle_completed()
+		return
+
+	if _is_multiplayer:
+		BattleSync.notify_battle_left()
+		if state == State.RESOLVED and not _reported_battle_finished:
+			BattleSync.notify_battle_finished()
+			_reported_battle_finished = true
+
+	BattleSync.clear_battle_state()
+	App.switch_to_main_music()
+	App.on_battle_completed()
+
+
 func _on_leave_pressed() -> void:
+	# Cancel auto-return if player manually leaves
+	_auto_return_active = false
 	var state_name: String = ["SETUP", "WAITING_FOR_PLAYER", "WAITING_FOR_ALL_READY", "FLIPPING", "RESOLVED"][clampi(state, 0, 4)]
-	print("[BattleManager] Leave pressed. Current battle state: %s. Resolution runs only when state is RESOLVED (both players Ready, result shown)." % state_name)
+	print("[BattleManager] Leave pressed. Current battle state: %s. is_spectator=%s" % [state_name, str(_is_spectator)])
+
+	if _is_spectator:
+		App.is_battle_spectator = false
+		BattleSync.clear_battle_state()
+		App.switch_to_main_music()
+		if state == State.RESOLVED:
+			App.on_battle_completed()
+		else:
+			App.go(MAIN_MENU_PATH)
+		return
 
 	if _is_multiplayer:
 		BattleSync.notify_battle_left()
@@ -1284,33 +1598,4 @@ func _respace_hand_cards() -> void:
 			tween.tween_property(card, "global_position", new_pos, 0.25)
 
 
-func _unhandled_input(event: InputEvent) -> void:
-	if state != State.RESOLVED:
-		return
-	if event is InputEventKey:
-		var key := event as InputEventKey
-		if key.pressed and key.keycode == KEY_SPACE:
-			# Territory battles: state already applied at flip time. Queue battles: apply loser card removal here.
-			var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
-			var is_territory_battle: bool = not tid_str.is_empty() and not tid_str.begins_with("battle_")
-			if not is_territory_battle:
-				var result := _get_battle_result()
-				var player_wins := result == "win"
-				if BattleStateManager:
-					BattleStateManager.record_battle_result(result, player_wins, tid_str)
-				if not player_wins:
-					if BattleStateManager:
-						var placed := BattleStateManager.get_local_slots()
-						App.remove_placed_cards_from_collection_for_slots(placed)
-						BattleStateManager.clear_local_slots()
-					_clear_player_slots()
-
-			if _is_multiplayer:
-				BattleSync.notify_battle_left()
-				if not _reported_battle_finished:
-					BattleSync.notify_battle_finished()
-					_reported_battle_finished = true
-			BattleSync.clear_battle_state()
-			App.switch_to_main_music()
-			# Proceed immediately; start_territory_battle RPC will pull the other player into the next battle.
-			App.on_battle_completed()
+## SPACE key return removed — auto-return timer handles the transition for all players.
