@@ -764,7 +764,7 @@ func _resolve_battle() -> void:
 	if state == State.WAITING_FOR_ALL_READY:
 		state = State.FLIPPING
 	# Pairing is fixed by array ordering:
-	# PL vs OR, PM vs OM, PR vs OL
+	# PR vs OR, PM vs OM, PL vs OL
 	# Determine per-pair results using power values with attribute modifiers, then best-of-3 overall.
 	if attribute_config == null or not attribute_config.has_method("get_attribute"):
 		push_warning("BattleManager: attribute_config not set; battle will tie.")
@@ -777,10 +777,26 @@ func _resolve_battle() -> void:
 	var opponent_wins := 0
 	var ties := 0
 	_round_results.clear()
+	# Pre-fill round results with ties so indices always align with player slot indices (0=PL,1=PM,2=PR).
+	for _i in range(_player_slot_nodes.size()):
+		_round_results.append("tie")
 
-	for i in range(min(_player_slot_nodes.size(), _opponent_slot_nodes.size())):
-		var pslot = _player_slot_nodes[i]
-		var oslot = _opponent_slot_nodes[i]
+	# Pairing order from right to left: PR vs OR, PM vs OM, PL vs OL.
+	var player_indices := [2, 1, 0]
+	var opponent_indices := [0, 1, 2]
+	var pair_count: int = min(
+		min(player_indices.size(), opponent_indices.size()),
+		min(_player_slot_nodes.size(), _opponent_slot_nodes.size())
+	)
+
+	for pair_idx in range(pair_count):
+		var p_index: int = player_indices[pair_idx]
+		var o_index: int = opponent_indices[pair_idx]
+		if p_index >= _player_slot_nodes.size() or o_index >= _opponent_slot_nodes.size():
+			continue
+
+		var pslot = _player_slot_nodes[p_index]
+		var oslot = _opponent_slot_nodes[o_index]
 
 		var pcard = pslot.snapped_card if pslot else null
 		var ocard = oslot.snapped_card if oslot else null
@@ -846,13 +862,13 @@ func _resolve_battle() -> void:
 		# Determine winner based on final power values (per round)
 		if p_final_power > o_final_power:
 			player_wins += 1
-			_round_results.append("win")
+			_round_results[p_index] = "win"
 		elif o_final_power > p_final_power:
 			opponent_wins += 1
-			_round_results.append("lose")
+			_round_results[p_index] = "lose"
 		else:
 			ties += 1
-			_round_results.append("tie")
+			_round_results[p_index] = "tie"
 
 	# Overall result by point system: +1 win, -1 loss, 0 tie. Most points wins; equal = tie.
 	# On tie overall, defender wins for card-loss purposes (handled in process_battle_resolution).
@@ -920,11 +936,26 @@ func _add_attribute_indicators_to_player_cards() -> void:
 	## After flip: show +1 when player's card attribute is advantageous vs opponent's (e.g. water vs fire), -1 when disadvantageous (e.g. fire vs water). Neutral/same attribute = no indicator. Independent of round win/loss.
 	if attribute_config == null or not attribute_config.has_method("get_attribute"):
 		return
-	for i in range(_player_slot_nodes.size()):
-		var pslot = _player_slot_nodes[i]
-		var oslot = _opponent_slot_nodes[i] if i < _opponent_slot_nodes.size() else null
+	# Use the same pairing order as _resolve_battle so indicators follow the actual matchup:
+	# PR vs OR, PM vs OM, PL vs OL.
+	var player_indices := [2, 1, 0]
+	var opponent_indices := [0, 1, 2]
+	var pair_count: int = min(
+		min(player_indices.size(), opponent_indices.size()),
+		min(_player_slot_nodes.size(), _opponent_slot_nodes.size())
+	)
+
+	for pair_idx in range(pair_count):
+		var p_index: int = player_indices[pair_idx]
+		var o_index: int = opponent_indices[pair_idx]
+		if p_index >= _player_slot_nodes.size() or o_index >= _opponent_slot_nodes.size():
+			continue
+
+		var pslot = _player_slot_nodes[p_index]
+		var oslot = _opponent_slot_nodes[o_index]
 		if not pslot:
 			continue
+
 		var card = pslot.snapped_card if pslot.get("snapped_card") else null
 		if not card or not is_instance_valid(card):
 			continue
@@ -932,6 +963,12 @@ func _add_attribute_indicators_to_player_cards() -> void:
 		var matchup := _get_player_attribute_matchup(card, ocard)
 		if matchup == "neutral":
 			continue
+
+		# Clear any existing indicator on this card before adding a new one.
+		var existing_panel: Node = card.get_node_or_null("AttributeIndicator")
+		if existing_panel:
+			existing_panel.queue_free()
+
 		var text := "+1" if matchup == "advantage" else "-1"
 		var card_size := _get_card_size_for_indicator(card)
 		var font_size := int(card_size.y * attribute_indicator_font_scale)
@@ -949,6 +986,7 @@ func _add_attribute_indicators_to_player_cards() -> void:
 		style.shadow_color = Color(1.0, 1.0, 0.85, 0.5)
 		style.shadow_size = 3
 		style.shadow_offset = Vector2.ZERO
+
 		var panel := Panel.new()
 		panel.name = "AttributeIndicator"
 		panel.add_theme_stylebox_override("panel", style)
@@ -957,6 +995,7 @@ func _add_attribute_indicators_to_player_cards() -> void:
 		panel.position = attribute_indicator_offset - panel_size / 2.0
 		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
 		card.add_child(panel)
+
 		var label := Label.new()
 		label.name = "Label"
 		label.text = text
