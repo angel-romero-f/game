@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://haic64xj6306"
+path="res://.godot/imported/moss_rock_territory.pxo-963e170772e579448c3efe2f96be48cb.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/moss_rock_territory.pxo"
+dest_files=["res://.godot/imported/moss_rock_territory.pxo-963e170772e579448c3efe2f96be48cb.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

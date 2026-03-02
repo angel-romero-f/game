@@ -951,9 +951,23 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 	
 	var my_id: int = multiplayer.get_unique_id() if (is_multiplayer and multiplayer.has_multiplayer_peer()) else -1
 	
-	# Determine if I am participating
+	# Determine if I am participating and who my opponent is (for current_battle_metadata / opponent sprite)
 	var is_attacker = (my_id == attacker_id)
 	var is_defender = (my_id == defender_id)
+	var opponent_id: int = defender_id if is_attacker else (attacker_id if is_defender else -1)
+	var opponent_name := "Unknown"
+	var opponent_race := "Fairy"
+	for p in game_players:
+		if int(p.get("id", -1)) == opponent_id:
+			opponent_name = p.get("name", "Unknown")
+			opponent_race = p.get("race", "Fairy")
+			break
+	current_battle_metadata = {
+		"battle_index": territory_id,
+		"opponent_id": opponent_id,
+		"opponent_name": opponent_name,
+		"opponent_race": opponent_race
+	}
 	
 	if is_attacker:
 		print("[App] I am the ATTACKER. Loading attacking slots.")

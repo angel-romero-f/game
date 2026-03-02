@@ -12,6 +12,7 @@ card_sprite_frames = ExtResource("2_ktuci")
 frame_index = 3
 
 [node name="Card_Image" type="Sprite2D" parent="."]
+scale = Vector2(1.4, 1.4)
 
 [node name="Card_Collision" type="Area2D" parent="."]
 

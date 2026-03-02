@@ -182,6 +182,7 @@ func clear_battle_state() -> void: BattleSync.clear_battle_state()
 func request_place_battle_card(slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
 	BattleSync.request_place_battle_card(slot_index, sprite_frames_path, frame_index)
 func request_remove_battle_card(slot_index: int) -> void: BattleSync.request_remove_battle_card(slot_index)
+func request_clear_my_battle_cards() -> void: BattleSync.request_clear_my_battle_cards()
 func request_battle_ready() -> void: BattleSync.request_battle_ready()
 func notify_battle_left() -> void: BattleSync.notify_battle_left()
 func notify_battle_finished() -> void: BattleSync.notify_battle_finished()

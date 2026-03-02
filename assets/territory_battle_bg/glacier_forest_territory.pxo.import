@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://bwh4nox2ma6fm"
+path="res://.godot/imported/glacier_forest_territory.pxo-611116a14da641ca0c7d786472ff19d6.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/glacier_forest_territory.pxo"
+dest_files=["res://.godot/imported/glacier_forest_territory.pxo-611116a14da641ca0c7d786472ff19d6.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

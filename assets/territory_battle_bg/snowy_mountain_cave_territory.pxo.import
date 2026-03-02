@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://etgaaxxcwwkj"
+path="res://.godot/imported/snowy_mountain_cave_territory.pxo-80dfc11e21df56a6e34f2611364c5b05.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/snowy_mountain_cave_territory.pxo"
+dest_files=["res://.godot/imported/snowy_mountain_cave_territory.pxo-80dfc11e21df56a6e34f2611364c5b05.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

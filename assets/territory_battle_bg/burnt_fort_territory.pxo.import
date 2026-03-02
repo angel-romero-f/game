@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://d0lnealtbi731"
+path="res://.godot/imported/burnt_fort_territory.pxo-4000ac575f36651176bb28e0beea74d9.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/burnt_fort_territory.pxo"
+dest_files=["res://.godot/imported/burnt_fort_territory.pxo-4000ac575f36651176bb28e0beea74d9.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

@@ -38,6 +38,11 @@ const CARD_BACK_FRAME_INDEX := 0
 @export var flip_down_duration: float = 0.25
 @export var offscreen_y: float = -200.0
 
+## +1 / -1 on player cards after flip. Tweak size and offset in the inspector; run a battle to preview.
+@export_group("Attribute indicator (+1/-1)")
+@export var attribute_indicator_font_scale: float = 0.5
+@export var attribute_indicator_offset: Vector2 = Vector2(0.0, 40.0)
+
 var _player_slot_nodes: Array = []
 var _opponent_slot_nodes: Array = []
 
@@ -47,6 +52,16 @@ var _result_label: Label
 var _continue_label: Label
 var _leave_button: Button
 var _debug_add_card_button: Button
+
+## Race sprites: Player (frame 1) and Opponent (frame 0) from assets/[race]_fb.pxo.
+## Editor scale is the base; Elf is 1.5x that, Fairy is 1/1.5x, Orc/Infernal use base.
+## Use Game Race = follow code (local/opponent from game); any specific race = override and always use that texture.
+enum DefaultRace { USE_GAME, ELF, ORC, INFERNAL, FAIRY }
+@export var player_default_race: DefaultRace = DefaultRace.USE_GAME
+@export var opponent_default_race: DefaultRace = DefaultRace.USE_GAME
+
+var _player_sprite: Sprite2D
+var _opponent_sprite: Sprite2D
 
 var _opponent_cards_by_slot: Dictionary = {} # slot -> card
 
@@ -66,6 +81,7 @@ func _ready() -> void:
 	var role := "SERVER" if multiplayer.is_server() else "CLIENT"
 	print("[BattleManager] _ready() START. peer=%d role=%s is_multiplayer=%s" % [my_id, role, str(_is_multiplayer)])
 	_cache_nodes()
+	_apply_race_textures()
 	if _is_multiplayer:
 		# Server already cleared battle state before scene transition (in BattleSync).
 		# Do NOT clear here — it races with the other player's sync.
@@ -132,6 +148,74 @@ func _cache_nodes() -> void:
 		push_warning("[BattleManager] ContinueLabel not found at path: %s. Continue hint will not be displayed." % String(continue_label_path))
 	_leave_button = (root.get_node_or_null(leave_button_path) if root else null) as Button
 	_debug_add_card_button = (root.get_node_or_null(debug_add_card_button_path) if root else null) as Button
+	_player_sprite = (root.get_node_or_null("Player") if root else null) as Sprite2D
+	_opponent_sprite = (root.get_node_or_null("Opponent") if root else null) as Sprite2D
+
+
+func _apply_race_textures() -> void:
+	## Set Player and Opponent Sprite2D textures and race-based scale. USE_GAME = use race from code; specific race = editor override.
+	var local_race := _get_local_player_race()
+	var game_opponent_race := _get_opponent_race()
+	var player_race: String = _default_race_to_string(player_default_race) if player_default_race != DefaultRace.USE_GAME else local_race
+	var opponent_race: String = _default_race_to_string(opponent_default_race) if opponent_default_race != DefaultRace.USE_GAME else game_opponent_race
+	var player_base_scale: Vector2 = _player_sprite.scale if _player_sprite else Vector2.ONE
+	var opponent_base_scale: Vector2 = _opponent_sprite.scale if _opponent_sprite else Vector2.ONE
+	_set_sprite_from_race(_player_sprite, player_race, 1, player_default_race, player_base_scale)
+	_set_sprite_from_race(_opponent_sprite, opponent_race, 0, opponent_default_race, opponent_base_scale)
+
+
+func _get_local_player_race() -> String:
+	if not App:
+		return "Fairy"
+	for p in App.game_players:
+		if p.get("is_local", false):
+			var r: String = p.get("race", "")
+			return r if r and r != "Unknown" else "Fairy"
+	return App.selected_race if (App.selected_race and App.selected_race != "Unknown") else "Fairy"
+
+
+func _get_opponent_race() -> String:
+	if not App:
+		return "Fairy"
+	var r: String = App.current_battle_metadata.get("opponent_race", "Fairy")
+	return r if r and r != "Unknown" else "Fairy"
+
+
+func _default_race_to_string(r: DefaultRace) -> String:
+	match r:
+		DefaultRace.USE_GAME: return "fairy"
+		DefaultRace.ELF: return "elf"
+		DefaultRace.ORC: return "orc"
+		DefaultRace.INFERNAL: return "infernal"
+		DefaultRace.FAIRY: return "fairy"
+	return "fairy"
+
+
+func _race_scale_multiplier(race: String) -> float:
+	## Elf 1.5x bigger, Fairy 1.5x smaller than editor base; Orc and Infernal use base scale.
+	var r := race.to_lower()
+	if r == "elf":
+		return 1.1
+	if r == "fairy":
+		return 1.0 / 1.5
+	return 1.0
+
+
+func _set_sprite_from_race(sprite: Sprite2D, race: String, frame_index: int, default_race: DefaultRace, base_scale: Vector2) -> void:
+	## Overwrites sprite.texture from race and applies race-based scale (elf 1.5x, fairy 1/1.5x, orc/infernal 1x of editor scale).
+	if sprite == null:
+		return
+	var path := "res://assets/%s_fb.pxo" % race.to_lower()
+	var sf: SpriteFrames = load(path) as SpriteFrames
+	if sf == null or not sf.has_animation("default"):
+		path = "res://assets/%s_fb.pxo" % _default_race_to_string(default_race)
+		sf = load(path) as SpriteFrames
+	if sf and sf.has_animation("default"):
+		var fc := sf.get_frame_count("default")
+		var idx := clampi(frame_index, 0, maxi(0, fc - 1))
+		sprite.texture = sf.get_frame_texture("default", idx)
+	var mult: float = _race_scale_multiplier(race)
+	sprite.scale = base_scale * mult
 
 
 func _restore_and_sync_placed_cards() -> void:
@@ -320,6 +404,7 @@ func _on_battle_start_requested() -> void:
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
 	_show_result()
+	_add_attribute_indicators_to_player_cards()
 	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
@@ -525,6 +610,7 @@ func _trigger_battle_start() -> void:
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
 	_show_result()
+	_add_attribute_indicators_to_player_cards()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
 
@@ -828,6 +914,89 @@ func _apply_result_visibility() -> void:
 	if _continue_label and not _continue_label.visible:
 		_continue_label.visible = true
 		print("[BattleManager] _apply_result_visibility: re-applied ContinueLabel.visible=true")
+
+
+func _add_attribute_indicators_to_player_cards() -> void:
+	## After flip: show +1 when player's card attribute is advantageous vs opponent's (e.g. water vs fire), -1 when disadvantageous (e.g. fire vs water). Neutral/same attribute = no indicator. Independent of round win/loss.
+	if attribute_config == null or not attribute_config.has_method("get_attribute"):
+		return
+	for i in range(_player_slot_nodes.size()):
+		var pslot = _player_slot_nodes[i]
+		var oslot = _opponent_slot_nodes[i] if i < _opponent_slot_nodes.size() else null
+		if not pslot:
+			continue
+		var card = pslot.snapped_card if pslot.get("snapped_card") else null
+		if not card or not is_instance_valid(card):
+			continue
+		var ocard: Node = oslot.snapped_card if oslot and oslot.get("snapped_card") else null
+		var matchup := _get_player_attribute_matchup(card, ocard)
+		if matchup == "neutral":
+			continue
+		var text := "+1" if matchup == "advantage" else "-1"
+		var card_size := _get_card_size_for_indicator(card)
+		var font_size := int(card_size.y * attribute_indicator_font_scale)
+		if font_size < 8:
+			font_size = 8
+		var label_size := Vector2(maxi(font_size * 2, 40), maxi(font_size + 8, 32))
+		var glow_padding := 1
+		var panel_size := label_size + Vector2(glow_padding * 2, glow_padding * 2)
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(1.0, 1.0, 0.95, 0.55)
+		style.corner_radius_top_left = 4
+		style.corner_radius_top_right = 4
+		style.corner_radius_bottom_left = 4
+		style.corner_radius_bottom_right = 4
+		style.shadow_color = Color(1.0, 1.0, 0.85, 0.5)
+		style.shadow_size = 6
+		style.shadow_offset = Vector2.ZERO
+		var panel := Panel.new()
+		panel.name = "AttributeIndicator"
+		panel.add_theme_stylebox_override("panel", style)
+		panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		panel.size = panel_size
+		panel.position = attribute_indicator_offset - panel_size / 2.0
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(panel)
+		var label := Label.new()
+		label.name = "Label"
+		label.text = text
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", font_size)
+		label.add_theme_color_override("font_color", Color.BLACK)
+		label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		label.size = label_size
+		label.position = Vector2(glow_padding, glow_padding)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(label)
+
+
+func _get_player_attribute_matchup(player_card: Node, opponent_card: Node) -> String:
+	## Returns "advantage" (player attr beats opponent), "disadvantage" (opponent beats player), or "neutral".
+	var pa := _get_card_attribute(player_card)
+	var oa := _get_card_attribute(opponent_card)
+	if pa == "unknown" or oa == "unknown":
+		return "neutral"
+	if pa == oa:
+		return "neutral"
+	var pa_beats = attribute_config.beats.get(pa, null)
+	if pa_beats == oa:
+		return "advantage"
+	var oa_beats = attribute_config.beats.get(oa, null)
+	if oa_beats == pa:
+		return "disadvantage"
+	return "neutral"
+
+
+func _get_card_size_for_indicator(card: Node) -> Vector2:
+	if card.get("card_size"):
+		var s: Variant = card.get("card_size")
+		if s is Vector2:
+			return s
+	var img := card.get_node_or_null("Card_Image") as Sprite2D
+	if img and img.texture:
+		return img.texture.get_size() * img.scale
+	return Vector2(100, 140)
 
 
 func _get_battle_result() -> String:

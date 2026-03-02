@@ -77,6 +77,11 @@ func request_remove_battle_card(slot_index: int) -> void:
 	else:
 		remove_battle_card.rpc_id(1, slot_index)
 
+## Request to clear all of the calling peer's battle cards (e.g. after losing). Removes slots 0, 1, 2.
+func request_clear_my_battle_cards() -> void:
+	for slot_index in range(3):
+		request_remove_battle_card(slot_index)
+
 @rpc("any_peer", "reliable")
 func place_battle_card(slot_index: int, sprite_frames_path: String, frame_index: int) -> void:
 	if not multiplayer.is_server():
