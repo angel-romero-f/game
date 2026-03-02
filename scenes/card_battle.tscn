@@ -31,29 +31,20 @@ layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 0.0
-offset_top = 0.0
-offset_right = 0.0
-offset_bottom = 0.0
 grow_horizontal = 2
 grow_vertical = 2
-expand_mode = 1
-stretch_mode = 0
 mouse_filter = 2
+expand_mode = 1
 
 [node name="BackgroundDarken" type="ColorRect" parent="BackgroundLayer/BackgroundContainer"]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
 anchor_bottom = 1.0
-offset_left = 0.0
-offset_top = 0.0
-offset_right = 0.0
-offset_bottom = 0.0
-color = Color(0, 0, 0, 0.5)
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
+color = Color(0, 0, 0, 0.5)
 
 [node name="HandCardsLayer" type="CanvasLayer" parent="."]
 layer = 10
@@ -84,7 +75,7 @@ script = ExtResource("2_battle_manager")
 attribute_config = SubResource("Resource_attr_cfg")
 show_debug_add_card_button = true
 attribute_indicator_font_scale = 0.15
-attribute_indicator_offset = Vector2(20, 65)
+attribute_indicator_offset = Vector2(-40, -45)
 
 [node name="CardSlotOM" parent="." instance=ExtResource("3_u4xae")]
 position = Vector2(532.5299, 206.9638)
