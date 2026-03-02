@@ -319,6 +319,7 @@ func _apply_resource_collection_ui() -> void:
 			if PhaseController.player_done_state.get(my_id, false):
 				should_disable_minigames = true
 			var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
+			count = maxi(count, App.minigames_completed_this_phase)
 			if count >= App.MAX_MINIGAMES_PER_PHASE:
 				should_disable_minigames = true
 		if should_disable_minigames:
@@ -374,6 +375,7 @@ func _apply_card_collection_ui() -> void:
 		if PhaseController.player_done_state.get(my_id, false):
 			should_disable_minigames = true
 		var count: int = PhaseController.player_minigame_counts.get(my_id, 0)
+		count = maxi(count, App.minigames_completed_this_phase)
 		if count >= App.MAX_MINIGAMES_PER_PHASE:
 			should_disable_minigames = true
 	if should_disable_minigames:
@@ -429,11 +431,10 @@ func _fade_if_visible(tween: Tween, node: CanvasItem) -> void:
 func _update_minigames_counter() -> void:
 	if not minigames_counter_label:
 		return
-	var count: int
+	var count: int = App.minigames_completed_this_phase
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		count = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
-	else:
-		count = App.minigames_completed_this_phase
+		var server_count: int = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
+		count = maxi(count, server_count)
 	minigames_counter_label.text = "Minigames: %d/%d" % [count, App.MAX_MINIGAMES_PER_PHASE]
 
 # ---------- SKIP / DONE BUTTON ----------

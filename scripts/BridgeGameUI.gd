@@ -16,6 +16,7 @@ var _timer_label: Label = null
 var _reward_panel: Control = null
 var _timeout_label: Label = null
 var _pixel_font: Font = null
+var _big_title_label: Label = null
 
 func _ready():
 	game_over_panel.visible = false
@@ -61,6 +62,23 @@ func _ready():
 	_timeout_label.text = "Time's Up!"
 	_timeout_label.visible = false
 	$UI.add_child(_timeout_label)
+	
+	_big_title_label = Label.new()
+	_big_title_label.name = "BigTitleLabel"
+	if _pixel_font:
+		_big_title_label.add_theme_font_override("font", _pixel_font)
+	_big_title_label.add_theme_font_size_override("font_size", 72)
+	_big_title_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_big_title_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	_big_title_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
+	_big_title_label.add_theme_constant_override("outline_size", 8)
+	_big_title_label.set_anchors_preset(Control.PRESET_CENTER)
+	_big_title_label.offset_left = -500
+	_big_title_label.offset_right = 500
+	_big_title_label.offset_top = -100
+	_big_title_label.offset_bottom = 100
+	_big_title_label.visible = false
+	$UI.add_child(_big_title_label)
 	
 	# Assign lose music to Music bus
 	if lose_music:
@@ -209,12 +227,17 @@ func show_game_over(is_final: bool):
 	
 	if is_final:
 		# Final death - show game over and play lose music
-		if game_over_label:
-			game_over_label.text = "Game Over!\nYou've used all your chances!\nPress R to return to map"
+		if _big_title_label:
+			_big_title_label.text = "Clobbered on the Crossing!"
+			_big_title_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
+			_big_title_label.visible = true
+		if game_over_panel:
+			game_over_panel.visible = false
 		if lose_music:
 			App.stop_main_music()
 			lose_music.stop()
 			lose_music.play()
+		_auto_return_after_timeout()
 	else:
 		# Not final - show remaining lives
 		var lives_left := App.get_lives()
@@ -230,8 +253,13 @@ func show_win():
 		_timer_label.visible = false
 	if _reward_panel:
 		_reward_panel.visible = false
-	if win_label:
-		win_label.text = "You Made It!\nPress R to return to map"
+	if _big_title_label:
+		_big_title_label.text = "Crossing Conquered!"
+		_big_title_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.2))
+		_big_title_label.visible = true
+	if win_panel:
+		win_panel.visible = false
+	_auto_return_after_timeout()
 
 func _show_reward_in_win_panel() -> void:
 	var reward := App.pending_minigame_reward

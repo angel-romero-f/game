@@ -509,7 +509,8 @@ func start_selection_timer() -> void:
 	# Don't start if player has no more minigames (check count directly, not can_play_minigame which only works in CARD_COLLECTION)
 	var minigame_count: int = App.minigames_completed_this_phase
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		minigame_count = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
+		var server_count: int = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
+		minigame_count = maxi(minigame_count, server_count)
 	if minigame_count >= App.MAX_MINIGAMES_PER_PHASE:
 		return
 	_selection_timer = SELECTION_TIME_LIMIT
@@ -543,7 +544,8 @@ func _on_selection_timeout() -> void:
 	# Only refresh UI if the player can still play another game in the collect phase
 	var minigame_count: int = App.minigames_completed_this_phase
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		minigame_count = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
+		var server_count: int = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
+		minigame_count = maxi(minigame_count, server_count)
 	if minigame_count < App.MAX_MINIGAMES_PER_PHASE and phase_ui:
 		# Reset the timer guard so a fresh timer can start for the 2nd pick
 		_selection_timer_active = false
