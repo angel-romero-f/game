@@ -14,6 +14,47 @@ script = ExtResource("9_attr_cfg_script")
 [node name="CardBattle" type="Node2D"]
 script = ExtResource("1_scene")
 
+[node name="BackgroundLayer" type="CanvasLayer" parent="."]
+layer = -10
+
+[node name="BackgroundContainer" type="Control" parent="BackgroundLayer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="TerritoryBackground" type="TextureRect" parent="BackgroundLayer/BackgroundContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+grow_horizontal = 2
+grow_vertical = 2
+expand_mode = 1
+stretch_mode = 0
+mouse_filter = 2
+
+[node name="BackgroundDarken" type="ColorRect" parent="BackgroundLayer/BackgroundContainer"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 0.0
+offset_top = 0.0
+offset_right = 0.0
+offset_bottom = 0.0
+color = Color(0, 0, 0, 0.5)
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
 [node name="HandCardsLayer" type="CanvasLayer" parent="."]
 layer = 10
 
