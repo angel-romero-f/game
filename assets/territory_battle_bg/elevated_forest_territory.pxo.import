@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://bpqj0tfmssln0"
+path="res://.godot/imported/elevated_forest_territory.pxo-586e57e57ac1cff5748a621ea142fa1e.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/elevated_forest_territory.pxo"
+dest_files=["res://.godot/imported/elevated_forest_territory.pxo-586e57e57ac1cff5748a621ea142fa1e.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

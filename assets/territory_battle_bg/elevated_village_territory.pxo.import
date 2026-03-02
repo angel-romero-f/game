@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://ddcy52c6pxe70"
+path="res://.godot/imported/elevated_village_territory.pxo-f8d7930e35c549c4fb169f5abcb86033.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/elevated_village_territory.pxo"
+dest_files=["res://.godot/imported/elevated_village_territory.pxo-f8d7930e35c549c4fb169f5abcb86033.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

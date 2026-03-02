@@ -938,16 +938,16 @@ func _add_attribute_indicators_to_player_cards() -> void:
 		if font_size < 8:
 			font_size = 8
 		var label_size := Vector2(maxi(font_size * 2, 40), maxi(font_size + 8, 32))
-		var glow_padding := 1
+		var glow_padding := 0.5
 		var panel_size := label_size + Vector2(glow_padding * 2, glow_padding * 2)
 		var style := StyleBoxFlat.new()
 		style.bg_color = Color(1.0, 1.0, 0.95, 0.55)
-		style.corner_radius_top_left = 4
-		style.corner_radius_top_right = 4
-		style.corner_radius_bottom_left = 4
-		style.corner_radius_bottom_right = 4
+		style.corner_radius_top_left = 8
+		style.corner_radius_top_right = 8
+		style.corner_radius_bottom_left = 8
+		style.corner_radius_bottom_right = 8
 		style.shadow_color = Color(1.0, 1.0, 0.85, 0.5)
-		style.shadow_size = 6
+		style.shadow_size = 3
 		style.shadow_offset = Vector2.ZERO
 		var panel := Panel.new()
 		panel.name = "AttributeIndicator"

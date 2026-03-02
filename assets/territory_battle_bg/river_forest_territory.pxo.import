@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://chqp0a1tugm6o"
+path="res://.godot/imported/river_forest_territory.pxo-83ca908b8791439dc17c8543db860b20.res"
+
+[deps]
+
+source_file="res://assets/territory_battle_bg/river_forest_territory.pxo"
+dest_files=["res://.godot/imported/river_forest_territory.pxo-83ca908b8791439dc17c8543db860b20.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
