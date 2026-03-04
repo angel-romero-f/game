@@ -230,8 +230,8 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 	var is_claimed: bool = _territory_claim_state and _territory_claim_state.call("is_claimed", territory_id)
 	var tid_str := str(territory_id)
 	claim_panel_attack_mode = is_claimed and (
-		App.current_game_phase == App.GamePhase.CARD_COMMAND
-		or App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+		App.current_game_phase == App.GamePhase.CONTEST_COMMAND
+		or App.current_game_phase == App.GamePhase.CONTEST_CLAIM
 	)
 
 	if claim_panel_attack_mode:

@@ -59,14 +59,14 @@ func _refresh_players_list() -> void:
 		# Add self
 		var my_id := multiplayer.get_unique_id()
 		var my_name: String = String(PlayerDataSync.player_names.get(my_id, "You"))
-		players_list.add_item("%s - ID: %d" % [my_name, my_id])
+		players_list.add_item(my_name)
 		
 		# Add other peers
 		var peers := multiplayer.get_peers()
 		for peer_id in peers:
 			if peer_id != my_id:
 				var peer_name: String = String(PlayerDataSync.player_names.get(peer_id, "Player"))
-				players_list.add_item("%s - ID: %d" % [peer_name, peer_id])
+				players_list.add_item(peer_name)
 
 func _on_back_pressed() -> void:
 	NetworkManager.disconnect_from_game()

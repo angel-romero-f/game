@@ -4,15 +4,15 @@ extends Node
 ## Holds phase/turn/done state and emits signals on changes.
 ## Contains NO networking logic — pure local state + signals.
 ##
-## phase=0  COMMAND   (turn-ordered card placement)
-## phase=1  CLAIM_CONQUER (sub=CLAIMING/RESOURCE_COLLECTION/BATTLE_READY)
-## phase=2  CARD_COLLECTION (legacy)
+## phase=0  CONTEST_COMMAND (turn-ordered card placement)
+## phase=1  CONTEST_CLAIM (sub=CLAIMING/RESOURCE_COLLECTION/BATTLE_READY)
+## phase=2  COLLECT
 
 enum MapSubPhase { CLAIMING = 0, RESOURCE_COLLECTION = 1, BATTLE_READY = 2 }
 
 # Current game phase (see comments above)
 var current_phase: int = 0
-# Map sub-phase (used within phase=1 CLAIM_CONQUER)
+# Map sub-phase (used within phase=1 CONTEST_CLAIM)
 var map_sub_phase: int = MapSubPhase.CLAIMING
 # Per-player done state: {peer_id: bool}
 var player_done_state: Dictionary = {}
@@ -81,7 +81,7 @@ func count_done_players(peer_ids: Array) -> int:
 	return count
 
 ## Finish the CLAIMING turn: check for pending battles or request end-turn.
-## Only valid in CLAIM_CONQUER + CLAIMING. In MP, only active turn player may execute.
+## Only valid in CONTEST_CLAIM + CLAIMING. In MP, only active turn player may execute.
 func finish_claiming_turn() -> void:
 	# Must only run during claim-conquer claiming turn, never during command/collect.
 	if current_phase != 1 or map_sub_phase != MapSubPhase.CLAIMING:
@@ -120,21 +120,21 @@ func finish_claiming_turn() -> void:
 func sync_app_game_phase() -> void:
 	match current_phase:
 		0:
-			App.current_game_phase = App.GamePhase.CARD_COMMAND
-			App.phase_transition_text = "Command & Contest"
+			App.current_game_phase = App.GamePhase.CONTEST_COMMAND
+			App.phase_transition_text = "Contest"
 		1:
-			App.current_game_phase = App.GamePhase.CLAIM_CONQUER
+			App.current_game_phase = App.GamePhase.CONTEST_CLAIM
 			# The sub-phase controls whether this feels like claiming or collecting.
 			if map_sub_phase == MapSubPhase.RESOURCE_COLLECTION:
 				App.phase_transition_text = "Collect"
 			else:
-				App.phase_transition_text = "Command & Contest"
+				App.phase_transition_text = "Contest"
 		2:
-			App.current_game_phase = App.GamePhase.CARD_COLLECTION
+			App.current_game_phase = App.GamePhase.COLLECT
 			App.phase_transition_text = "Collect"
 		_:
-			App.current_game_phase = App.GamePhase.CARD_COMMAND
-			App.phase_transition_text = "Command & Contest"
+			App.current_game_phase = App.GamePhase.CONTEST_COMMAND
+			App.phase_transition_text = "Contest"
 
 ## Transition to RESOURCE_COLLECTION sub-phase (reset minigame count)
 func enter_resource_collection() -> void:

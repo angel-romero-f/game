@@ -338,7 +338,7 @@ func _check_battle_phase_complete() -> void:
 
 	if all_decided:
 		print("[BattleSync] Battles complete, entering next round (Claim -> Minigames -> Battle)")
-		PhaseSync.server_enter_claim_conquer_from_battles()
+		PhaseSync.server_enter_contest_claim_from_battles()
 
 @rpc("authority", "call_local", "reliable")
 func rpc_set_battle_decider(peer_id: int) -> void:

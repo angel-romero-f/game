@@ -20,15 +20,15 @@ var current_lives: int = MAX_LIVES
 var minigame_time_remaining: float = -1.0
 
 ## ---------- PHASE SYSTEM ----------
-## Game phases: Card Command -> Claim & Conquer -> Card Collection -> loop
-enum GamePhase { CARD_COMMAND, CLAIM_CONQUER, CARD_COLLECTION }
+## Game phases: Contest (Command -> Claim) -> Collect -> loop
+enum GamePhase { CONTEST_COMMAND, CONTEST_CLAIM, COLLECT }
 
 signal game_phase_changed(new_phase: GamePhase)
 signal minigame_completed_signal  # Emitted when a minigame is won
 @warning_ignore("unused_signal")
 signal turn_changed(player_id: int)  # Emitted when turn changes (reserved for future use)
 
-var current_game_phase: GamePhase = GamePhase.CARD_COMMAND
+var current_game_phase: GamePhase = GamePhase.CONTEST_COMMAND
 var minigames_completed_this_phase: int = 0
 const MAX_MINIGAMES_PER_PHASE: int = 2
 
@@ -85,37 +85,37 @@ var game_victor_id: int = -1
 ## True when the local player is a spectator (not attacker or defender) in a territory battle.
 var is_battle_spectator: bool = false
 
-func enter_card_command_phase() -> void:
-	current_game_phase = GamePhase.CARD_COMMAND
+func enter_contest_command_phase() -> void:
+	current_game_phase = GamePhase.CONTEST_COMMAND
 	minigames_completed_this_phase = 0
 	region_bonus_active = false
 	pending_bonus_reward.clear()
 	region_bonus_used_this_phase = false
-	phase_transition_text = "Command & Contest"
+	phase_transition_text = "Contest"
 	show_phase_transition = true
-	print("[HOST Phase] Entering CARD_COMMAND")
+	print("[HOST Phase] Entering CONTEST_COMMAND")
 	game_phase_changed.emit(current_game_phase)
 
-func enter_claim_conquer_phase() -> void:
-	current_game_phase = GamePhase.CLAIM_CONQUER
+func enter_contest_claim_phase() -> void:
+	current_game_phase = GamePhase.CONTEST_CLAIM
 	minigames_completed_this_phase = 0
 	region_bonus_active = false
 	pending_bonus_reward.clear()
 	region_bonus_used_this_phase = false
 	phase_transition_text = "Collect"
 	show_phase_transition = true
-	print("[HOST Phase] Entering CLAIM_CONQUER")
+	print("[HOST Phase] Entering CONTEST_CLAIM")
 	game_phase_changed.emit(current_game_phase)
 
-func enter_card_collection_phase() -> void:
-	current_game_phase = GamePhase.CARD_COLLECTION
+func enter_collect_phase() -> void:
+	current_game_phase = GamePhase.COLLECT
 	minigames_completed_this_phase = 0
 	region_bonus_active = false
 	pending_bonus_reward.clear()
 	region_bonus_used_this_phase = false
 	phase_transition_text = "Collect"
 	show_phase_transition = true
-	print("[HOST Phase] Entering CARD_COLLECTION")
+	print("[HOST Phase] Entering COLLECT")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_battle_phase() -> void:
@@ -137,10 +137,10 @@ func on_minigame_completed() -> void:
 	
 	# Single player: when max minigames reached, transition depends on current phase
 	if minigames_completed_this_phase >= MAX_MINIGAMES_PER_PHASE:
-		if current_game_phase == GamePhase.CARD_COLLECTION:
-			print("[Phase] Max minigames reached, looping to Card Command")
-			enter_card_command_phase()
-		# If in CLAIM_CONQUER, GameIntro handles BATTLE_READY transition (delayed overlay)
+		if current_game_phase == GamePhase.COLLECT:
+			print("[Phase] Max minigames reached, looping to Contest Command")
+			enter_contest_command_phase()
+		# If in CONTEST_CLAIM, GameIntro handles BATTLE_READY transition (delayed overlay)
 
 func on_battle_completed() -> void:
 	## Called when a single battle ends - handles territory battle sequence or multi-battle queue
@@ -181,7 +181,7 @@ func on_battle_completed() -> void:
 	# FIX: `GameIntro` sets `App.returning_from_territory_battles = true`? No.
 	# We need a state variable `in_territory_battle_sequence`.
 	
-	# Alternative: We always check returning logic if we are in CLAIM_CONQUER phase and just finished a battle?
+	# Alternative: We always check returning logic if we are in CONTEST_CLAIM phase and just finished a battle?
 	# `on_battle_completed` is called after EVERY battle.
 	
 	# Use `BattleStateManager.current_territory_id`. If it is a valid ID (numeric string), it was a territory battle.
@@ -287,11 +287,11 @@ func skip_to_done() -> void:
 		return
 	
 	# Single player: transition immediately to next round
-	enter_card_command_phase()
+	enter_contest_command_phase()
 
 func can_play_minigame() -> bool:
 	## Returns true if player can still play minigames this phase
-	if current_game_phase != GamePhase.CARD_COLLECTION:
+	if current_game_phase != GamePhase.COLLECT:
 		return false
 	# In multiplayer, check host-authoritative done state
 	if is_multiplayer and multiplayer.has_multiplayer_peer():
@@ -306,7 +306,7 @@ func can_play_minigame() -> bool:
 	return minigames_completed_this_phase < MAX_MINIGAMES_PER_PHASE
 
 func reset_phase_state() -> void:
-	current_game_phase = GamePhase.CARD_COMMAND
+	current_game_phase = GamePhase.CONTEST_COMMAND
 	minigames_completed_this_phase = 0
 	region_bonus_active = false
 	pending_bonus_reward.clear()

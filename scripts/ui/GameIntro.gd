@@ -322,10 +322,10 @@ func _ready() -> void:
 		# Sync BEFORE skip_to_game_ready so returning logic uses correct phase!
 		if App.is_multiplayer:
 			match PhaseController.current_phase:
-				0: current_phase_as_enum = App.GamePhase.CARD_COMMAND
-				1: current_phase_as_enum = App.GamePhase.CLAIM_CONQUER
-				2: current_phase_as_enum = App.GamePhase.CARD_COLLECTION
-				_: current_phase_as_enum = App.GamePhase.CARD_COMMAND
+				0: current_phase_as_enum = App.GamePhase.CONTEST_COMMAND
+				1: current_phase_as_enum = App.GamePhase.CONTEST_CLAIM
+				2: current_phase_as_enum = App.GamePhase.COLLECT
+				_: current_phase_as_enum = App.GamePhase.CONTEST_COMMAND
 				
 			if current_phase_as_enum != App.current_game_phase:
 				missed_phase_transition = true
@@ -383,8 +383,8 @@ func _on_intro_completed() -> void:
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 		if PhaseController.current_phase == 0 and PhaseController.player_done_state.is_empty():
 			# First game load — host initializes the Card Command phase
-			PhaseSync.host_init_card_command_phase()
-			App.phase_transition_text = "Command & Contest"
+			PhaseSync.host_init_contest_command_phase()
+			App.phase_transition_text = "Contest"
 		else:
 			# Returning from minigame/battle — phase already set by server RPCs
 			PhaseController.sync_app_game_phase()
@@ -395,7 +395,7 @@ func _on_intro_completed() -> void:
 		phase_ui.map_sub_phase = PhaseController.map_sub_phase
 		territory_ui.map_sub_phase = PhaseController.map_sub_phase
 	else:
-		App.enter_claim_conquer_phase()
+		App.enter_contest_claim_phase()
 		phase_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		territory_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		App.phase_transition_text = "Collect"
@@ -417,8 +417,8 @@ func _on_phase_ui_applied() -> void:
 		_sync_turn_order_bar_highlight()
 	# Stop the selection timer if we've left the collect phase
 	var in_collect_phase := (
-		App.current_game_phase == App.GamePhase.CARD_COLLECTION
-		or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+		App.current_game_phase == App.GamePhase.COLLECT
+		or (App.current_game_phase == App.GamePhase.CONTEST_CLAIM
 			and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
 	)
 	if not in_collect_phase:
@@ -512,10 +512,10 @@ func _on_victory_main_menu_pressed() -> void:
 # ---------- MINIGAME SELECTION TIMER ----------
 
 func start_selection_timer() -> void:
-	# Only start in collect phases (not Command & Contest)
+	# Only start in collect phases (not Contest)
 	var in_collect_phase := (
-		App.current_game_phase == App.GamePhase.CARD_COLLECTION
-		or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+		App.current_game_phase == App.GamePhase.COLLECT
+		or (App.current_game_phase == App.GamePhase.CONTEST_CLAIM
 			and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
 	)
 	if not in_collect_phase:
@@ -524,7 +524,7 @@ func start_selection_timer() -> void:
 	# Don't restart if already running (prevents flicker resets)
 	if _selection_timer_active:
 		return
-	# Don't start if player has no more minigames (check count directly, not can_play_minigame which only works in CARD_COLLECTION)
+	# Don't start if player has no more minigames (check count directly, not can_play_minigame which only works in COLLECT)
 	var minigame_count: int = App.minigames_completed_this_phase
 	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 		var server_count: int = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
@@ -612,8 +612,8 @@ func _sync_turn_order_bar_highlight() -> void:
 
 func _is_collect_phase() -> bool:
 	return (
-		App.current_game_phase == App.GamePhase.CARD_COLLECTION
-		or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+		App.current_game_phase == App.GamePhase.COLLECT
+		or (App.current_game_phase == App.GamePhase.CONTEST_CLAIM
 			and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
 	)
 
@@ -631,7 +631,7 @@ func _create_phase_indicator_bar() -> HBoxContainer:
 	bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
 	bar.add_theme_constant_override("separation", 6)
-	var names: Array[String] = ["Command & Contest", "Collect"]
+	var names: Array[String] = ["Contest", "Collect"]
 	for i in names.size():
 		if i > 0:
 			var sep := Label.new()

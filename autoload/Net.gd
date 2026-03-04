@@ -166,9 +166,9 @@ func host_generate_and_sync_rolls() -> void: PlayerDataSync.host_generate_and_sy
 func request_roll_generation() -> void: PlayerDataSync.request_roll_generation()
 
 # ---------- PHASE METHODS (delegated to PhaseSync) ----------
-func host_init_card_command_phase() -> void: PhaseSync.host_init_card_command_phase()
-func host_init_card_collection_phase() -> void: PhaseSync.host_init_card_collection_phase()
-func request_end_card_command_turn() -> void: PhaseSync.request_end_card_command_turn()
+func host_init_contest_command_phase() -> void: PhaseSync.host_init_contest_command_phase()
+func host_init_collect_phase() -> void: PhaseSync.host_init_collect_phase()
+func request_end_contest_command_turn() -> void: PhaseSync.request_end_contest_command_turn()
 func request_end_claiming_turn() -> void: PhaseSync.request_end_claiming_turn()
 func request_increment_minigame() -> void: PhaseSync.request_increment_minigame()
 func request_skip_to_done() -> void: PhaseSync.request_skip_to_done()

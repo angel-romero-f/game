@@ -195,13 +195,13 @@ func update_territory_interaction() -> void:
 func _on_territory_selected(territory_id: int) -> void:
 	if not are_territories_interactable() or not claim_ui:
 		return
-	var is_card_command := App.current_game_phase == App.GamePhase.CARD_COMMAND
+	var is_card_command := App.current_game_phase == App.GamePhase.CONTEST_COMMAND
 	var is_claiming_phase := (
-		App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+		App.current_game_phase == App.GamePhase.CONTEST_CLAIM
 		and map_sub_phase == PhaseController.MapSubPhase.CLAIMING
 	)
 	var is_resource_collection := (
-		App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+		App.current_game_phase == App.GamePhase.CONTEST_CLAIM
 		and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION
 	)
 	var is_claimed: bool = _territory_claim_state != null and _territory_claim_state.call("is_claimed", territory_id)

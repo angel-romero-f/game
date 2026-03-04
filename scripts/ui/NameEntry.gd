@@ -21,6 +21,7 @@ func _ready() -> void:
 	
 	if name_input:
 		name_input.placeholder_text = "Enter your name"
+		name_input.max_length = 12
 		name_input.text_submitted.connect(_on_name_submitted)
 	
 	if continue_button:
@@ -35,7 +36,7 @@ func _on_continue_pressed() -> void:
 	if not name_input:
 		return
 	
-	var name := name_input.text.strip_edges()
+	var name := name_input.text.strip_edges().left(12)
 	if name.is_empty():
 		if status_label:
 			status_label.text = "Enter a name"

@@ -19,16 +19,16 @@ func start_game() -> void:
 	App.setup_multiplayer_game()
 	App.go("res://scenes/ui/game_intro.tscn")
 
-# ---------- CARD COMMAND PHASE ----------
+# ---------- CONTEST COMMAND PHASE ----------
 
-## Host: Initialize Card Command phase for all participants
-func host_init_card_command_phase() -> void:
+## Host: Initialize Contest Command phase for all participants
+func host_init_contest_command_phase() -> void:
 	if not multiplayer.is_server():
 		return
 
 	PhaseController.reset()
 	BattleSync.reset_battle_state()
-	PhaseController.current_phase = 0  # CARD_COMMAND
+	PhaseController.current_phase = 0  # CONTEST_COMMAND
 	PhaseController.init_done_state(NetworkManager.get_all_peer_ids())
 
 	# Set first player's turn based on turn order
@@ -42,7 +42,7 @@ func host_init_card_command_phase() -> void:
 
 	var all_peers := NetworkManager.get_all_peer_ids()
 	var total := all_peers.size()
-	print("[PhaseSync] Host init Card Command phase with ", total, " participants. First turn: ", PhaseController.current_turn_peer_id)
+	print("[PhaseSync] Host init Contest Command phase with ", total, " participants. First turn: ", PhaseController.current_turn_peer_id)
 
 	# IMPORTANT: Sync turn and done state BEFORE phase change, because phase_changed
 	# signal triggers UI update which reads current_turn_peer_id
@@ -54,17 +54,17 @@ func host_init_card_command_phase() -> void:
 		rpc_sync_card_counts.rpc(PhaseController.player_card_counts.duplicate())
 	rpc_set_phase.rpc(0)  # Must be last - triggers UI update
 
-## Host: Initialize Card Collection phase (after all players finish their turns)
-func host_init_card_collection_phase() -> void:
+## Host: Initialize Collect phase (after all players finish their turns)
+func host_init_collect_phase() -> void:
 	if not multiplayer.is_server():
 		return
 
-	PhaseController.current_phase = 2  # CARD_COLLECTION
+	PhaseController.current_phase = 2  # COLLECT
 	PhaseController.init_done_state(NetworkManager.get_all_peer_ids())
 
 	var all_peers := NetworkManager.get_all_peer_ids()
 	var total := all_peers.size()
-	print("[PhaseSync] Host init Card Collection phase with ", total, " participants")
+	print("[PhaseSync] Host init Collect phase with ", total, " participants")
 
 	# Sync done state BEFORE phase change (phase_changed triggers UI update)
 	rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
@@ -80,23 +80,23 @@ func rpc_set_current_turn(peer_id: int) -> void:
 	if multiplayer.is_server():
 		print("[HOST PhaseSync] Turn → peer %d" % peer_id)
 
-## Client requests to end their Card Command turn
-func request_end_card_command_turn() -> void:
+## Client requests to end their Contest Command turn
+func request_end_contest_command_turn() -> void:
 	if multiplayer.is_server():
-		_server_advance_card_command_turn(multiplayer.get_unique_id())
+		_server_advance_contest_command_turn(multiplayer.get_unique_id())
 	else:
-		server_end_card_command_turn.rpc_id(1)
+		server_end_contest_command_turn.rpc_id(1)
 
 @rpc("any_peer", "reliable")
-func server_end_card_command_turn() -> void:
+func server_end_contest_command_turn() -> void:
 	if not multiplayer.is_server():
 		return
 	var id := multiplayer.get_remote_sender_id()
 	if id == 0:
 		id = multiplayer.get_unique_id()
-	_server_advance_card_command_turn(id)
+	_server_advance_contest_command_turn(id)
 
-func _server_advance_card_command_turn(peer_id: int) -> void:
+func _server_advance_contest_command_turn(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
 
@@ -104,18 +104,18 @@ func _server_advance_card_command_turn(peer_id: int) -> void:
 		print("[PhaseSync] REJECTED turn end from ", peer_id, " (not their turn, current: ", PhaseController.current_turn_peer_id, ")")
 		return
 
-	print("[PhaseSync] Player ", peer_id, " finished Card Command turn (index ", PhaseController.current_turn_index, ")")
+	print("[PhaseSync] Player ", peer_id, " finished Contest Command turn (index ", PhaseController.current_turn_index, ")")
 
 	PhaseController.player_done_state[peer_id] = true
 
 	PhaseController.current_turn_index += 1
 	if PhaseController.current_turn_index >= App.turn_order.size():
-		print("[PhaseSync] All players finished Card Command - entering Claim & Conquer")
-		_server_enter_claim_conquer_phase()
+		print("[PhaseSync] All players finished Contest Command - entering Contest Claim")
+		_server_enter_contest_claim_phase()
 	else:
 		var next_player = App.turn_order[PhaseController.current_turn_index]
 		PhaseController.current_turn_peer_id = next_player.get("id", -1)
-		print("[PhaseSync] Next Card Command turn: ", PhaseController.current_turn_peer_id, " (index ", PhaseController.current_turn_index, ")")
+		print("[PhaseSync] Next Contest Command turn: ", PhaseController.current_turn_peer_id, " (index ", PhaseController.current_turn_index, ")")
 		rpc_set_current_turn.rpc(PhaseController.current_turn_peer_id)
 		rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
 
@@ -174,7 +174,7 @@ func server_increment_minigame() -> void:
 func _server_increment_minigame(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
-	# Minigames only count during Claim & Conquer resource collection.
+	# Minigames only count during Contest Claim resource collection.
 	if PhaseController.current_phase != 1 or PhaseController.map_sub_phase != PhaseController.MapSubPhase.RESOURCE_COLLECTION:
 		print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (phase=", PhaseController.current_phase, " sub=", PhaseController.map_sub_phase, ")")
 		return
@@ -228,15 +228,15 @@ func _check_all_done_and_advance() -> void:
 	rpc_sync_done_counts.rpc(done_count, total)
 
 	if total > 0 and done_count >= total:
-		if PhaseController.current_phase == 0:  # CARD_COMMAND -> CLAIM_CONQUER
-			_server_enter_claim_conquer_phase()
-		elif PhaseController.current_phase == 1:  # CLAIM_CONQUER
-			if PhaseController.map_sub_phase == 1:  # RESOURCE_COLLECTION done → advance to CARD_COMMAND
-				host_init_card_command_phase()
-			else:  # CLAIMING or BATTLE_READY done → loop back to claim/conquer
-				server_enter_claim_conquer_from_battles()
-		elif PhaseController.current_phase == 2:  # CARD_COLLECTION -> CARD_COMMAND (loop)
-			host_init_card_command_phase()
+		if PhaseController.current_phase == 0:  # CONTEST_COMMAND -> CONTEST_CLAIM
+			_server_enter_contest_claim_phase()
+		elif PhaseController.current_phase == 1:  # CONTEST_CLAIM
+			if PhaseController.map_sub_phase == 1:  # RESOURCE_COLLECTION done → advance to CONTEST_COMMAND
+				host_init_contest_command_phase()
+			else:  # CLAIMING or BATTLE_READY done → loop back to contest claim
+				server_enter_contest_claim_from_battles()
+		elif PhaseController.current_phase == 2:  # COLLECT -> CONTEST_COMMAND (loop)
+			host_init_contest_command_phase()
 
 # ---------- PHASE TRANSITION RPCs ----------
 
@@ -293,22 +293,22 @@ func rpc_sync_card_counts(counts: Dictionary) -> void:
 
 # ---------- CLAIM & CONQUER PHASE TRANSITIONS ----------
 
-## Server enters Claim & Conquer phase (from CARD_COMMAND, skips CLAIMING)
-func _server_enter_claim_conquer_phase() -> void:
+## Server enters Contest Claim phase (from CONTEST_COMMAND, skips CLAIMING)
+func _server_enter_contest_claim_phase() -> void:
 	if not multiplayer.is_server():
 		return
-	PhaseController.current_phase = 1  # CLAIM_CONQUER
+	PhaseController.current_phase = 1  # CONTEST_CLAIM
 	BattleSync.init_battle_phase()
 	PhaseController.init_done_state(NetworkManager.get_all_peer_ids())
 	rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
 	rpc_set_phase.rpc(1)
 	rpc_map_sub_phase.rpc(1)  # RESOURCE_COLLECTION
 
-## Server enters Claim & Conquer from battles (loop back)
-func server_enter_claim_conquer_from_battles() -> void:
+## Server enters Contest Claim from battles (loop back)
+func server_enter_contest_claim_from_battles() -> void:
 	if not multiplayer.is_server():
 		return
-	PhaseController.current_phase = 1  # CLAIM_CONQUER
+	PhaseController.current_phase = 1  # CONTEST_CLAIM
 	BattleSync.init_battle_phase()
 	PhaseController.current_turn_index = 0
 	if App.turn_order.size() > 0:

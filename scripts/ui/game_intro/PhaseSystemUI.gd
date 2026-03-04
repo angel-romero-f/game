@@ -114,9 +114,9 @@ func set_overlay_state(state: OverlayState, text: String = "") -> void:
 func _update_turn_banner() -> void:
 	if not turn_banner_label:
 		return
-	# Only show the turn banner during Command & Contest (CARD_COMMAND) phase.
+	# Only show the turn banner during Contest (CONTEST_COMMAND) phase.
 	# All other phases (Collect, etc.) are not strictly turn-based for this UI.
-	if App.current_game_phase != App.GamePhase.CARD_COMMAND:
+	if App.current_game_phase != App.GamePhase.CONTEST_COMMAND:
 		turn_banner_label.visible = false
 		return
 	if not App.is_multiplayer or not multiplayer.has_multiplayer_peer():
@@ -139,22 +139,22 @@ func _update_current_phase_label() -> void:
 	# Update standalone phase label if available
 	if current_phase_label:
 		match App.current_game_phase:
-			App.GamePhase.CARD_COMMAND:
-				current_phase_label.text = "Command & Contest"
-			App.GamePhase.CLAIM_CONQUER:
+			App.GamePhase.CONTEST_COMMAND:
+				current_phase_label.text = "Contest"
+			App.GamePhase.CONTEST_CLAIM:
 				if map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
 					current_phase_label.text = "Collect"
 				else:
-					current_phase_label.text = "Command & Contest"
-			App.GamePhase.CARD_COLLECTION:
+					current_phase_label.text = "Contest"
+			App.GamePhase.COLLECT:
 				current_phase_label.text = "Collect"
 		current_phase_label.visible = true
 	# Update phase indicator bar if available
 	if phase_indicator_bar:
 		phase_indicator_bar.visible = true
 		var is_collect := (
-			App.current_game_phase == App.GamePhase.CARD_COLLECTION
-			or (App.current_game_phase == App.GamePhase.CLAIM_CONQUER
+			App.current_game_phase == App.GamePhase.COLLECT
+			or (App.current_game_phase == App.GamePhase.CONTEST_CLAIM
 				and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
 		)
 		for child in phase_indicator_bar.get_children():
@@ -165,7 +165,7 @@ func _update_current_phase_label() -> void:
 				var is_active := false
 				if is_collect and child.name.begins_with("Collect"):
 					is_active = true
-				elif not is_collect and child.name.begins_with("Command"):
+				elif not is_collect and child.name.begins_with("Contest"):
 					is_active = true
 				if is_active:
 					label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
@@ -210,12 +210,12 @@ func apply_phase_ui() -> void:
 		return
 	map_sub_phase = PhaseController.map_sub_phase
 	match App.current_game_phase:
-		App.GamePhase.CARD_COMMAND:
-			_apply_card_command_ui()
-		App.GamePhase.CLAIM_CONQUER:
-			_apply_claim_conquer_ui()
-		App.GamePhase.CARD_COLLECTION:
-			_apply_card_collection_ui()
+		App.GamePhase.CONTEST_COMMAND:
+			_apply_contest_command_ui()
+		App.GamePhase.CONTEST_CLAIM:
+			_apply_contest_claim_ui()
+		App.GamePhase.COLLECT:
+			_apply_collect_ui()
 	settings_button.visible = true
 	card_icon_button.visible = true
 	# Always update and show the phase label
@@ -226,7 +226,7 @@ func _hide_battle_selection_ui() -> void:
 	if battle_ui:
 		battle_ui.hide_all()
 
-func _apply_card_command_ui() -> void:
+func _apply_contest_command_ui() -> void:
 	minigame_button.visible = false
 	bridge_minigame_button.visible = false
 	ice_fishing_button.visible = false
@@ -258,7 +258,7 @@ func _apply_card_command_ui() -> void:
 		is_waiting_for_others = false
 		_update_turn_banner()
 
-func _apply_claim_conquer_ui() -> void:
+func _apply_contest_claim_ui() -> void:
 	minigame_button.visible = false
 	bridge_minigame_button.visible = false
 	ice_fishing_button.visible = false
@@ -359,7 +359,7 @@ func _apply_battle_ready_ui() -> void:
 		battle_button.visible = true
 	minigames_counter_label.visible = false
 
-func _apply_card_collection_ui() -> void:
+func _apply_collect_ui() -> void:
 	minigame_button.visible = true
 	bridge_minigame_button.visible = true
 	ice_fishing_button.visible = true
@@ -440,11 +440,11 @@ func _update_minigames_counter() -> void:
 # ---------- SKIP / DONE BUTTON ----------
 
 func on_skip_to_battle_pressed() -> void:
-	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase == PhaseController.MapSubPhase.CLAIMING:
+	if App.current_game_phase == App.GamePhase.CONTEST_CLAIM and map_sub_phase == PhaseController.MapSubPhase.CLAIMING:
 		finish_claiming_pressed.emit()
 		return
 	match App.current_game_phase:
-		App.GamePhase.CARD_COMMAND:
+		App.GamePhase.CONTEST_COMMAND:
 			skip_to_battle_button.visible = false
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 				# Check for pending battles (attacks on enemy territories)
@@ -454,18 +454,18 @@ func on_skip_to_battle_pressed() -> void:
 					App.is_territory_battle_attacker = true
 					App.on_battle_completed()  # Pops first battle and starts it
 					return  # Battles resolve first; turn advances when returning
-				PhaseSync.request_end_card_command_turn()
+				PhaseSync.request_end_contest_command_turn()
 				# Keep non-active players on the board with turn banner guidance; no gray waiting screen.
 				set_overlay_state(OverlayState.NONE)
 				is_waiting_for_others = false
 			else:
-				App.enter_claim_conquer_phase()
+				App.enter_contest_claim_phase()
 				show_phase_transition_overlay()
-		App.GamePhase.CLAIM_CONQUER:
+		App.GamePhase.CONTEST_CLAIM:
 			# Non-CLAIMING sub-phases (RESOURCE_COLLECTION, BATTLE_READY):
 			# server drives transitions, so do nothing here.
 			pass
-		App.GamePhase.CARD_COLLECTION:
+		App.GamePhase.COLLECT:
 			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 				var prev_phase := App.current_game_phase
 				App.skip_to_done()
@@ -474,7 +474,7 @@ func on_skip_to_battle_pressed() -> void:
 					is_waiting_for_others = true
 			else:
 				App.skip_to_done()
-				App.enter_card_command_phase()
+				App.enter_contest_command_phase()
 				show_phase_transition_overlay()
 		_:
 			App.skip_to_done()
@@ -496,9 +496,9 @@ func _on_net_phase_changed(phase_id: int) -> void:
 	if _pending_phase_overlay:
 		phase_actually_changed = true
 		_pending_phase_overlay = false
-	# Sub-phase changes within CLAIM_CONQUER shouldn't re-show the phase overlay.
-	# But a real transition INTO CLAIM_CONQUER from another phase should.
-	if App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER and prev_phase == App.GamePhase.CLAIM_CONQUER:
+	# Sub-phase changes within CONTEST_CLAIM shouldn't re-show the phase overlay.
+	# But a real transition INTO CONTEST_CLAIM from another phase should.
+	if App.is_multiplayer and App.current_game_phase == App.GamePhase.CONTEST_CLAIM and prev_phase == App.GamePhase.CONTEST_CLAIM:
 		phase_actually_changed = false
 	if phase_actually_changed:
 		is_waiting_for_others = false
@@ -522,11 +522,11 @@ func _on_net_phase_changed(phase_id: int) -> void:
 
 		# Set phase_transition_text based on the new phase
 		match App.current_game_phase:
-			App.GamePhase.CARD_COMMAND:
-				App.phase_transition_text = "Command & Contest"
-			App.GamePhase.CLAIM_CONQUER:
+			App.GamePhase.CONTEST_COMMAND:
+				App.phase_transition_text = "Contest"
+			App.GamePhase.CONTEST_CLAIM:
 				App.phase_transition_text = "Collect"
-			App.GamePhase.CARD_COLLECTION:
+			App.GamePhase.COLLECT:
 				App.phase_transition_text = "Collect"
 		print("[CLIENT PhaseSystemUI] Phase changed to %d — showing transition overlay" % phase_id)
 		show_phase_transition_overlay()
@@ -543,7 +543,7 @@ func _on_turn_changed(_peer_id: int) -> void:
 func _on_done_counts_updated(done: int, total: int) -> void:
 	local_done_count = done
 	local_total_count = total
-	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER \
+	if App.current_game_phase == App.GamePhase.CONTEST_CLAIM \
 		and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION \
 		and minigames_counter_label.visible:
 		_update_minigames_counter()
@@ -554,13 +554,13 @@ func _on_done_counts_updated(done: int, total: int) -> void:
 	# Phase mismatch repair
 	var net_phase_as_enum: App.GamePhase
 	match PhaseController.current_phase:
-		0: net_phase_as_enum = App.GamePhase.CARD_COMMAND
-		1: net_phase_as_enum = App.GamePhase.CLAIM_CONQUER
-		2: net_phase_as_enum = App.GamePhase.CARD_COLLECTION
-		_: net_phase_as_enum = App.GamePhase.CARD_COMMAND
+		0: net_phase_as_enum = App.GamePhase.CONTEST_COMMAND
+		1: net_phase_as_enum = App.GamePhase.CONTEST_CLAIM
+		2: net_phase_as_enum = App.GamePhase.COLLECT
+		_: net_phase_as_enum = App.GamePhase.CONTEST_COMMAND
 	if net_phase_as_enum != App.current_game_phase:
 		_on_net_phase_changed(PhaseController.current_phase)
-	if App.current_game_phase == App.GamePhase.CLAIM_CONQUER and map_sub_phase < PhaseController.map_sub_phase:
+	if App.current_game_phase == App.GamePhase.CONTEST_CLAIM and map_sub_phase < PhaseController.map_sub_phase:
 		_on_net_map_sub_phase_changed(PhaseController.map_sub_phase)
 
 func _on_battle_decider_changed(_peer_id: int) -> void:
@@ -601,7 +601,7 @@ func _on_net_territory_claim_rejected(territory_id: int, claimer_name: String) -
 func _on_net_map_sub_phase_changed(sub_phase: int) -> void:
 	# Ignore stale/non-applicable sub-phase transitions outside Claim & Conquer.
 	# This prevents late RESOURCE_COLLECTION RPCs from reopening "Collect" UI while in Command.
-	if App.current_game_phase != App.GamePhase.CLAIM_CONQUER:
+	if App.current_game_phase != App.GamePhase.CONTEST_CLAIM:
 		if sub_phase == PhaseController.MapSubPhase.CLAIMING:
 			map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		return
@@ -614,7 +614,7 @@ func _on_net_map_sub_phase_changed(sub_phase: int) -> void:
 		set_overlay_state(OverlayState.NONE)
 		# Show phase transition when exiting resource collection into claiming.
 		if previous_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION:
-			App.phase_transition_text = "Command & Contest"
+			App.phase_transition_text = "Contest"
 			show_phase_transition_overlay()
 		else:
 			apply_phase_ui()

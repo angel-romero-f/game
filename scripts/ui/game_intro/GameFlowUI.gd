@@ -29,7 +29,7 @@ func skip_to_game_ready() -> int:
 			App.pending_return_map_sub_phase = -1
 
 		# If 2 minigames done in single-player RESOURCE_COLLECTION, start delayed battle transition
-		if not App.is_multiplayer and App.current_game_phase == App.GamePhase.CLAIM_CONQUER \
+		if not App.is_multiplayer and App.current_game_phase == App.GamePhase.CONTEST_CLAIM \
 			and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION \
 			and App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:
 			delayed_battle_transition_needed.emit()
@@ -43,15 +43,15 @@ func skip_to_game_ready() -> int:
 		App.is_territory_battle_attacker = false
 
 		if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-			if App.current_game_phase == App.GamePhase.CARD_COMMAND:
-				PhaseSync.request_end_card_command_turn()
+			if App.current_game_phase == App.GamePhase.CONTEST_COMMAND:
+				PhaseSync.request_end_contest_command_turn()
 			else:
 				PhaseSync.request_end_claiming_turn()
 		else:
 			if App.current_turn_index < App.turn_order.size():
 				var current_id = App.current_turn_player_id
 				var player_name := _get_player_name_by_id(current_id)
-				App.current_game_phase = App.GamePhase.CARD_COMMAND
+				App.current_game_phase = App.GamePhase.CONTEST_COMMAND
 				map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 				show_next_player_turn.emit(player_name)
 			else:

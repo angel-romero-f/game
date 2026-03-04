@@ -74,13 +74,13 @@ func _refresh_players_list() -> void:
 		# Add host
 		var host_id := multiplayer.get_unique_id()
 		var host_name: String = String(PlayerDataSync.player_names.get(host_id, "Host (you)"))
-		players_list.add_item("%s - ID: %d" % [host_name, host_id])
+		players_list.add_item(host_name)
 		
 		# Add connected peers
 		var peers := multiplayer.get_peers()
 		for peer_id in peers:
 			var peer_name: String = String(PlayerDataSync.player_names.get(peer_id, "Player"))
-			players_list.add_item("%s - ID: %d" % [peer_name, peer_id])
+			players_list.add_item(peer_name)
 
 func _on_start_pressed() -> void:
 	if multiplayer.is_server():
