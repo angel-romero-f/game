@@ -5,12 +5,14 @@ extends Node2D
 
 var dragged_card: Node2D = null
 var drag_offset: Vector2 = Vector2.ZERO
+var dragging_enabled: bool = true
 var screen_bounds: Rect2
 var hovered_card: Node2D = null
 var card_original_scales: Dictionary = {}  # Store original scales for each card
 var card_spawn_positions: Dictionary = {}  # Store original spawn positions for each card
 var hover_scale: float = 1.15  # Scale factor when hovering (15% larger)
 var snapped_cards: Dictionary = {}  # Track which cards are snapped to slots (card -> slot)
+var dragged_from_slot: Node2D = null  # Slot the card was in when drag started (for swap-on-drop)
 
 # Double-click enlarge feature
 var enlarged_card: Node2D = null  # Currently enlarged card (if any)
@@ -126,15 +128,24 @@ func _on_card_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, c
 					last_click_time = 0.0  # Reset to prevent triple-click issues
 					last_clicked_card = null
 				else:
-					# Single click - start drag as normal
+					# Single click - start drag as normal (only if dragging is enabled)
+					if not dragging_enabled:
+						return
 					last_click_time = current_time
 					last_clicked_card = card
-					# If card is snapped, unsnap it first
+					# If card is snapped, remember its slot for possible swap, then unsnap
 					if snapped_cards.has(card):
+						dragged_from_slot = snapped_cards[card]
 						_unsnap_card(card)
+					else:
+						dragged_from_slot = null
 					_start_drag(card, get_global_mouse_position())
 			else:
 				_end_drag()
+
+func disable_dragging() -> void:
+	"""Disables starting new drags for all cards."""
+	dragging_enabled = false
 
 func _on_card_mouse_entered(card: Node2D):
 	# Don't hover effect if card is being dragged
@@ -204,11 +215,27 @@ func _end_drag():
 		var card_pos = card.global_position
 		
 		# Check if card should snap to a nearby slot
-		var nearest_slot = _find_nearest_slot(card_pos)
+		var nearest_slot: Node2D = _find_nearest_slot(card_pos)
 		var did_snap := false
 		if nearest_slot:
-			_snap_card_to_slot(card, nearest_slot)
-			did_snap = true
+			var target_occupied: bool = nearest_slot.get("has_card") == true and nearest_slot.get("snapped_card") != null
+			# If target slot has another card and we came from a slot, trade positions
+			if target_occupied and dragged_from_slot != null and is_instance_valid(dragged_from_slot):
+				var other_card: Node2D = nearest_slot.snapped_card
+				if other_card and is_instance_valid(other_card):
+					# Put our card into the target slot (displaces other_card)
+					nearest_slot.force_snap_card(card)
+					snapped_cards[card] = nearest_slot
+					snapped_cards.erase(other_card)
+					if card_original_scales.has(card):
+						card.scale = card_original_scales[card]
+					card_snapped_to_slot.emit(card, nearest_slot)
+					# Put the displaced card into our previous slot
+					_snap_card_to_slot(other_card, dragged_from_slot)
+					did_snap = true
+			if not did_snap:
+				_snap_card_to_slot(card, nearest_slot)
+				did_snap = snapped_cards.has(card)
 		else:
 			# Unsnap if card was previously snapped but moved away
 			if snapped_cards.has(card):
@@ -225,6 +252,7 @@ func _end_drag():
 		card_drag_ended.emit(card)
 		dragged_card = null
 		drag_offset = Vector2.ZERO
+		dragged_from_slot = null
 
 func _process(_delta):
 	# Don't process dragging if card is enlarged

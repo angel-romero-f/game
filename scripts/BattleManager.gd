@@ -728,16 +728,25 @@ func _process(delta: float) -> void:
 
 	if not is_timer_active or state != State.WAITING_FOR_PLAYER:
 		return
-		
+	
 	battle_timer -= delta
 	if _timer_label:
 		_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(max(0, battle_timer))
-		
+	
 	if battle_timer <= 0.0:
 		is_timer_active = false
 		_update_timer_visibility()
-		_auto_snap_dragged_card()
-		_trigger_battle_start()
+		_on_battle_timer_expired()
+
+
+func _on_battle_timer_expired() -> void:
+	## When the player countdown reaches zero: stop any active drag, snap the dragged card into
+	## the nearest available card slot, disable further dragging, then start battle resolution
+	## after a short delay so the player can see the lock-in.
+	_auto_snap_dragged_card()
+	_disable_card_dragging()
+	await get_tree().create_tween().tween_interval(0.5).finished
+	_trigger_battle_start()
 
 func _auto_snap_dragged_card() -> void:
 	## If the player is dragging a card when the timer expires, force it into the nearest available slot.
@@ -749,11 +758,45 @@ func _auto_snap_dragged_card() -> void:
 		return
 	var card: Node2D = card_manager.dragged_card
 	var card_pos: Vector2 = card.global_position
-	var nearest_slot: Node2D = card_manager._find_nearest_slot(card_pos) if card_manager.has_method("_find_nearest_slot") else null
-	if nearest_slot:
+	var nearest_slot: Node2D = null
+	var nearest_distance: float = INF
+
+	# Prefer a dedicated nearest-empty-slot search if available; otherwise, filter manually.
+	if card_manager.has_method("_find_all_slots"):
+		var all_slots: Array = card_manager._find_all_slots(root)
+		for slot in all_slots:
+			if slot == null or not is_instance_valid(slot):
+				continue
+			# Only consider real card slots that can snap and are currently empty.
+			# CardSlot.gd defines can_snap_cards() and has_card, so we can call directly.
+			if slot.has_method("can_snap_cards") and not slot.can_snap_cards():
+				continue
+			# Skip slots that already have a snapped card
+			if "has_card" in slot and slot.has_card:
+				continue
+			var distance := card_pos.distance_to(slot.global_position)
+			if distance < nearest_distance:
+				nearest_distance = distance
+				nearest_slot = slot
+	else:
+		# Fallback: use CardManager's nearest slot helper (may consider occupied slots).
+		if card_manager.has_method("_find_nearest_slot"):
+			nearest_slot = card_manager._find_nearest_slot(card_pos)
+
+	if nearest_slot and card_manager.has_method("_snap_card_to_slot"):
 		card_manager._snap_card_to_slot(card, nearest_slot)
 	card_manager.dragged_card = null
 	card_manager.drag_offset = Vector2.ZERO
+
+
+func _disable_card_dragging() -> void:
+	## Ask CardManager to prevent any new drags once the timer has expired.
+	var root: Node = get_parent()
+	if root == null:
+		root = get_tree().current_scene
+	var card_manager: Node = root.get_node_or_null("CardManager") if root else null
+	if card_manager and card_manager.has_method("disable_dragging"):
+		card_manager.disable_dragging()
 
 
 func _trigger_battle_start() -> void:
