@@ -1,6 +1,7 @@
-[gd_scene load_steps=9 format=3 uid="uid://8s4xj8qvpi8a"]
+[gd_scene load_steps=10 format=3 uid="uid://8s4xj8qvpi8a"]
 
 [ext_resource type="Script" uid="uid://bo11tt1dae0fx" path="res://scripts/CardBattleScene.gd" id="1_scene"]
+[ext_resource type="Script" path="res://scripts/ui/CardSceneUI.gd" id="11_card_scene_ui"]
 [ext_resource type="Script" uid="uid://bkwfgx4dtvma" path="res://scripts/BattleManager.gd" id="2_battle_manager"]
 [ext_resource type="Script" uid="uid://p40834bmanry" path="res://scripts/CardManager.gd" id="2_cardmanager"]
 [ext_resource type="PackedScene" uid="uid://bafobj10bgihh" path="res://scenes/card_slot.tscn" id="3_u4xae"]
@@ -13,6 +14,9 @@ script = ExtResource("9_attr_cfg_script")
 
 [node name="CardBattle" type="Node2D"]
 script = ExtResource("1_scene")
+
+[node name="CardSceneUI" type="Node" parent="."]
+script = ExtResource("11_card_scene_ui")
 
 [node name="BackgroundLayer" type="CanvasLayer" parent="."]
 layer = -10

@@ -52,6 +52,8 @@ var _result_label: Label
 var _continue_label: Label
 var _leave_button: Button
 var _debug_add_card_button: Button
+var _card_manager: Node = null
+var _card_scene_ui: Node = null
 
 ## Race sprites: Player (frame 1) and Opponent (frame 0) from assets/[race]_fb.pxo.
 ## Editor scale is the base; Elf is 1.5x that, Fairy is 1/1.5x, Orc/Infernal use base.
@@ -94,10 +96,11 @@ func _ready() -> void:
 	print("[BattleManager] _ready() START. peer=%d role=%s is_multiplayer=%s is_spectator=%s" % [my_id, role, str(_is_multiplayer), str(_is_spectator)])
 	_cache_nodes()
 
-	if _is_spectator:
-		_apply_spectator_race_textures()
-	else:
-		_apply_race_textures()
+	if _card_scene_ui:
+		if _is_spectator:
+			_card_scene_ui.apply_spectator_race_textures(_player_sprite, _opponent_sprite)
+		else:
+			_card_scene_ui.apply_race_textures(_player_sprite, _opponent_sprite, player_default_race, opponent_default_race)
 
 	if _is_multiplayer:
 		# Server already cleared battle state before scene transition (in BattleSync).
@@ -113,7 +116,10 @@ func _ready() -> void:
 		BattleSync.clear_battle_state()
 
 	if _is_spectator:
-		_setup_spectator_ui()
+		if _card_scene_ui:
+			_card_scene_ui.setup_spectator_ui(_timer_label, _timer_sub_label, _continue_label, _leave_button, _debug_add_card_button, _result_label, _player_slot_nodes, _opponent_slot_nodes, get_parent() if get_parent() else get_tree().current_scene)
+			if not _card_scene_ui.leave_pressed.is_connected(_on_leave_pressed):
+				_card_scene_ui.leave_pressed.connect(_on_leave_pressed)
 	else:
 		_setup_ui()
 
@@ -147,7 +153,8 @@ func _ready() -> void:
 			_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(battle_timer)
 		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER, timer started")
 		# Respace hand cards after everything is set up
-		call_deferred("_respace_hand_cards")
+		if _card_manager:
+			_card_manager.call_deferred("respace_hand_cards")
 	else:
 		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER (SPECTATOR mode)")
 
@@ -175,172 +182,10 @@ func _cache_nodes() -> void:
 		push_warning("[BattleManager] ContinueLabel not found at path: %s. Continue hint will not be displayed." % String(continue_label_path))
 	_leave_button = (root.get_node_or_null(leave_button_path) if root else null) as Button
 	_debug_add_card_button = (root.get_node_or_null(debug_add_card_button_path) if root else null) as Button
+	_card_manager = root.get_node_or_null("CardManager") if root else null
+	_card_scene_ui = root.get_node_or_null("CardSceneUI") if root else null
 	_player_sprite = (root.get_node_or_null("Player") if root else null) as Sprite2D
 	_opponent_sprite = (root.get_node_or_null("Opponent") if root else null) as Sprite2D
-
-
-func _apply_race_textures() -> void:
-	## Set Player and Opponent Sprite2D textures and race-based scale. USE_GAME = use race from code; specific race = editor override.
-	var local_race := _get_local_player_race()
-	var game_opponent_race := _get_opponent_race()
-	var player_race: String = _default_race_to_string(player_default_race) if player_default_race != DefaultRace.USE_GAME else local_race
-	var opponent_race: String = _default_race_to_string(opponent_default_race) if opponent_default_race != DefaultRace.USE_GAME else game_opponent_race
-	var player_base_scale: Vector2 = _player_sprite.scale if _player_sprite else Vector2.ONE
-	var opponent_base_scale: Vector2 = _opponent_sprite.scale if _opponent_sprite else Vector2.ONE
-	_set_sprite_from_race(_player_sprite, player_race, 1, player_default_race, player_base_scale)
-	_set_sprite_from_race(_opponent_sprite, opponent_race, 0, opponent_default_race, opponent_base_scale)
-
-
-func _get_local_player_race() -> String:
-	if not App:
-		return "Fairy"
-	for p in App.game_players:
-		if p.get("is_local", false):
-			var r: String = p.get("race", "")
-			return r if r and r != "Unknown" else "Fairy"
-	return App.selected_race if (App.selected_race and App.selected_race != "Unknown") else "Fairy"
-
-
-func _get_opponent_race() -> String:
-	if not App:
-		return "Fairy"
-	var r: String = App.current_battle_metadata.get("opponent_race", "Fairy")
-	return r if r and r != "Unknown" else "Fairy"
-
-
-func _default_race_to_string(r: DefaultRace) -> String:
-	match r:
-		DefaultRace.USE_GAME: return "fairy"
-		DefaultRace.ELF: return "elf"
-		DefaultRace.ORC: return "orc"
-		DefaultRace.INFERNAL: return "infernal"
-		DefaultRace.FAIRY: return "fairy"
-	return "fairy"
-
-
-func _race_scale_multiplier(race: String) -> float:
-	## Elf 1.5x bigger, Fairy 1.5x smaller than editor base; Orc and Infernal use base scale.
-	var r := race.to_lower()
-	if r == "elf":
-		return 1.1
-	if r == "fairy":
-		return 1.0 / 1.5
-	return 1.0
-
-
-func _apply_spectator_race_textures() -> void:
-	## Spectator: top sprite = Defender (back facing), bottom sprite = Attacker (front facing).
-	var attacker_id := App.pending_territory_battle_attacker_id
-	var defender_id := App.pending_territory_battle_defender_id
-	var attacker_race := "Fairy"
-	var defender_race := "Fairy"
-	for p in App.game_players:
-		if int(p.get("id", -1)) == attacker_id:
-			var r: String = p.get("race", "")
-			attacker_race = r if r and r != "Unknown" else "Fairy"
-		if int(p.get("id", -1)) == defender_id:
-			var r: String = p.get("race", "")
-			defender_race = r if r and r != "Unknown" else "Fairy"
-	var player_base_scale: Vector2 = _player_sprite.scale if _player_sprite else Vector2.ONE
-	var opponent_base_scale: Vector2 = _opponent_sprite.scale if _opponent_sprite else Vector2.ONE
-	# Bottom sprite = Attacker (front facing, frame 1)
-	_set_sprite_from_race(_player_sprite, attacker_race, 1, DefaultRace.USE_GAME, player_base_scale)
-	# Top sprite = Defender (back facing, frame 0)
-	_set_sprite_from_race(_opponent_sprite, defender_race, 0, DefaultRace.USE_GAME, opponent_base_scale)
-
-
-func _setup_spectator_ui() -> void:
-	## Spectator UI: hide timer, hide cards/slots, show battle status text.
-	# Hide timer labels
-	if _timer_label:
-		_timer_label.visible = false
-	if _timer_sub_label:
-		_timer_sub_label.visible = false
-	# Hide continue label
-	if _continue_label:
-		_continue_label.visible = false
-	# Show leave button
-	if _leave_button:
-		_leave_button.visible = true
-		if not _leave_button.pressed.is_connected(_on_leave_pressed):
-			_leave_button.pressed.connect(_on_leave_pressed)
-	# Hide debug button
-	if _debug_add_card_button:
-		_debug_add_card_button.visible = false
-
-	# Hide all card slot nodes (player and opponent) so spectators see no card outlines
-	for slot in _player_slot_nodes:
-		if slot:
-			slot.visible = false
-	for slot in _opponent_slot_nodes:
-		if slot:
-			slot.visible = false
-
-	# Hide hand cards container (CanvasLayer has no 'visible'; hide its children)
-	var root := get_parent()
-	if root == null:
-		root = get_tree().current_scene
-	if root:
-		var hand_container := root.get_node_or_null("HandCardsLayer/HandCardsContainer") as Node2D
-		if hand_container:
-			hand_container.visible = false
-
-	# Look up names for attacker and defender
-	var attacker_name := _get_player_name(App.pending_territory_battle_attacker_id)
-	var defender_name := _get_player_name(App.pending_territory_battle_defender_id)
-
-	# Use the result label for spectator battle status (centered on screen)
-	if _result_label:
-		_result_label.text = "%s and %s are battling" % [defender_name, attacker_name]
-		_result_label.add_theme_font_size_override("font_size", 48)
-		_result_label.add_theme_color_override("font_color", Color.WHITE)
-		_result_label.visible = true
-
-
-func _get_player_name(peer_id: int) -> String:
-	for p in App.game_players:
-		if int(p.get("id", -1)) == peer_id:
-			return str(p.get("name", "Player"))
-	return "Player"
-
-
-func _get_player_race(peer_id: int) -> String:
-	for p in App.game_players:
-		if int(p.get("id", -1)) == peer_id:
-			var r: String = p.get("race", "")
-			if r and r != "Unknown":
-				return r
-	return ""
-
-
-func _get_race_color(race: String) -> Color:
-	match race:
-		"Elf":
-			return Color(1, 0.9, 0.2, 1)       # Yellow
-		"Orc":
-			return Color(0.2, 0.8, 0.2, 1)     # Green
-		"Fairy":
-			return Color(0.7, 0.3, 0.9, 1)     # Purple
-		"Infernal":
-			return Color(0.9, 0.2, 0.2, 1)     # Red
-	return Color.WHITE
-
-
-func _set_sprite_from_race(sprite: Sprite2D, race: String, frame_index: int, default_race: DefaultRace, base_scale: Vector2) -> void:
-	## Overwrites sprite.texture from race and applies race-based scale (elf 1.5x, fairy 1/1.5x, orc/infernal 1x of editor scale).
-	if sprite == null:
-		return
-	var path := "res://assets/%s_fb.pxo" % race.to_lower()
-	var sf: SpriteFrames = load(path) as SpriteFrames
-	if sf == null or not sf.has_animation("default"):
-		path = "res://assets/%s_fb.pxo" % _default_race_to_string(default_race)
-		sf = load(path) as SpriteFrames
-	if sf and sf.has_animation("default"):
-		var fc := sf.get_frame_count("default")
-		var idx := clampi(frame_index, 0, maxi(0, fc - 1))
-		sprite.texture = sf.get_frame_texture("default", idx)
-	var mult: float = _race_scale_multiplier(race)
-	sprite.scale = base_scale * mult
 
 
 func _restore_and_sync_placed_cards() -> void:
@@ -451,7 +296,6 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 	var hand_container := root.get_node_or_null("HandCardsLayer/HandCardsContainer")
 	if not hand_container:
 		hand_container = root
-	var card_manager := root.get_node_or_null("CardManager") # Unused
 	for slot_idx in placed:
 		if slot_idx < 0 or slot_idx >= _player_slot_nodes.size():
 			continue
@@ -480,21 +324,21 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 
 		# Register with CardManager BEFORE snapping (so it's set up for dragging)
 		# This ensures input events are connected and card is draggable
-		if card_manager:
-			if card_manager.has_method("register_card"):
-				card_manager.register_card(card)
+		if _card_manager:
+			if _card_manager.has_method("register_card"):
+				_card_manager.register_card(card)
 			# Ensure card is in card_spawn_positions for tracking
-			if not card_manager.card_spawn_positions.has(card):
-				card_manager.card_spawn_positions[card] = slot.global_position
+			if not _card_manager.card_spawn_positions.has(card):
+				_card_manager.card_spawn_positions[card] = slot.global_position
 
 		# Now snap to slot
 		slot.force_snap_card(card)
 
-		if card_manager:
-			card_manager.snapped_cards[card] = slot
+		if _card_manager:
+			_card_manager.snapped_cards[card] = slot
 			# Set spawn position to slot position (in case card is unsnapped later)
-			if card_manager.has_method("set_card_spawn_position"):
-				card_manager.set_card_spawn_position(card, slot.global_position)
+			if _card_manager.has_method("set_card_spawn_position"):
+				_card_manager.set_card_spawn_position(card, slot.global_position)
 
 		# Ensure the card's Area2D remains input_pickable even when snapped
 		var area := card.get_node_or_null("Card_Collision") as Area2D
@@ -505,7 +349,8 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 	# Wait a frame to ensure cards are properly registered
 	await get_tree().process_frame
 	call_deferred("_update_deck_visibility")
-	call_deferred("_respace_hand_cards")
+	if _card_manager:
+		_card_manager.call_deferred("respace_hand_cards")
 
 
 func _on_battle_cards_updated() -> void:
@@ -533,7 +378,8 @@ func _on_battle_start_requested() -> void:
 	# Short delay so both clients have synced opponent cards before resolving (fixes wrong result text for one player)
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
-	_add_attribute_indicators_to_player_cards()
+	if _card_manager:
+		_card_manager.add_attribute_indicators(_player_slot_nodes, _opponent_slot_nodes, attribute_config, attribute_indicator_font_scale, attribute_indicator_offset)
 	print("[BattleManager] _on_battle_start_requested: starting bump sequence")
 	await _animate_card_bump_sequence()
 	print("[BattleManager] _on_battle_start_requested: bump sequence complete, showing result")
@@ -673,7 +519,8 @@ func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
 			_persist_local_placed_cards()
 
 		# Respace hand cards (which will also update deck visibility)
-		call_deferred("_respace_hand_cards")
+		if _card_manager:
+			_card_manager.call_deferred("respace_hand_cards")
 
 	_update_timer_visibility()
 
@@ -693,7 +540,8 @@ func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
 		_persist_local_placed_cards()
 
 		# Respace hand cards (which will also update deck visibility)
-		call_deferred("_respace_hand_cards")
+		if _card_manager:
+			_card_manager.call_deferred("respace_hand_cards")
 
 	# Reset deck spawned flag so it can be used again
 	_update_timer_visibility()
@@ -743,61 +591,12 @@ func _on_battle_timer_expired() -> void:
 	## When the player countdown reaches zero: stop any active drag, snap the dragged card into
 	## the nearest available card slot, disable further dragging, then start battle resolution
 	## after a short delay so the player can see the lock-in.
-	_auto_snap_dragged_card()
-	_disable_card_dragging()
+	if _card_manager:
+		_card_manager.auto_snap_dragged_card()
+	if _card_manager:
+		_card_manager.disable_dragging()
 	await get_tree().create_tween().tween_interval(0.5).finished
 	_trigger_battle_start()
-
-func _auto_snap_dragged_card() -> void:
-	## If the player is dragging a card when the timer expires, force it into the nearest available slot.
-	var root: Node = get_parent()
-	if root == null:
-		root = get_tree().current_scene
-	var card_manager: Node = root.get_node_or_null("CardManager") if root else null
-	if card_manager == null or card_manager.dragged_card == null:
-		return
-	var card: Node2D = card_manager.dragged_card
-	var card_pos: Vector2 = card.global_position
-	var nearest_slot: Node2D = null
-	var nearest_distance: float = INF
-
-	# Prefer a dedicated nearest-empty-slot search if available; otherwise, filter manually.
-	if card_manager.has_method("_find_all_slots"):
-		var all_slots: Array = card_manager._find_all_slots(root)
-		for slot in all_slots:
-			if slot == null or not is_instance_valid(slot):
-				continue
-			# Only consider real card slots that can snap and are currently empty.
-			# CardSlot.gd defines can_snap_cards() and has_card, so we can call directly.
-			if slot.has_method("can_snap_cards") and not slot.can_snap_cards():
-				continue
-			# Skip slots that already have a snapped card
-			if "has_card" in slot and slot.has_card:
-				continue
-			var distance := card_pos.distance_to(slot.global_position)
-			if distance < nearest_distance:
-				nearest_distance = distance
-				nearest_slot = slot
-	else:
-		# Fallback: use CardManager's nearest slot helper (may consider occupied slots).
-		if card_manager.has_method("_find_nearest_slot"):
-			nearest_slot = card_manager._find_nearest_slot(card_pos)
-
-	if nearest_slot and card_manager.has_method("_snap_card_to_slot"):
-		card_manager._snap_card_to_slot(card, nearest_slot)
-	card_manager.dragged_card = null
-	card_manager.drag_offset = Vector2.ZERO
-
-
-func _disable_card_dragging() -> void:
-	## Ask CardManager to prevent any new drags once the timer has expired.
-	var root: Node = get_parent()
-	if root == null:
-		root = get_tree().current_scene
-	var card_manager: Node = root.get_node_or_null("CardManager") if root else null
-	if card_manager and card_manager.has_method("disable_dragging"):
-		card_manager.disable_dragging()
-
 
 func _trigger_battle_start() -> void:
 	if state != State.WAITING_FOR_PLAYER:
@@ -812,7 +611,8 @@ func _trigger_battle_start() -> void:
 	await _flip_opponent_cards_from_pool()
 	await get_tree().create_tween().tween_interval(0.2).finished
 	_resolve_battle()
-	_add_attribute_indicators_to_player_cards()
+	if _card_manager:
+		_card_manager.add_attribute_indicators(_player_slot_nodes, _opponent_slot_nodes, attribute_config, attribute_indicator_font_scale, attribute_indicator_offset)
 	print("[BattleManager] _trigger_battle_start: starting bump sequence")
 	await _animate_card_bump_sequence()
 	print("[BattleManager] _trigger_battle_start: bump sequence complete, showing result")
@@ -1093,11 +893,6 @@ func _place_opponent_backs() -> void:
 		_opponent_cards_by_slot[slot] = card
 
 
-func _on_start_battle_pressed() -> void:
-	# Deprecated manual trigger function
-	pass
-
-
 func _flip_opponent_cards_from_pool() -> void:
 	var chosen: Dictionary = {} # slot -> {frames, frame_index}
 
@@ -1249,8 +1044,8 @@ func _resolve_battle() -> void:
 			o_power = float(o_frame_idx + 1)
 
 		# Get attributes
-		var pa := _get_card_attribute(pcard)
-		var oa := _get_card_attribute(ocard)
+		var pa: String = _card_manager.get_card_attribute(pcard, attribute_config) if _card_manager else "unknown"
+		var oa: String = _card_manager.get_card_attribute(ocard, attribute_config) if _card_manager else "unknown"
 
 		# Calculate attribute modifier for player card
 		var p_modifier: float = 0.0
@@ -1330,17 +1125,6 @@ func _resolve_battle() -> void:
 		print("[BattleManager] _resolve_battle: _result_label is null, result_text would be \"%s\"" % result_text)
 
 
-func _get_card_attribute(card: Node) -> String:
-	if card == null:
-		return "unknown"
-	if attribute_config == null or not attribute_config.has_method("get_attribute"):
-		return "unknown"
-	# Card.gd exports card_sprite_frames + frame_index.
-	var frames: SpriteFrames = card.get("card_sprite_frames")
-	var fidx: int = int(card.get("frame_index"))
-	return String(attribute_config.call("get_attribute", frames, fidx))
-
-
 func _show_result() -> void:
 	print("[BattleManager] _show_result() called. _result_label valid=%s _continue_label valid=%s" % [_result_label != null, _continue_label != null])
 	if _result_label:
@@ -1379,120 +1163,14 @@ func _determine_winner_color() -> Color:
 	else:
 		# Tie → defender wins for territory purposes
 		winner_id = App.pending_territory_battle_defender_id
-	var winner_race := _get_player_race(winner_id)
-	return _get_race_color(winner_race)
+	var winner_race: String = _card_scene_ui.get_player_race(winner_id) if _card_scene_ui else ""
+	return _card_scene_ui.get_race_color(winner_race) if _card_scene_ui else Color.WHITE
 
 
 func _apply_result_visibility() -> void:
 	if _result_label and not _result_label.visible:
 		_result_label.visible = true
 		print("[BattleManager] _apply_result_visibility: re-applied ResultLabel.visible=true")
-
-
-func _add_attribute_indicators_to_player_cards() -> void:
-	## After flip: show +1 when player's card attribute is advantageous vs opponent's (e.g. water vs fire), -1 when disadvantageous (e.g. fire vs water). Neutral/same attribute = no indicator. Independent of round win/loss.
-	if attribute_config == null or not attribute_config.has_method("get_attribute"):
-		return
-	# Use the same pairing order as _resolve_battle so indicators follow the actual matchup:
-	# PR vs OR, PM vs OM, PL vs OL.
-	var player_indices := [2, 1, 0]
-	var opponent_indices := [0, 1, 2]
-	var pair_count: int = min(
-		min(player_indices.size(), opponent_indices.size()),
-		min(_player_slot_nodes.size(), _opponent_slot_nodes.size())
-	)
-
-	for pair_idx in range(pair_count):
-		var p_index: int = player_indices[pair_idx]
-		var o_index: int = opponent_indices[pair_idx]
-		if p_index >= _player_slot_nodes.size() or o_index >= _opponent_slot_nodes.size():
-			continue
-
-		var pslot = _player_slot_nodes[p_index]
-		var oslot = _opponent_slot_nodes[o_index]
-		if not pslot:
-			continue
-
-		var card = pslot.snapped_card if pslot.get("snapped_card") else null
-		if not card or not is_instance_valid(card):
-			continue
-		var ocard: Node = oslot.snapped_card if oslot and oslot.get("snapped_card") else null
-		var matchup := _get_player_attribute_matchup(card, ocard)
-		if matchup == "neutral":
-			continue
-
-		# Clear any existing indicator on this card before adding a new one.
-		var existing_panel: Node = card.get_node_or_null("AttributeIndicator")
-		if existing_panel:
-			existing_panel.queue_free()
-
-		var text := "+1" if matchup == "advantage" else "-1"
-		var card_size := _get_card_size_for_indicator(card)
-		var font_size := int(card_size.y * attribute_indicator_font_scale)
-		if font_size < 8:
-			font_size = 8
-		var label_size := Vector2(maxi(font_size * 2, 40), maxi(font_size + 8, 32))
-		var glow_padding := 0.5
-		var panel_size := label_size + Vector2(glow_padding * 2, glow_padding * 2)
-		var style := StyleBoxFlat.new()
-		style.bg_color = Color(1.0, 1.0, 0.95, 0.55)
-		style.corner_radius_top_left = 8
-		style.corner_radius_top_right = 8
-		style.corner_radius_bottom_left = 8
-		style.corner_radius_bottom_right = 8
-		style.shadow_color = Color(1.0, 1.0, 0.85, 0.5)
-		style.shadow_size = 3
-		style.shadow_offset = Vector2.ZERO
-
-		var panel := Panel.new()
-		panel.name = "AttributeIndicator"
-		panel.add_theme_stylebox_override("panel", style)
-		panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		panel.size = panel_size
-		panel.position = attribute_indicator_offset - panel_size / 2.0
-		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		card.add_child(panel)
-
-		var label := Label.new()
-		label.name = "Label"
-		label.text = text
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.add_theme_font_size_override("font_size", font_size)
-		label.add_theme_color_override("font_color", Color.BLACK)
-		label.set_anchors_preset(Control.PRESET_TOP_LEFT)
-		label.size = label_size
-		label.position = Vector2(glow_padding, glow_padding)
-		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
-		panel.add_child(label)
-
-
-func _get_player_attribute_matchup(player_card: Node, opponent_card: Node) -> String:
-	## Returns "advantage" (player attr beats opponent), "disadvantage" (opponent beats player), or "neutral".
-	var pa := _get_card_attribute(player_card)
-	var oa := _get_card_attribute(opponent_card)
-	if pa == "unknown" or oa == "unknown":
-		return "neutral"
-	if pa == oa:
-		return "neutral"
-	var pa_beats = attribute_config.beats.get(pa, null)
-	if pa_beats == oa:
-		return "advantage"
-	var oa_beats = attribute_config.beats.get(oa, null)
-	if oa_beats == pa:
-		return "disadvantage"
-	return "neutral"
-
-
-func _get_card_size_for_indicator(card: Node) -> Vector2:
-	if card.get("card_size"):
-		var s: Variant = card.get("card_size")
-		if s is Vector2:
-			return s
-	var img := card.get_node_or_null("Card_Image") as Sprite2D
-	if img and img.texture:
-		return img.texture.get_size() * img.scale
-	return Vector2(100, 140)
 
 
 func _get_battle_result() -> String:
@@ -1586,7 +1264,7 @@ func _spectator_on_battle_start() -> void:
 	_spectator_winner_role = result.get("winner", "defender")
 	_spectator_winner_id = int(result.get("winner_id", -1))
 
-	var winner_name := _get_player_name(_spectator_winner_id)
+	var winner_name: String = _card_scene_ui.get_player_name(_spectator_winner_id) if _card_scene_ui else "Player"
 	var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
 
 	var text := "%s Won" % winner_name
@@ -1598,8 +1276,8 @@ func _spectator_on_battle_start() -> void:
 	if _result_label:
 		_result_label.text = text
 		_result_label.add_theme_font_size_override("font_size", 48)
-		var winner_race := _get_player_race(_spectator_winner_id)
-		_result_label.add_theme_color_override("font_color", _get_race_color(winner_race))
+		var winner_race: String = _card_scene_ui.get_player_race(_spectator_winner_id) if _card_scene_ui else ""
+		_result_label.add_theme_color_override("font_color", _card_scene_ui.get_race_color(winner_race) if _card_scene_ui else Color.WHITE)
 		_result_label.visible = true
 
 	state = State.RESOLVED
@@ -1640,8 +1318,8 @@ func _spectator_resolve_from_sync() -> Dictionary:
 			a_power = float(int(a_data.get("frame", 0)) + 1)
 
 		# Get attributes from sprite frames paths
-		var da := _get_attribute_from_path(d_data.get("path", ""))
-		var aa := _get_attribute_from_path(a_data.get("path", ""))
+		var da: String = _card_manager.get_attribute_from_path(d_data.get("path", ""), attribute_config) if _card_manager else "unknown"
+		var aa: String = _card_manager.get_attribute_from_path(a_data.get("path", ""), attribute_config) if _card_manager else "unknown"
 
 		var d_modifier: float = 0.0
 		var a_modifier: float = 0.0
@@ -1675,31 +1353,17 @@ func _spectator_resolve_from_sync() -> Dictionary:
 		return {"winner": "attacker", "winner_id": attacker_id}
 
 
-func _get_attribute_from_path(path: String) -> String:
-	if path.is_empty():
-		return "unknown"
-	var sf: SpriteFrames = load(path) as SpriteFrames
-	if sf == null:
-		return "unknown"
-	if attribute_config and attribute_config.has_method("get_attribute"):
-		return String(attribute_config.call("get_attribute", sf, 0))
-	return "unknown"
-
-
 func _clear_player_slots() -> void:
 	## Clear all player slots: remove cards, reset slot state
-	var root := get_tree().current_scene
-	var card_manager := root.get_node_or_null("CardManager")
-
 	for slot in _player_slot_nodes:
 		if not slot:
 			continue
 		if slot.has_card and slot.snapped_card:
 			var card = slot.snapped_card
 			# Remove from CardManager's snapped_cards tracking
-			if card_manager:
-				if card_manager.snapped_cards.has(card):
-					card_manager.snapped_cards.erase(card)
+			if _card_manager:
+				if _card_manager.snapped_cards.has(card):
+					_card_manager.snapped_cards.erase(card)
 			# Reset slot state
 			if slot.has_method("unsnap_card"):
 				slot.unsnap_card()
@@ -1777,43 +1441,10 @@ func _on_leave_pressed() -> void:
 
 
 func _on_debug_add_card_pressed() -> void:
-	## Temporary debug: add a random card to hand and spawn it.
 	if not _debug_add_card_button or not show_debug_add_card_button:
 		return
-	App.add_card_from_minigame_win()
-	if App.player_card_collection.is_empty():
-		return
-	var card_data: Dictionary = App.player_card_collection[App.player_card_collection.size() - 1]
-	var card_path: String = card_data.get("path", "")
-	var frame: int = int(card_data.get("frame"))
-	if card_path.is_empty():
-		return
-	var frames: SpriteFrames = ResourceLoader.load(card_path, "SpriteFrames", ResourceLoader.CACHE_MODE_REUSE) as SpriteFrames
-	if not frames:
-		return
-	var root := get_parent()
-	if not root:
-		root = get_tree().current_scene
-	var hand_container := root.get_node_or_null("HandCardsLayer/HandCardsContainer")
-	if not hand_container:
-		hand_container = root
-	var card_manager := root.get_node_or_null("CardManager")
-	if not card_manager:
-		return
-	var card := CARD_SCENE.instantiate()
-	if not card:
-		return
-	hand_container.add_child(card)
-	card.card_sprite_frames = frames
-	card.frame_index = frame
-	if card_manager.has_method("register_card"):
-		card_manager.register_card(card)
-	# Position will be set by _respace_hand_cards - use a temporary position
-	var viewport := get_viewport()
-	if viewport:
-		var viewport_size := viewport.get_visible_rect().size
-		card.global_position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.9)
-	call_deferred("_respace_hand_cards")
+	if _card_manager and _card_manager.has_method("request_debug_add_card"):
+		_card_manager.request_debug_add_card(CARD_SCENE)
 
 
 func _persist_local_placed_cards() -> void:
@@ -1829,68 +1460,3 @@ func _persist_local_placed_cards() -> void:
 			var fidx: int = int(card.get("frame_index"))
 			if frames and frames.resource_path:
 				BattleStateManager.set_local_slot(idx, frames.resource_path, fidx)
-
-
-func _update_deck_visibility() -> void:
-	# Deck nodes were removed from the card battle scene.
-	pass
-
-
-func _respace_hand_cards() -> void:
-	## Re-space all cards in the hand evenly whenever hand size changes.
-	var root := get_tree().current_scene
-	if not root:
-		return
-	var card_manager := root.get_node_or_null("CardManager")
-	if not card_manager:
-		return
-
-	# Get all cards currently in hand (have spawn positions but not snapped)
-	var hand_cards: Array = []
-	for card in card_manager.card_spawn_positions:
-		if not card_manager.snapped_cards.has(card):
-			if is_instance_valid(card):
-				hand_cards.append(card)
-
-	if hand_cards.is_empty():
-		return
-
-	# Calculate evenly spaced positions (same formula as Deck)
-	var viewport := get_viewport()
-	if not viewport:
-		return
-	var viewport_size := viewport.get_visible_rect().size
-	var y := viewport_size.y * 0.9  # Use same height as Deck
-	var n := hand_cards.size()
-
-	# Update spawn positions and tween cards to new positions
-	for i in range(n):
-		var card = hand_cards[i]
-		if not is_instance_valid(card):
-			continue
-		if not is_instance_of(card, Node2D):
-			continue
-		if not card.is_inside_tree():
-			continue
-
-		var t := float(i + 1) / float(n + 1)
-		var x := viewport_size.x * t
-		var new_pos := Vector2(x, y)
-
-		# Update spawn position
-		if card_manager.has_method("set_card_spawn_position"):
-			card_manager.set_card_spawn_position(card, new_pos)
-
-		# Tween card to new position (only if not being dragged)
-		if card_manager.dragged_card == card:
-			continue
-
-		# Create tween
-		var tween := create_tween()
-		if tween:
-			tween.set_ease(Tween.EASE_OUT)
-			tween.set_trans(Tween.TRANS_CUBIC)
-			tween.tween_property(card, "global_position", new_pos, 0.25)
-
-
-## SPACE key return removed — auto-return timer handles the transition for all players.

@@ -575,6 +575,226 @@ func _restore_enlarged_card() -> void:
 	card_enlarged_state.erase(card)
 	enlarged_card = null
 
+
+# --- Methods moved from BattleManager (card/hand/snap/attribute UI) ---
+
+func respace_hand_cards() -> void:
+	## Re-space all cards in the hand evenly whenever hand size changes.
+	var hand_cards: Array = []
+	for card in card_spawn_positions:
+		if not snapped_cards.has(card):
+			if is_instance_valid(card):
+				hand_cards.append(card)
+	if hand_cards.is_empty():
+		return
+	var viewport := get_viewport()
+	if not viewport:
+		return
+	var viewport_size := viewport.get_visible_rect().size
+	var y := viewport_size.y * 0.9
+	var n := hand_cards.size()
+	for i in range(n):
+		var card = hand_cards[i]
+		if not is_instance_valid(card) or not is_instance_of(card, Node2D) or not card.is_inside_tree():
+			continue
+		var t := float(i + 1) / float(n + 1)
+		var x := viewport_size.x * t
+		var new_pos := Vector2(x, y)
+		set_card_spawn_position(card, new_pos)
+		if dragged_card == card:
+			continue
+		var tween_instance := create_tween()
+		if tween_instance:
+			tween_instance.set_ease(Tween.EASE_OUT)
+			tween_instance.set_trans(Tween.TRANS_CUBIC)
+			tween_instance.tween_property(card, "global_position", new_pos, 0.25)
+
+
+func get_card_size_for_indicator(card: Node) -> Vector2:
+	if card.get("card_size"):
+		var s: Variant = card.get("card_size")
+		if s is Vector2:
+			return s
+	var img := card.get_node_or_null("Card_Image") as Sprite2D
+	if img and img.texture:
+		return img.texture.get_size() * img.scale
+	return Vector2(100, 140)
+
+
+func get_card_attribute(card: Node, attribute_config: Resource) -> String:
+	if card == null:
+		return "unknown"
+	if attribute_config == null or not attribute_config.has_method("get_attribute"):
+		return "unknown"
+	var frames: SpriteFrames = card.get("card_sprite_frames")
+	var fidx: int = int(card.get("frame_index"))
+	return String(attribute_config.call("get_attribute", frames, fidx))
+
+
+func get_attribute_from_path(path: String, attribute_config: Resource) -> String:
+	if path.is_empty():
+		return "unknown"
+	var sf: SpriteFrames = load(path) as SpriteFrames
+	if sf == null:
+		return "unknown"
+	if attribute_config and attribute_config.has_method("get_attribute"):
+		return String(attribute_config.call("get_attribute", sf, 0))
+	return "unknown"
+
+
+func _get_player_attribute_matchup(player_card: Node, opponent_card: Node, attribute_config: Resource) -> String:
+	var pa := get_card_attribute(player_card, attribute_config)
+	var oa := get_card_attribute(opponent_card, attribute_config)
+	if pa == "unknown" or oa == "unknown":
+		return "neutral"
+	if pa == oa:
+		return "neutral"
+	var pa_beats = attribute_config.beats.get(pa, null)
+	if pa_beats == oa:
+		return "advantage"
+	var oa_beats = attribute_config.beats.get(oa, null)
+	if oa_beats == pa:
+		return "disadvantage"
+	return "neutral"
+
+
+func add_attribute_indicators(
+	player_slot_nodes: Array,
+	opponent_slot_nodes: Array,
+	attribute_config: Resource,
+	font_scale: float,
+	indicator_offset: Vector2
+) -> void:
+	if attribute_config == null or not attribute_config.has_method("get_attribute"):
+		return
+	var player_indices := [2, 1, 0]
+	var opponent_indices := [0, 1, 2]
+	var pair_count: int = min(
+		min(player_indices.size(), opponent_indices.size()),
+		min(player_slot_nodes.size(), opponent_slot_nodes.size())
+	)
+	for pair_idx in range(pair_count):
+		var p_index: int = player_indices[pair_idx]
+		var o_index: int = opponent_indices[pair_idx]
+		if p_index >= player_slot_nodes.size() or o_index >= opponent_slot_nodes.size():
+			continue
+		var pslot = player_slot_nodes[p_index]
+		var oslot = opponent_slot_nodes[o_index]
+		if not pslot:
+			continue
+		var card = pslot.snapped_card if pslot.get("snapped_card") else null
+		if not card or not is_instance_valid(card):
+			continue
+		var ocard: Node = oslot.snapped_card if oslot and oslot.get("snapped_card") else null
+		var matchup := _get_player_attribute_matchup(card, ocard, attribute_config)
+		if matchup == "neutral":
+			continue
+		var existing_panel: Node = card.get_node_or_null("AttributeIndicator")
+		if existing_panel:
+			existing_panel.queue_free()
+		var text := "+1" if matchup == "advantage" else "-1"
+		var card_size := get_card_size_for_indicator(card)
+		var font_size := int(card_size.y * font_scale)
+		if font_size < 8:
+			font_size = 8
+		var label_size := Vector2(maxi(font_size * 2, 40), maxi(font_size + 8, 32))
+		var glow_padding := 0.5
+		var panel_size := label_size + Vector2(glow_padding * 2, glow_padding * 2)
+		var style := StyleBoxFlat.new()
+		style.bg_color = Color(1.0, 1.0, 0.95, 0.55)
+		style.corner_radius_top_left = 8
+		style.corner_radius_top_right = 8
+		style.corner_radius_bottom_left = 8
+		style.corner_radius_bottom_right = 8
+		style.shadow_color = Color(1.0, 1.0, 0.85, 0.5)
+		style.shadow_size = 3
+		style.shadow_offset = Vector2.ZERO
+		var panel := Panel.new()
+		panel.name = "AttributeIndicator"
+		panel.add_theme_stylebox_override("panel", style)
+		panel.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		panel.size = panel_size
+		panel.position = indicator_offset - panel_size / 2.0
+		panel.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		card.add_child(panel)
+		var label := Label.new()
+		label.name = "Label"
+		label.text = text
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", font_size)
+		label.add_theme_color_override("font_color", Color.BLACK)
+		label.set_anchors_preset(Control.PRESET_TOP_LEFT)
+		label.size = label_size
+		label.position = Vector2(glow_padding, glow_padding)
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		panel.add_child(label)
+
+
+func auto_snap_dragged_card() -> void:
+	## If the player is dragging a card when the timer expires, force it into the nearest available slot.
+	if dragged_card == null:
+		return
+	var card: Node2D = dragged_card
+	var card_pos: Vector2 = card.global_position
+	var root: Node = get_parent()
+	if root == null:
+		root = get_tree().current_scene
+	var nearest_slot: Node2D = null
+	var nearest_distance: float = INF
+	var all_slots: Array = _find_all_slots(root)
+	for slot in all_slots:
+		if slot == null or not is_instance_valid(slot):
+			continue
+		if slot.has_method("can_snap_cards") and not slot.can_snap_cards():
+			continue
+		if "has_card" in slot and slot.has_card:
+			continue
+		var distance := card_pos.distance_to(slot.global_position)
+		if distance < nearest_distance:
+			nearest_distance = distance
+			nearest_slot = slot
+	if nearest_slot:
+		_snap_card_to_slot(card, nearest_slot)
+	dragged_card = null
+	drag_offset = Vector2.ZERO
+
+
+func request_debug_add_card(card_scene: PackedScene) -> void:
+	## Debug: add a random card to hand and respace. Called when debug button is pressed.
+	if not card_scene:
+		return
+	App.add_card_from_minigame_win()
+	if App.player_card_collection.is_empty():
+		return
+	var card_data: Dictionary = App.player_card_collection[App.player_card_collection.size() - 1]
+	var card_path: String = card_data.get("path", "")
+	var frame: int = int(card_data.get("frame"))
+	if card_path.is_empty():
+		return
+	var frames: SpriteFrames = ResourceLoader.load(card_path, "SpriteFrames", ResourceLoader.CACHE_MODE_REUSE) as SpriteFrames
+	if not frames:
+		return
+	var root_node := get_parent()
+	if not root_node:
+		root_node = get_tree().current_scene
+	var hand_container := root_node.get_node_or_null("HandCardsLayer/HandCardsContainer")
+	if not hand_container:
+		hand_container = root_node
+	var card := card_scene.instantiate()
+	if not card:
+		return
+	hand_container.add_child(card)
+	card.set("card_sprite_frames", frames)
+	card.set("frame_index", frame)
+	register_card(card)
+	var viewport := get_viewport()
+	if viewport:
+		var viewport_size := viewport.get_visible_rect().size
+		card.global_position = Vector2(viewport_size.x * 0.5, viewport_size.y * 0.9)
+	call_deferred("respace_hand_cards")
+
+
 func _input(event: InputEvent):
 	# Handle click to close enlarged card
 	if enlarged_card and event is InputEventMouseButton:
