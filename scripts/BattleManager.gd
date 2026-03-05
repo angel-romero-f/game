@@ -1239,7 +1239,7 @@ func _apply_battle_resolution_state() -> void:
 					owners_list.append("T%s->owner %s" % [k, oid])
 			print("[BattleManager] Attacker wins: territory %s claimed by attacker (owner) %s. Current owners of all territories: %s" % [tid_str, attacker_id, ", ".join(owners_list)])
 		else:
-			if tcs and tcs.has_method("get_owner_id") and tcs.has_method("set_claim"):
+			if tcs and tcs.has_method("get_owner_id"):
 				var owner_id = tcs.call("get_owner_id", int(tid_str))
 				if owner_id != null:
 					var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str)
@@ -1248,7 +1248,11 @@ func _apply_battle_resolution_state() -> void:
 						var c: Dictionary = remaining[idx]
 						if int(idx) < 3 and c.get("path", "") != "":
 							cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
-					tcs.call("set_claim", int(tid_str), int(owner_id), cards)
+					# Defender keeps the territory but may have lost cards. Sync the updated defending cards to all peers.
+					if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
+						TerritorySync.request_conquest_territory(int(tid_str), int(owner_id), cards)
+					else:
+						TerritoryClaimManager.apply_conquest_claim(int(tid_str), int(owner_id), cards)
 
 
 # ---------- SPECTATOR BATTLE RESOLUTION ----------
