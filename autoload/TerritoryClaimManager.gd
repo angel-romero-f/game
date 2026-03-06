@@ -206,10 +206,10 @@ func launch_territory_minigame(territory_id: int, region_id: int) -> void:
 		App.pre_roll_minigame_reward()
 
 		var local_id: int = _get_local_id()
-		var eligible := not App.region_bonus_used_this_phase and player_owns_full_region(local_id, region_id)
+		var eligible := region_id not in App.region_bonus_used_this_phase and player_owns_full_region(local_id, region_id)
 		App.region_bonus_active = eligible
 		if eligible:
 			App.pre_roll_bonus_reward()
-			App.region_bonus_used_this_phase = true
+			App.region_bonus_used_this_phase.append(region_id)
 
 		App.go(scene_path)

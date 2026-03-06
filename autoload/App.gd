@@ -39,7 +39,7 @@ var pending_minigame_reward: Dictionary = {}  # {"path": String, "frame": int}
 ## Region bonus: active when the player owns both territories in a region and plays a minigame there.
 var region_bonus_active: bool = false
 var pending_bonus_reward: Dictionary = {}  # {"path": String, "frame": int}
-var region_bonus_used_this_phase: bool = false
+var region_bonus_used_this_phase: Array = []
 
 ## Flag to show phase transition overlay when returning to GameIntro
 var show_phase_transition: bool = false
@@ -90,7 +90,7 @@ func enter_contest_command_phase() -> void:
 	minigames_completed_this_phase = 0
 	region_bonus_active = false
 	pending_bonus_reward.clear()
-	region_bonus_used_this_phase = false
+	region_bonus_used_this_phase.clear()
 	phase_transition_text = "Contest"
 	show_phase_transition = true
 	print("[HOST Phase] Entering CONTEST_COMMAND")
@@ -101,7 +101,7 @@ func enter_contest_claim_phase() -> void:
 	minigames_completed_this_phase = 0
 	region_bonus_active = false
 	pending_bonus_reward.clear()
-	region_bonus_used_this_phase = false
+	region_bonus_used_this_phase.clear()
 	phase_transition_text = "Collect"
 	show_phase_transition = true
 	print("[HOST Phase] Entering CONTEST_CLAIM")
@@ -112,7 +112,7 @@ func enter_collect_phase() -> void:
 	minigames_completed_this_phase = 0
 	region_bonus_active = false
 	pending_bonus_reward.clear()
-	region_bonus_used_this_phase = false
+	region_bonus_used_this_phase.clear()
 	phase_transition_text = "Collect"
 	show_phase_transition = true
 	print("[HOST Phase] Entering COLLECT")
@@ -310,7 +310,7 @@ func reset_phase_state() -> void:
 	minigames_completed_this_phase = 0
 	region_bonus_active = false
 	pending_bonus_reward.clear()
-	region_bonus_used_this_phase = false
+	region_bonus_used_this_phase.clear()
 	show_phase_transition = false
 	phase_transition_text = ""
 	current_turn_player_id = -1

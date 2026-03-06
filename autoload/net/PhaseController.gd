@@ -139,6 +139,7 @@ func sync_app_game_phase() -> void:
 ## Transition to RESOURCE_COLLECTION sub-phase (reset minigame count)
 func enter_resource_collection() -> void:
 	App.minigames_completed_this_phase = 0
+	App.region_bonus_used_this_phase.clear()
 	set_map_sub_phase(MapSubPhase.RESOURCE_COLLECTION)
 
 ## Transition to next CLAIMING round (reset minigame count)

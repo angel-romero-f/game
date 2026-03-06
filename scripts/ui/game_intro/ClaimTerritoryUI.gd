@@ -379,7 +379,7 @@ func open_play_only_panel(territory_id: int) -> void:
 	var region_info: Dictionary = TerritoryClaimManager.REGION_MINIGAMES.get(region_id, { "name": "", "scene": "" })
 	var scene_path: String = region_info.get("scene", "")
 	var region_name: String = region_info.get("name", "")
-	var has_region_bonus: bool = not App.region_bonus_used_this_phase and TerritoryClaimManager.player_owns_full_region(int(_get_local_player_id()), region_id)
+	var has_region_bonus: bool = region_id not in App.region_bonus_used_this_phase and TerritoryClaimManager.player_owns_full_region(int(_get_local_player_id()), region_id)
 	if title_label:
 		title_label.text = "Region Bonus — 2x Cards!" if has_region_bonus else "Collect resources"
 	if claim_play_minigame_button:
