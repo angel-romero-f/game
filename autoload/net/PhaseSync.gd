@@ -300,6 +300,7 @@ func _server_enter_contest_claim_phase() -> void:
 	PhaseController.current_phase = 1  # CONTEST_CLAIM
 	BattleSync.init_battle_phase()
 	PhaseController.init_done_state(NetworkManager.get_all_peer_ids())
+	App.minigames_completed_this_phase = 0
 	rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
 	rpc_set_phase.rpc(1)
 	rpc_map_sub_phase.rpc(1)  # RESOURCE_COLLECTION
@@ -316,6 +317,7 @@ func server_enter_contest_claim_from_battles() -> void:
 	else:
 		PhaseController.current_turn_peer_id = multiplayer.get_unique_id()
 	PhaseController.init_done_state(NetworkManager.get_all_peer_ids())
+	App.minigames_completed_this_phase = 0
 	rpc_set_current_turn.rpc(PhaseController.current_turn_peer_id)
 	rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
 	rpc_sync_done_counts.rpc(0, NetworkManager.get_all_peer_ids().size())

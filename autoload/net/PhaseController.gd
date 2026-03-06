@@ -165,6 +165,7 @@ func reset() -> void:
 	player_minigame_counts.clear()
 	current_turn_peer_id = -1
 	current_turn_index = 0
+	App.minigames_completed_this_phase = 0
 
 ## Full reset for a brand new game
 func full_reset() -> void:

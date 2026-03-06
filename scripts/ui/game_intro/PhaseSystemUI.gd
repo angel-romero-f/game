@@ -516,8 +516,7 @@ func on_skip_to_battle_pressed() -> void:
 func _on_net_phase_changed(phase_id: int) -> void:
 	var prev_phase := App.current_game_phase
 	PhaseController.sync_app_game_phase()
-	if phase_id == 2:
-		App.minigames_completed_this_phase = 0
+	App.minigames_completed_this_phase = 0
 	if not intro_complete:
 		# RPC arrived before intro sequence finished — mark for deferred overlay
 		_pending_phase_overlay = true
