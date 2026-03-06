@@ -245,7 +245,12 @@ func _ready() -> void:
 			hand_ui.update_card_count()
 			if turn_order_bar:
 				turn_order_bar.update_card_count()
+				turn_order_bar.update_territory_counts()
 		)
+
+	# Territory ownership changes (claim, conquest, network sync) → refresh turn order territory counts
+	if TerritoryClaimManager and not TerritoryClaimManager.claim_succeeded.is_connected(_on_territory_claim_succeeded):
+		TerritoryClaimManager.claim_succeeded.connect(_on_territory_claim_succeeded)
 
 	# TerritorySystemUI → PhaseSystemUI
 	territory_ui.phase_ui_update_requested.connect(phase_ui.apply_phase_ui)
@@ -260,6 +265,7 @@ func _ready() -> void:
 		hand_ui.show_card_icon_button()
 		if turn_order_bar:
 			turn_order_bar.update_card_count()
+			turn_order_bar.update_territory_counts()
 	)
 	flow_ui.show_next_player_turn.connect(_on_show_next_player_turn)
 
@@ -414,6 +420,7 @@ func _on_phase_ui_applied() -> void:
 	hand_ui.update_card_count()
 	if turn_order_bar:
 		turn_order_bar.update_card_count()
+		turn_order_bar.update_territory_counts()
 		_sync_turn_order_bar_highlight()
 	# Stop the selection timer if we've left the collect phase
 	var in_collect_phase := (
@@ -427,6 +434,14 @@ func _on_phase_ui_applied() -> void:
 func _on_net_territory_claimed(territory_id: int, owner_id: int, cards: Array) -> void:
 	# TerritoryClaimManager applies via TerritorySync.territory_claimed; we just refresh visuals.
 	territory_ui.refresh_territory_claimed_visuals()
+	if turn_order_bar:
+		turn_order_bar.update_territory_counts()
+
+
+func _on_territory_claim_succeeded(_territory_id: int, _owner_id: int, _cards: Array) -> void:
+	# Any successful claim (initial claim, conquest, network sync) — refresh territory counts.
+	if turn_order_bar:
+		turn_order_bar.update_territory_counts()
 
 func _on_enter_battle_scene(scene_path: String) -> void:
 	App.go(scene_path)
@@ -586,6 +601,7 @@ func _on_corner_order_ready() -> void:
 func _on_card_counts_updated() -> void:
 	if turn_order_bar:
 		turn_order_bar.update_card_count()
+		turn_order_bar.update_territory_counts()
 
 func _on_turn_order_bar_turn_changed(peer_id: int) -> void:
 	if not turn_order_bar:
