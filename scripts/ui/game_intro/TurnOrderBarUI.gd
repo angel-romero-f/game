@@ -5,6 +5,7 @@ extends Node
 
 const UI_FONT := preload("res://fonts/m5x7.ttf")
 const CARDBACK_PATH := "res://assets/cardback.pxo"
+const TERRITORY_ICON_PATH := "res://assets/territory_indicator.pxo"
 
 const SPRITE_SIZE := Vector2(48, 48)
 const SLOT_FIXED_WIDTH := 140.0
@@ -25,12 +26,14 @@ var _bar_container: HBoxContainer
 var _local_indicator: HBoxContainer
 var _player_slots: Dictionary = {}
 var _card_icon_texture: Texture2D
+var _territory_icon_texture: Texture2D
 var _current_highlight_id: int = -1
 
 
 func initialize(parent: Control) -> void:
 	_parent_control = parent
 	_load_card_icon()
+	_load_territory_icon()
 	_build_bar()
 	_build_local_indicator()
 
@@ -39,6 +42,12 @@ func _load_card_icon() -> void:
 	var frames: SpriteFrames = load(CARDBACK_PATH)
 	if frames and frames.has_animation("default") and frames.get_frame_count("default") > 0:
 		_card_icon_texture = frames.get_frame_texture("default", 0)
+
+
+func _load_territory_icon() -> void:
+	var frames: SpriteFrames = load(TERRITORY_ICON_PATH)
+	if frames and frames.has_animation("default") and frames.get_frame_count("default") > 0:
+		_territory_icon_texture = frames.get_frame_texture("default", 0)
 
 
 func _build_bar() -> void:
@@ -150,6 +159,8 @@ func build_turn_order(turn_order: Array) -> void:
 	_bar_container.visible = true
 	_populate_local_indicator()
 
+	update_territory_counts()
+
 	if turn_order.size() > 0:
 		highlight_current_turn(int(turn_order[0].get("id", -1)))
 
@@ -222,6 +233,32 @@ func update_card_count() -> void:
 			card_label.text = str(App.player_card_collection.size())
 
 
+func update_territory_counts() -> void:
+	for pid in _player_slots:
+		var slot_data: Dictionary = _player_slots[pid]
+		var territory_label: Label = slot_data.get("territory_label")
+		if not territory_label:
+			continue
+		var count: int = _get_player_territory_count(pid)
+		territory_label.text = str(count)
+
+
+func _get_player_territory_count(player_id: int) -> int:
+	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+	if not tcs:
+		return 0
+	var claims_dict: Variant = tcs.get("claims")
+	if not (claims_dict is Dictionary):
+		return 0
+	var total := 0
+	for tid in claims_dict:
+		var claim: Dictionary = (claims_dict as Dictionary)[tid]
+		var owner_id: Variant = claim.get("owner_player_id", null)
+		if owner_id != null and int(owner_id) == int(player_id):
+			total += 1
+	return total
+
+
 func set_visible(v: bool) -> void:
 	if _bar_container:
 		_bar_container.visible = v
@@ -238,17 +275,6 @@ func _create_player_slot(player: Dictionary, index: int) -> VBoxContainer:
 	slot.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
 	slot.add_theme_constant_override("separation", 0)
 	slot.alignment = BoxContainer.ALIGNMENT_END
-
-	# -- Position ordinal --
-	var pos_label := Label.new()
-	pos_label.text = _ordinal(index + 1)
-	pos_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	pos_label.add_theme_font_override("font", UI_FONT)
-	pos_label.add_theme_font_size_override("font_size", 24)
-	pos_label.add_theme_color_override("font_color", Color(0.9, 0.88, 0.75, 1.0))
-	pos_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-	pos_label.add_theme_constant_override("outline_size", 3)
-	slot.add_child(pos_label)
 
 	# -- Sprite + card row (lighter gray background) --
 	var sprite_panel := PanelContainer.new()
@@ -284,30 +310,60 @@ func _create_player_slot(player: Dictionary, index: int) -> VBoxContainer:
 	sprite.custom_minimum_size = SPRITE_SIZE
 	sprite_row.add_child(sprite)
 
-	# Card indicator (icon + count) on same row as sprite
-	var card_col := VBoxContainer.new()
-	card_col.alignment = BoxContainer.ALIGNMENT_CENTER
-	card_col.add_theme_constant_override("separation", 0)
-	sprite_row.add_child(card_col)
+	# Stats column: two rows stacked vertically (Mario Party style: icon + count side by side per row)
+	var stats_col := VBoxContainer.new()
+	stats_col.alignment = BoxContainer.ALIGNMENT_CENTER
+	stats_col.add_theme_constant_override("separation", 0)
+	sprite_row.add_child(stats_col)
+
+	# Row 1: card icon + card count
+	var card_row := HBoxContainer.new()
+	card_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	card_row.add_theme_constant_override("separation", 2)
+	stats_col.add_child(card_row)
 
 	if _card_icon_texture:
 		var card_icon := TextureRect.new()
 		card_icon.texture = _card_icon_texture
 		card_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 		card_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-		card_icon.custom_minimum_size = Vector2(22, 30)
-		card_col.add_child(card_icon)
+		card_icon.custom_minimum_size = Vector2(16, 22)
+		card_icon.modulate = App.get_race_color(race)
+		card_row.add_child(card_icon)
 
 	var card_label := Label.new()
 	var initial_count: int = PhaseController.player_card_counts.get(player_id, -1)
 	card_label.text = str(initial_count) if initial_count >= 0 else str(App.player_card_collection.size())
-	card_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	card_label.add_theme_font_override("font", UI_FONT)
-	card_label.add_theme_font_size_override("font_size", 26)
+	card_label.add_theme_font_size_override("font_size", 22)
 	card_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.9))
 	card_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
 	card_label.add_theme_constant_override("outline_size", 2)
-	card_col.add_child(card_label)
+	card_row.add_child(card_label)
+
+	# Row 2: territory icon + territory count (same size/style as card row)
+	var territory_row := HBoxContainer.new()
+	territory_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	territory_row.add_theme_constant_override("separation", 2)
+	stats_col.add_child(territory_row)
+
+	if _territory_icon_texture:
+		var territory_icon := TextureRect.new()
+		territory_icon.texture = _territory_icon_texture
+		territory_icon.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		territory_icon.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		territory_icon.custom_minimum_size = Vector2(16, 22)
+		territory_icon.modulate = App.get_race_color(race)
+		territory_row.add_child(territory_icon)
+
+	var territory_label := Label.new()
+	territory_label.text = str(_get_player_territory_count(player_id))
+	territory_label.add_theme_font_override("font", UI_FONT)
+	territory_label.add_theme_font_size_override("font_size", 22)
+	territory_label.add_theme_color_override("font_color", Color(1.0, 1.0, 1.0, 0.9))
+	territory_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
+	territory_label.add_theme_constant_override("outline_size", 2)
+	territory_row.add_child(territory_label)
 
 	slot.add_child(sprite_panel)
 
@@ -348,6 +404,7 @@ func _create_player_slot(player: Dictionary, index: int) -> VBoxContainer:
 		"sprite_bg": sprite_bg,
 		"slot_root": slot,
 		"card_label": card_label,
+		"territory_label": territory_label,
 		"is_local": is_local,
 	}
 
