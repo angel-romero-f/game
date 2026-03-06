@@ -16,6 +16,7 @@ enum OverlayState { NONE, PHASE_TRANSITION, WAITING, D20_ROLLING }
 var _overlay_state: OverlayState = OverlayState.NONE
 var _pending_phase_overlay: bool = false  # True when a phase RPC arrived before intro_complete
 var is_phase_overlay_animating: bool = false
+var _queued_transition_text: String = ""  # Non-empty when a transition was requested while one was already animating
 var is_waiting_for_others: bool = false
 var local_done_count: int = 0
 var local_total_count: int = 0
@@ -201,8 +202,9 @@ func show_phase_transition_overlay() -> void:
 	if not phase_overlay or not phase_label:
 		apply_phase_ui()
 		return
-	# Prevent double overlay if one is already animating
+	# If already animating, queue this request so it plays once the current one finishes.
 	if is_phase_overlay_animating:
+		_queued_transition_text = App.phase_transition_text
 		return
 	# Hide top phase indicator during overlay to avoid redundant text.
 	if current_phase_label:
@@ -222,6 +224,13 @@ func show_phase_transition_overlay() -> void:
 func _on_phase_transition_finished() -> void:
 	phase_overlay.visible = false
 	is_phase_overlay_animating = false
+	# Drain any queued transition that arrived while we were animating
+	if _queued_transition_text != "":
+		var queued_text := _queued_transition_text
+		_queued_transition_text = ""
+		App.phase_transition_text = queued_text
+		show_phase_transition_overlay()
+		return
 	apply_phase_ui()
 	animate_phase_buttons()
 	phase_transition_finished.emit()
