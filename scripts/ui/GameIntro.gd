@@ -277,14 +277,16 @@ func _ready() -> void:
 	if ready_for_battle_button:
 		ready_for_battle_button.pressed.connect(territory_ui.on_ready_for_battle_pressed)
 
-	# Victory overlay
+	# Victory overlay — wire button if it already exists in the scene tree
 	if victory_overlay:
 		var victory_btn := victory_overlay.get_node_or_null("MainMenuButton") as Button
 		if victory_btn:
 			victory_btn.pressed.connect(_on_victory_main_menu_pressed)
-		if App.game_victor_id >= 0:
-			_show_victory_overlay(App.game_victor_id)
-			App.game_victor_id = -1
+
+	# Check if a player won while we were in another scene (e.g. battle)
+	if App.game_victor_id >= 0:
+		_show_victory_overlay(App.game_victor_id)
+		App.game_victor_id = -1
 
 	# Settings
 	if settings_button:
