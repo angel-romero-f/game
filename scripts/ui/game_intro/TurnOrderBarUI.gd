@@ -143,6 +143,7 @@ func build_turn_order(turn_order: Array) -> void:
 	for child in _bar_container.get_children():
 		child.queue_free()
 	_player_slots.clear()
+	_current_highlight_id = -1
 
 	# Seed card counts if not yet populated
 	var local_count := App.player_card_collection.size()
