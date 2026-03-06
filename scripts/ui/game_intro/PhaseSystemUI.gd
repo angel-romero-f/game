@@ -169,8 +169,31 @@ func _update_current_phase_label() -> void:
 					is_active = true
 				if is_active:
 					label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
+					var style_active := StyleBoxFlat.new()
+					style_active.bg_color = Color(0.0, 0.0, 0.0, 0.45)
+					style_active.border_color = Color(1.0, 0.92, 0.55, 1.0)
+					style_active.border_width_left = 2
+					style_active.border_width_top = 2
+					style_active.border_width_right = 2
+					style_active.border_width_bottom = 2
+					style_active.corner_radius_top_left = 4
+					style_active.corner_radius_top_right = 4
+					style_active.corner_radius_bottom_left = 4
+					style_active.corner_radius_bottom_right = 4
+					style_active.content_margin_left = 8
+					style_active.content_margin_right = 8
+					style_active.content_margin_top = 2
+					style_active.content_margin_bottom = 2
+					child.add_theme_stylebox_override("panel", style_active)
 				else:
 					label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1.0))
+					var style_inactive := StyleBoxFlat.new()
+					style_inactive.bg_color = Color(0, 0, 0, 0)
+					style_inactive.border_width_left = 0
+					style_inactive.border_width_top = 0
+					style_inactive.border_width_right = 0
+					style_inactive.border_width_bottom = 0
+					child.add_theme_stylebox_override("panel", style_inactive)
 
 # ---------- PHASE TRANSITION OVERLAY ----------
 

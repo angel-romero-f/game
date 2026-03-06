@@ -630,22 +630,19 @@ func _create_phase_indicator_bar() -> HBoxContainer:
 	bar.offset_bottom = 52.0
 	bar.grow_horizontal = Control.GROW_DIRECTION_BOTH
 	bar.alignment = BoxContainer.ALIGNMENT_CENTER
-	bar.add_theme_constant_override("separation", 6)
+	bar.add_theme_constant_override("separation", 32)
 	var names: Array[String] = ["Contest", "Collect"]
 	for i in names.size():
-		if i > 0:
-			var sep := Label.new()
-			sep.text = ">"
-			sep.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
-			sep.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1))
-			sep.add_theme_constant_override("outline_size", 3)
-			sep.add_theme_font_override("font", font)
-			sep.add_theme_font_size_override("font_size", 30)
-			sep.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-			sep.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-			bar.add_child(sep)
 		var panel := PanelContainer.new()
 		panel.name = names[i] + "PhasePanel"
+		# Default style: transparent background, no border
+		var style_inactive := StyleBoxFlat.new()
+		style_inactive.bg_color = Color(0, 0, 0, 0)
+		style_inactive.border_width_left = 0
+		style_inactive.border_width_top = 0
+		style_inactive.border_width_right = 0
+		style_inactive.border_width_bottom = 0
+		panel.add_theme_stylebox_override("panel", style_inactive)
 		var label := Label.new()
 		label.text = names[i]
 		label.add_theme_color_override("font_color", Color(0.5, 0.5, 0.5, 1))
