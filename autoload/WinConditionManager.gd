@@ -1,11 +1,11 @@
 extends Node
 
 ## WinConditionManager
-## 4-minute game timer. When the timer expires, the player with the most
+## 5-minute game timer. When the timer expires, the player with the most
 ## territories wins. Uses its own CanvasLayer so the timer label and victory
 ## overlay render on top of ALL scenes (map, minigames, battles).
 
-const GAME_DURATION: float = 240.0  # 4 minutes
+const GAME_DURATION: float = 300.0  # 5 minutes
 
 var time_remaining: float = 0.0
 var timer_active: bool = false
@@ -168,7 +168,7 @@ func _build_ui() -> void:
 	_timer_label.offset_top = 8.0
 	_timer_label.offset_right = 380.0
 	_timer_label.offset_bottom = 44.0
-	_timer_label.text = "4:00"
+	_timer_label.text = "5:00"
 	_canvas_layer.add_child(_timer_label)
 
 	# ---- Victory overlay (full-screen, hidden) ----
