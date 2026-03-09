@@ -739,9 +739,6 @@ func _ready() -> void:
 		get_tree().node_added.connect(_on_node_added)
 	call_deferred("_hook_buttons_on_current_scene")
 
-	# Win condition: show victory when a player owns 5/6 regions
-	if WinConditionManager and not WinConditionManager.player_won.is_connected(_on_player_won):
-		WinConditionManager.player_won.connect(_on_player_won)
 
 func go(path: String) -> void:
 	get_tree().change_scene_to_file(path)
@@ -902,9 +899,6 @@ func play_blip_select() -> void:
 	if ui_sfx.playing:
 		ui_sfx.stop()
 	ui_sfx.play()
-
-func _on_player_won(player_id: int) -> void:
-	game_victor_id = player_id
 
 func _on_node_added(node: Node) -> void:
 	if node is BaseButton:
