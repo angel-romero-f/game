@@ -103,8 +103,15 @@ func _apply_claim_panel_art() -> void:
 	if not bg:
 		return
 	var sf: SpriteFrames = load(CLAIM_PANEL_ART_PATH) as SpriteFrames
-	if sf and sf.has_animation("default") and sf.get_frame_count("default") > 0:
-		bg.texture = sf.get_frame_texture("default", 0)
+	if sf:
+		# Prefer the \"default\" animation if present; otherwise fall back to the first animation.
+		var anim_name := "default"
+		if not sf.has_animation(anim_name):
+			var names := sf.get_animation_names()
+			if names.size() > 0:
+				anim_name = names[0]
+		if sf.has_animation(anim_name) and sf.get_frame_count(anim_name) > 0:
+			bg.texture = sf.get_frame_texture(anim_name, 0)
 	bg.modulate = Color(1.0, 1.0, 1.0, CLAIM_PANEL_ART_ALPHA)
 	bg.set_anchors_preset(Control.PRESET_FULL_RECT)
 	bg.offset_left = CLAIM_PANEL_ART_OFFSET.x
