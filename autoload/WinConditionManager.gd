@@ -14,6 +14,7 @@ var timer_active: bool = false
 var _canvas_layer: CanvasLayer
 var _timer_label: Label
 var _victory_overlay: ColorRect
+var _victory_background: TextureRect
 var _victory_label: Label
 var _main_menu_button: Button
 
@@ -178,6 +179,20 @@ func _build_ui() -> void:
 	_victory_overlay.color = Color(0, 0, 0, 0.8)
 	_victory_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
 	_canvas_layer.add_child(_victory_overlay)
+
+	# Background image for win screen (first frame of assets/win_screen_bg.pxo)
+	_victory_background = TextureRect.new()
+	_victory_background.name = "VictoryBackground"
+	_victory_background.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_victory_background.stretch_mode = TextureRect.STRETCH_SCALE
+	_victory_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	_victory_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	_victory_overlay.add_child(_victory_background)
+
+	var bg_frames: SpriteFrames = load("res://assets/win_screen_bg.pxo") as SpriteFrames
+	if bg_frames and bg_frames.has_animation("default") and bg_frames.get_frame_count("default") > 0:
+		var bg_tex: Texture2D = bg_frames.get_frame_texture("default", 0)
+		_victory_background.texture = bg_tex
 
 	_victory_label = Label.new()
 	_victory_label.name = "VictoryLabel"
