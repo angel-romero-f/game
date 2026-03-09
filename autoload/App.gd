@@ -130,7 +130,7 @@ func on_minigame_completed() -> void:
 	minigame_completed_signal.emit()
 	
 	# In multiplayer, notify host of minigame completion (host controls phase)
-	if is_multiplayer and multiplayer.has_multiplayer_peer():
+	if is_multiplayer and _has_peer():
 		PhaseSync.request_increment_minigame()
 		# Don't auto-transition locally - host will broadcast phase change
 		return
@@ -152,7 +152,7 @@ func on_battle_completed() -> void:
 		var next_id = int(next_id_str)
 		
 		# If Multiplayer, trigger via Net
-		if is_multiplayer and multiplayer.has_multiplayer_peer():
+		if is_multiplayer and _has_peer():
 			print("[DEBUG] Requesting Multi-Player Territory Battle: ", next_id)
 			BattleSync.request_start_territory_battle(next_id)
 			return # Wait for RPC to call enter_territory_battle
@@ -195,7 +195,7 @@ func on_battle_completed() -> void:
 			returning_from_territory_battles = true
 		
 		# If Multiplayer, we need to notify the server we are done with battles/claiming
-		if is_multiplayer and multiplayer.has_multiplayer_peer():
+		if is_multiplayer and _has_peer():
 			print("[DEBUG] Multiplayer: Requesting end claiming turn after battles.")
 			pass # Logic will be handled in GameIntro._ready()
 		else:
@@ -226,7 +226,7 @@ func on_battle_completed() -> void:
 		current_battle_metadata.clear()
 		
 		# In multiplayer, notify host we finished our battles
-		if is_multiplayer and multiplayer.has_multiplayer_peer():
+		if is_multiplayer and _has_peer():
 			BattleSync.notify_battle_finished()
 		
 		go("res://scenes/ui/game_intro.tscn")
@@ -282,7 +282,7 @@ func skip_to_done() -> void:
 	print("[Phase] Player skipping to done")
 	
 	# In multiplayer, request host to mark us as done
-	if is_multiplayer and multiplayer.has_multiplayer_peer():
+	if is_multiplayer and _has_peer():
 		PhaseSync.request_skip_to_done()
 		return
 	
@@ -294,7 +294,7 @@ func can_play_minigame() -> bool:
 	if current_game_phase != GamePhase.COLLECT:
 		return false
 	# In multiplayer, check host-authoritative done state
-	if is_multiplayer and multiplayer.has_multiplayer_peer():
+	if is_multiplayer and _has_peer():
 		var my_id := multiplayer.get_unique_id()
 		# If host marked us as done, we cannot play
 		if PhaseController.player_done_state.get(my_id, false):
@@ -319,6 +319,8 @@ func reset_phase_state() -> void:
 	current_battle_queue_index = -1
 	current_battle_metadata.clear()
 	is_territory_battle_attacker = false
+func _has_peer() -> bool:
+	return multiplayer != null and multiplayer.has_multiplayer_peer()
 ## ---------- END PHASE SYSTEM ----------
 
 ## ---------- PLAYER HAND SYSTEM ----------
@@ -816,7 +818,7 @@ func setup_multiplayer_game() -> void:
 		tcs.clear_all()
 	
 	# Build player list from PlayerDataSync.player_names and PlayerDataSync.player_races
-	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var my_id := multiplayer.get_unique_id() if _has_peer() else 1
 	
 	for pid in PlayerDataSync.player_races.keys():
 		var p := {
@@ -961,7 +963,7 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 	BattleStateManager.set_current_territory(tid_str)
 	BattleStateManager.clear_local_slots(tid_str)
 	
-	var my_id: int = multiplayer.get_unique_id() if (is_multiplayer and multiplayer.has_multiplayer_peer()) else -1
+	var my_id: int = multiplayer.get_unique_id() if (is_multiplayer and _has_peer()) else -1
 	
 	# Determine if I am participating and who my opponent is (for current_battle_metadata / opponent sprite)
 	var is_attacker = (my_id == attacker_id)
