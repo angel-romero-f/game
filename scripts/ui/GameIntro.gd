@@ -12,6 +12,7 @@ const GameFlowUIScript := preload("res://scripts/ui/game_intro/GameFlowUI.gd")
 const TurnOrderBarUIScript := preload("res://scripts/ui/game_intro/TurnOrderBarUI.gd")
 const BotControllerScript := preload("res://scripts/bots/BotController.gd")
 const GnomeTutorialUIScript := preload("res://scripts/ui/game_intro/GnomeTutorialUI.gd")
+const BotControllerScript := preload("res://scripts/bots/BotController.gd")
 
 # Component instances
 var gnome_ui: Node

@@ -158,6 +158,7 @@ func on_battle_completed() -> void:
 	if pending_territory_battle_ids.size() > 0:
 		var next_id_str = pending_territory_battle_ids.pop_front()
 		var next_id = int(next_id_str)
+		territory_pending_attackers.erase(next_id)
 		
 		# If Multiplayer, trigger via Net
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
