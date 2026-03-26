@@ -84,6 +84,14 @@ var game_victor_id: int = -1
 
 ## True when the local player is a spectator (not attacker or defender) in a territory battle.
 var is_battle_spectator: bool = false
+## Single-player bot coordinator instance (set by GameIntro).
+var single_player_bot_controller: Node = null
+## Bot card collections by player id (single-player only): { bot_id: [ {"path","frame"}, ... ] }
+var bot_card_collections: Dictionary = {}
+## Territory -> attacker id map used to resolve single-player battle participants.
+var territory_pending_attackers: Dictionary = {}
+## How to continue after territory-battle sequence in single-player: "", "command", or "collect".
+var territory_battle_resume_mode: String = ""
 
 func enter_contest_command_phase() -> void:
 	current_game_phase = GamePhase.CONTEST_COMMAND
@@ -150,6 +158,7 @@ func on_battle_completed() -> void:
 	if pending_territory_battle_ids.size() > 0:
 		var next_id_str = pending_territory_battle_ids.pop_front()
 		var next_id = int(next_id_str)
+		territory_pending_attackers.erase(next_id)
 		
 		# If Multiplayer, trigger via Net
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
@@ -159,7 +168,10 @@ func on_battle_completed() -> void:
 			
 		# Single Player (Local)
 		print("[DEBUG] Starting Single-Player Territory Battle: ", next_id)
-		enter_territory_battle(next_id, -1, -2)
+		var tcs := get_node_or_null("/root/TerritoryClaimState")
+		var defender_id: int = int(tcs.get_owner_id(next_id)) if (tcs and tcs.has_method("get_owner_id") and tcs.get_owner_id(next_id) != null) else -1
+		var attacker_id: int = int(territory_pending_attackers.get(next_id, current_turn_player_id))
+		enter_territory_battle(next_id, attacker_id, defender_id)
 		return
 
 	# ALL BATTLES COMPLETED (if we get here, pending list is empty)
@@ -191,6 +203,18 @@ func on_battle_completed() -> void:
 	if just_finished_territory_battle and pending_territory_battle_ids.size() == 0:
 		print("[DEBUG] All territory battles completed. Returning to GameIntro with flag set.")
 		pending_territory_battle_ids.clear()
+		# Single-player bot flow: resume according to explicit mode.
+		if not is_multiplayer and territory_battle_resume_mode != "":
+			var resume_mode := territory_battle_resume_mode
+			territory_battle_resume_mode = ""
+			returning_from_territory_battles = false
+			is_territory_battle_attacker = false
+			if resume_mode == "collect":
+				enter_collect_phase()
+			elif resume_mode == "command":
+				enter_contest_command_phase()
+			go("res://scenes/ui/game_intro.tscn")
+			return
 		if is_territory_battle_attacker:
 			returning_from_territory_battles = true
 		
@@ -662,10 +686,14 @@ func _notify_card_count_changed() -> void:
 	if is_multiplayer and get_tree().get_multiplayer().has_multiplayer_peer():
 		PhaseSync.report_card_count()
 	else:
-		var count := player_card_collection.size()
 		var players: Array = game_players if not game_players.is_empty() else turn_order
 		for p in players:
-			PhaseController.player_card_counts[int(p.get("id", -1))] = count
+			var pid: int = int(p.get("id", -1))
+			if bool(p.get("is_local", false)):
+				PhaseController.player_card_counts[pid] = player_card_collection.size()
+			else:
+				var bot_cards: Array = bot_card_collections.get(pid, [])
+				PhaseController.player_card_counts[pid] = bot_cards.size()
 		if not players.is_empty():
 			PhaseController.card_counts_updated.emit()
 ## ---------- END PLAYER HAND SYSTEM ----------
@@ -764,6 +792,10 @@ func setup_single_player_game() -> void:
 	reset_lives()
 	reset_phase_state()
 	reset_territories()
+	bot_card_collections.clear()
+	single_player_bot_controller = null
+	territory_pending_attackers.clear()
+	territory_battle_resume_mode = ""
 	initialize_player_hand()
 	initialize_player_card_collection()
 	# Use path built from parts so the autoload name is not parsed as an identifier
@@ -967,7 +999,7 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 	BattleStateManager.set_current_territory(tid_str)
 	BattleStateManager.clear_local_slots(tid_str)
 	
-	var my_id: int = multiplayer.get_unique_id() if (is_multiplayer and multiplayer.has_multiplayer_peer()) else -1
+	var my_id: int = multiplayer.get_unique_id() if (is_multiplayer and multiplayer.has_multiplayer_peer()) else int(_get_local_player_id_for_single_player())
 	
 	# Determine if I am participating and who my opponent is (for current_battle_metadata / opponent sprite)
 	var is_attacker = (my_id == attacker_id)
@@ -1008,3 +1040,10 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 	else:
 		print("[App] I am a SPECTATOR. Entering battle scene as spectator.")
 		go("res://scenes/card_battle.tscn")
+
+
+func _get_local_player_id_for_single_player() -> int:
+	for p in game_players:
+		if p.get("is_local", false):
+			return int(p.get("id", 1))
+	return 1

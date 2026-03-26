@@ -114,7 +114,10 @@ func _apply_claim_panel_art() -> void:
 
 func _apply_panel_style_for_phase(sub_phase: int) -> void:
 	## In resource collection (minigame) phase use the original black translucent box; otherwise use pixel art background.
-	var is_resource_collection: bool = (sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+	var is_resource_collection: bool = (
+		sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION
+		or App.current_game_phase == App.GamePhase.COLLECT
+	)
 	var bg: TextureRect = get_node_or_null("ContentWrap/PanelBackground") as TextureRect
 	if bg:
 		bg.visible = not is_resource_collection
@@ -337,7 +340,7 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 		indicator.show_selection_glow()
 
 func open_play_only_panel(territory_id: int) -> void:
-	_apply_panel_style_for_phase(PhaseController.map_sub_phase)
+	_apply_panel_style_for_phase(PhaseController.MapSubPhase.RESOURCE_COLLECTION)
 	_deselect_current()
 	current_claim_territory_id = territory_id
 	claim_panel_play_only_mode = true

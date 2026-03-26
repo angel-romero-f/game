@@ -157,6 +157,9 @@ func _ready() -> void:
 			_card_manager.call_deferred("respace_hand_cards")
 	else:
 		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER (SPECTATOR mode)")
+		# Single-player bot-vs-bot spectator battles: auto-resolve after 10 seconds.
+		if not _is_multiplayer:
+			call_deferred("_start_singleplayer_spectator_battle_timer")
 
 
 func _cache_nodes() -> void:
@@ -1259,12 +1262,15 @@ func _apply_battle_resolution_state() -> void:
 
 func _spectator_on_battle_start() -> void:
 	## Called when both battlers are ready and we are spectating.
-	## Compute battle result from BattleSync.battle_placed_cards and display winner.
+	## Compute battle result and display winner.
 	state = State.FLIPPING
-	# Short delay to allow synced data to settle
-	await get_tree().create_tween().tween_interval(0.5).finished
-
-	var result := _spectator_resolve_from_sync()
+	var result: Dictionary = {}
+	if _is_multiplayer:
+		# Short delay to allow synced data to settle
+		await get_tree().create_tween().tween_interval(0.5).finished
+		result = _spectator_resolve_from_sync()
+	else:
+		result = _spectator_resolve_single_player_from_state()
 	_spectator_winner_role = result.get("winner", "defender")
 	_spectator_winner_id = int(result.get("winner_id", -1))
 
@@ -1287,6 +1293,17 @@ func _spectator_on_battle_start() -> void:
 	state = State.RESOLVED
 	_start_auto_return()
 	print("[BattleManager] Spectator resolved: %s (id=%d) won territory %s" % [winner_name, _spectator_winner_id, tid_str])
+
+
+func _start_singleplayer_spectator_battle_timer() -> void:
+	## In single-player bot-vs-bot battles, run an automatic 5-second battle window.
+	if not _is_spectator or _is_multiplayer:
+		return
+	print("[BattleManager] Single-player spectator battle timer started (5.0s).")
+	await get_tree().create_tween().tween_interval(5.0).finished
+	if state == State.RESOLVED:
+		return
+	_spectator_on_battle_start()
 
 
 func _spectator_resolve_from_sync() -> Dictionary:
@@ -1355,6 +1372,56 @@ func _spectator_resolve_from_sync() -> Dictionary:
 		return {"winner": "defender", "winner_id": defender_id}
 	else:
 		return {"winner": "attacker", "winner_id": attacker_id}
+
+
+func _spectator_resolve_single_player_from_state() -> Dictionary:
+	## Resolve single-player bot-vs-bot battle from BattleStateManager attacking/defending slots.
+	var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+	var attacker_id := App.pending_territory_battle_attacker_id
+	var defender_id := App.pending_territory_battle_defender_id
+	var attacker_cards: Dictionary = BattleStateManager.get_attacking_slots(tid_str) if BattleStateManager else {}
+	var defender_cards: Dictionary = BattleStateManager.get_defending_slots(tid_str) if BattleStateManager else {}
+
+	var defender_wins := 0
+	var attacker_wins := 0
+	var defender_indices := [2, 1, 0]
+	var attacker_indices := [0, 1, 2]
+
+	for pair_idx in range(3):
+		var d_idx: int = defender_indices[pair_idx]
+		var a_idx: int = attacker_indices[pair_idx]
+		var d_data: Dictionary = defender_cards.get(d_idx, {})
+		var a_data: Dictionary = attacker_cards.get(a_idx, {})
+
+		var d_power: float = float(int(d_data.get("frame", 0)) + 1) if not d_data.is_empty() else 0.0
+		var a_power: float = float(int(a_data.get("frame", 0)) + 1) if not a_data.is_empty() else 0.0
+
+		var da: String = _card_manager.get_attribute_from_path(d_data.get("path", ""), attribute_config) if _card_manager else "unknown"
+		var aa: String = _card_manager.get_attribute_from_path(a_data.get("path", ""), attribute_config) if _card_manager else "unknown"
+		var d_modifier: float = 0.0
+		var a_modifier: float = 0.0
+		if da != "unknown" and aa != "unknown" and da != aa:
+			var da_beats = attribute_config.beats.get(da, null)
+			if da_beats == aa:
+				d_modifier = 0.5
+				a_modifier = -0.5
+			else:
+				var aa_beats = attribute_config.beats.get(aa, null)
+				if aa_beats == da:
+					a_modifier = 0.5
+					d_modifier = -0.5
+
+		var d_final := d_power + d_modifier
+		var a_final := a_power + a_modifier
+		if d_final > a_final:
+			defender_wins += 1
+		elif a_final > d_final:
+			attacker_wins += 1
+
+	var defender_points := defender_wins - attacker_wins
+	if defender_points >= 0:
+		return {"winner": "defender", "winner_id": defender_id}
+	return {"winner": "attacker", "winner_id": attacker_id}
 
 
 func _clear_player_slots() -> void:
