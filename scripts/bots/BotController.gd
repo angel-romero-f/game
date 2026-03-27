@@ -203,7 +203,13 @@ func _maybe_run_multiplayer_bot_command_turn() -> void:
 		var attacked: bool = _placing_attacked or _command_behavior.did_attack_claimed()
 		# Check for battles BEFORE advancing the turn.
 		if attacked:
-			var pending_battles_now: Array = BattleStateManager.get_territory_ids_with_battle() if BattleStateManager else []
+			var raw_battles: Array = BattleStateManager.get_territory_ids_with_battle() if BattleStateManager else []
+			var pending_battles_now: Array = []
+			for tid_str in raw_battles:
+				if App.territory_pending_attackers.has(int(tid_str)):
+					pending_battles_now.append(tid_str)
+				elif BattleStateManager:
+					BattleStateManager.clear_attacking_slots(str(tid_str))
 			if pending_battles_now.size() > 0:
 				App.pending_territory_battle_ids = pending_battles_now.duplicate()
 				App.territory_battle_resume_mode = "mp_command"
@@ -226,7 +232,13 @@ func _advance_to_next_turn_or_phase() -> void:
 	if App.current_turn_index >= App.turn_order.size():
 		App.current_turn_index = 0
 		App.current_turn_player_id = int(App.turn_order[0].get("id", -1)) if App.turn_order.size() > 0 else -1
-		var pending_battles: Array = BattleStateManager.get_territory_ids_with_battle() if BattleStateManager else []
+		var raw_battles: Array = BattleStateManager.get_territory_ids_with_battle() if BattleStateManager else []
+		var pending_battles: Array = []
+		for tid_str in raw_battles:
+			if App.territory_pending_attackers.has(int(tid_str)):
+				pending_battles.append(tid_str)
+			elif BattleStateManager:
+				BattleStateManager.clear_attacking_slots(str(tid_str))
 		if pending_battles.size() > 0:
 			App.pending_territory_battle_ids = pending_battles.duplicate()
 			App.is_territory_battle_attacker = true

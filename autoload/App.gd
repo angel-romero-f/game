@@ -224,6 +224,11 @@ func on_battle_completed() -> void:
 			if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
 				print("[DEBUG] Multiplayer: Bot mid-command battles done. Host advancing bot turn.")
 				PhaseSync.host_advance_bot_command_turn()
+				# Advancing the turn may have triggered end-of-round battles
+				# (via _server_advance_contest_command_turn) which already
+				# handle their own scene transitions. Don't override them.
+				if territory_battle_resume_mode != "":
+					return
 			go("res://scenes/ui/game_intro.tscn")
 			return
 		# Multiplayer: command-phase battles finished → host transitions to collect.

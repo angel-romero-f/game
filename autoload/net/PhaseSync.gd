@@ -119,7 +119,17 @@ func _server_advance_contest_command_turn(peer_id: int) -> void:
 
 	PhaseController.current_turn_index += 1
 	if PhaseController.current_turn_index >= App.turn_order.size():
-		var pending_battles: Array = BattleStateManager.get_territory_ids_with_battle() if BattleStateManager else []
+		var raw_battles: Array = BattleStateManager.get_territory_ids_with_battle() if BattleStateManager else []
+		# Only keep territories that have a registered attacker (filters stale slots
+		# left over from mid-command battles that already resolved).
+		var pending_battles: Array = []
+		for tid_str in raw_battles:
+			var tid_int: int = int(tid_str)
+			if App.territory_pending_attackers.has(tid_int):
+				pending_battles.append(tid_str)
+			elif BattleStateManager:
+				print("[PhaseSync] Cleaning stale attacking slots for territory %s (no registered attacker)" % tid_str)
+				BattleStateManager.clear_attacking_slots(str(tid_str))
 		if pending_battles.size() > 0:
 			print("[PhaseSync] All command turns done — %d territory battles pending. Starting battle sequence." % pending_battles.size())
 			App.pending_territory_battle_ids = pending_battles.duplicate()
