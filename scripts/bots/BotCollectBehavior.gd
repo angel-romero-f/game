@@ -7,8 +7,8 @@ func run_collect_for_bot(bot_player_id: int) -> void:
 	if not App.bot_card_collections.has(bot_player_id):
 		App.bot_card_collections[bot_player_id] = []
 	var has_region_bonus := _bot_has_region_bonus(bot_player_id)
-	var min_cards := 0
-	var max_cards := 2 if has_region_bonus else 1
+	var min_cards := 1
+	var max_cards := 3 if has_region_bonus else 2
 	var gain := randi_range(min_cards, max_cards)
 	for _i in range(gain):
 		var card := _random_card_for_bot_race(bot_player_id)

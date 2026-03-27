@@ -13,9 +13,16 @@ func start_race_select() -> void:
 		PlayerDataSync._sync_player_races()
 	App.go("res://scenes/ui/MultiplayerRaceSelect.tscn")
 
-## RPC: Start the game (called by host, transitions everyone to GameIntro scene)
+## RPC: Start the game (called by host, transitions everyone to GameIntro scene).
+## Host passes the complete names/races dicts and bot ID list so clients get bot entries atomically.
 @rpc("authority", "call_local", "reliable")
-func start_game() -> void:
+func start_game(all_names: Dictionary = {}, all_races: Dictionary = {}, bot_ids: Array = []) -> void:
+	if not all_names.is_empty():
+		PlayerDataSync.player_names = all_names.duplicate(true)
+	if not all_races.is_empty():
+		PlayerDataSync.player_races = all_races.duplicate(true)
+	if not bot_ids.is_empty():
+		PlayerDataSync.register_bot_ids(bot_ids)
 	App.setup_multiplayer_game()
 	App.go("res://scenes/ui/game_intro.tscn")
 
@@ -28,6 +35,8 @@ func host_init_contest_command_phase() -> void:
 
 	PhaseController.reset()
 	BattleSync.reset_battle_state()
+	if BattleStateManager:
+		BattleStateManager.clear_all_attacking_slots()
 	PhaseController.current_phase = 0  # CONTEST_COMMAND
 	PhaseController.init_done_state(NetworkManager.get_all_peer_ids())
 
@@ -110,6 +119,14 @@ func _server_advance_contest_command_turn(peer_id: int) -> void:
 
 	PhaseController.current_turn_index += 1
 	if PhaseController.current_turn_index >= App.turn_order.size():
+		var pending_battles: Array = BattleStateManager.get_territory_ids_with_battle() if BattleStateManager else []
+		if pending_battles.size() > 0:
+			print("[PhaseSync] All command turns done — %d territory battles pending. Starting battle sequence." % pending_battles.size())
+			App.pending_territory_battle_ids = pending_battles.duplicate()
+			App.territory_battle_resume_mode = "mp_collect"
+			App.is_territory_battle_attacker = true
+			App.on_battle_completed()
+			return
 		print("[PhaseSync] All players finished Contest Command - entering Contest Claim")
 		_server_enter_contest_claim_phase()
 	else:
@@ -118,6 +135,27 @@ func _server_advance_contest_command_turn(peer_id: int) -> void:
 		print("[PhaseSync] Next Contest Command turn: ", PhaseController.current_turn_peer_id, " (index ", PhaseController.current_turn_index, ")")
 		rpc_set_current_turn.rpc(PhaseController.current_turn_peer_id)
 		rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
+
+func host_advance_bot_command_turn() -> void:
+	if not multiplayer.is_server():
+		return
+	if PhaseController.current_phase != 0:
+		return
+	var current_id: int = PhaseController.current_turn_peer_id
+	for p in App.game_players:
+		if int(p.get("id", -1)) == current_id and bool(p.get("is_bot", false)):
+			_server_advance_contest_command_turn(current_id)
+			return
+
+func host_sync_bot_card_counts() -> void:
+	if not multiplayer.is_server():
+		return
+	for p in App.game_players:
+		if not bool(p.get("is_bot", false)):
+			continue
+		var pid: int = int(p.get("id", -1))
+		PhaseController.player_card_counts[pid] = int(App.bot_card_collections.get(pid, []).size())
+	rpc_sync_card_counts.rpc(PhaseController.player_card_counts.duplicate())
 
 # ---------- CLAIMING TURNS ----------
 

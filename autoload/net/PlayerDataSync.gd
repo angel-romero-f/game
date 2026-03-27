@@ -4,10 +4,13 @@ extends Node
 ## No game flow logic — only player identity data.
 
 const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
+const TARGET_PLAYER_COUNT := 4
+const BOT_NAMES := ["Bot Ash", "Bot Briar", "Bot Cinder", "Bot Dusk", "Bot Ember", "Bot Frost"]
 
 var player_names: Dictionary = {}
 var player_races: Dictionary = {} # peer_id -> race_name (String)
 var player_rolls: Dictionary = {} # peer_id -> roll value (int)
+var _bot_ids: Dictionary = {}     # bot_id -> true  (explicit set of generated bot IDs)
 
 signal player_names_updated
 signal player_races_updated
@@ -22,6 +25,7 @@ func _on_connection_closing() -> void:
 	player_names.clear()
 	player_races.clear()
 	player_rolls.clear()
+	_bot_ids.clear()
 
 func _on_peer_disconnected(id: int) -> void:
 	if multiplayer.is_server():
@@ -31,6 +35,54 @@ func _on_peer_disconnected(id: int) -> void:
 		if player_races.has(id):
 			player_races.erase(id)
 			_sync_player_races()
+
+func is_bot_id(id: int) -> bool:
+	return _bot_ids.has(id)
+
+func register_bot_ids(ids: Array) -> void:
+	_bot_ids.clear()
+	for bid in ids:
+		_bot_ids[int(bid)] = true
+
+func host_fill_bots_to_four() -> void:
+	if not multiplayer.is_server():
+		return
+	# Remove old bot entries.
+	for old_bot_id in _bot_ids.keys():
+		player_names.erase(old_bot_id)
+		player_races.erase(old_bot_id)
+	_bot_ids.clear()
+
+	var human_ids: Array[int] = []
+	for pid in NetworkManager.get_all_peer_ids():
+		human_ids.append(int(pid))
+	var human_count: int = human_ids.size()
+	var bot_count_needed: int = maxi(0, TARGET_PLAYER_COUNT - human_count)
+	if bot_count_needed <= 0:
+		return
+
+	var taken_races: Array[String] = []
+	for pid in human_ids:
+		var r: String = String(player_races.get(pid, ""))
+		if not r.is_empty():
+			taken_races.append(r)
+	var available_races: Array[String] = []
+	for race in RACES:
+		if not taken_races.has(race):
+			available_races.append(race)
+	available_races.shuffle()
+
+	for i in range(bot_count_needed):
+		var bot_id: int = -(i + 100)
+		var bot_name: String = BOT_NAMES[i] if i < BOT_NAMES.size() else ("Bot %d" % (i + 1))
+		var bot_race: String = ""
+		if i < available_races.size():
+			bot_race = available_races[i]
+		else:
+			bot_race = String(RACES[randi() % RACES.size()])
+		player_names[bot_id] = bot_name
+		player_races[bot_id] = bot_race
+		_bot_ids[bot_id] = true
 
 # ---------- NAME SYNC ----------
 

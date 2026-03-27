@@ -158,12 +158,12 @@ func on_battle_completed() -> void:
 	if pending_territory_battle_ids.size() > 0:
 		var next_id_str = pending_territory_battle_ids.pop_front()
 		var next_id = int(next_id_str)
-		territory_pending_attackers.erase(next_id)
 		
 		# If Multiplayer, trigger via Net
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
 			print("[DEBUG] Requesting Multi-Player Territory Battle: ", next_id)
 			BattleSync.request_start_territory_battle(next_id)
+			territory_pending_attackers.erase(next_id)
 			return # Wait for RPC to call enter_territory_battle
 			
 		# Single Player (Local)
@@ -171,6 +171,7 @@ func on_battle_completed() -> void:
 		var tcs := get_node_or_null("/root/TerritoryClaimState")
 		var defender_id: int = int(tcs.get_owner_id(next_id)) if (tcs and tcs.has_method("get_owner_id") and tcs.get_owner_id(next_id) != null) else -1
 		var attacker_id: int = int(territory_pending_attackers.get(next_id, current_turn_player_id))
+		territory_pending_attackers.erase(next_id)
 		enter_territory_battle(next_id, attacker_id, defender_id)
 		return
 
@@ -213,6 +214,26 @@ func on_battle_completed() -> void:
 				enter_collect_phase()
 			elif resume_mode == "command":
 				enter_contest_command_phase()
+			go("res://scenes/ui/game_intro.tscn")
+			return
+		# Multiplayer: mid-command bot battle resolved → host advances the bot's turn.
+		if is_multiplayer and territory_battle_resume_mode == "mp_command":
+			territory_battle_resume_mode = ""
+			returning_from_territory_battles = false
+			is_territory_battle_attacker = false
+			if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+				print("[DEBUG] Multiplayer: Bot mid-command battles done. Host advancing bot turn.")
+				PhaseSync.host_advance_bot_command_turn()
+			go("res://scenes/ui/game_intro.tscn")
+			return
+		# Multiplayer: command-phase battles finished → host transitions to collect.
+		if is_multiplayer and territory_battle_resume_mode == "mp_collect":
+			territory_battle_resume_mode = ""
+			returning_from_territory_battles = false
+			is_territory_battle_attacker = false
+			if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+				print("[DEBUG] Multiplayer: All command-phase battles done. Host entering Contest Claim (collect).")
+				PhaseSync._server_enter_contest_claim_phase()
 			go("res://scenes/ui/game_intro.tscn")
 			return
 		if is_territory_battle_attacker:
@@ -842,6 +863,10 @@ func setup_multiplayer_game() -> void:
 	reset_lives()
 	reset_phase_state()
 	reset_territories()
+	bot_card_collections.clear()
+	single_player_bot_controller = null
+	territory_pending_attackers.clear()
+	territory_battle_resume_mode = ""
 	initialize_player_hand()
 	initialize_player_card_collection()
 	# Clear territory claims so all territories start unclaimed (multiplayer uses Net sync)
@@ -859,7 +884,8 @@ func setup_multiplayer_game() -> void:
 			"name": String(PlayerDataSync.player_names.get(pid, "Player")),
 			"race": String(PlayerDataSync.player_races[pid]),
 			"roll": 0,
-			"is_local": int(pid) == my_id
+			"is_local": int(pid) == my_id,
+			"is_bot": PlayerDataSync.is_bot_id(int(pid))
 		}
 		game_players.append(p)
 

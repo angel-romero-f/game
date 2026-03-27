@@ -415,7 +415,7 @@ func _update_opponent_cards_from_net() -> void:
 		if int(pid) != my_id:
 			other_peer_id = int(pid)
 			break
-	if other_peer_id < 0:
+	if other_peer_id == -1:
 		print("[BattleManager] _update_opponent_cards_from_net: no opponent found (my_id=%d, keys=%s). Clearing." % [my_id, str(BattleSync.battle_placed_cards.keys())])
 		_clear_opponent_slot_cards()
 		return
@@ -910,7 +910,7 @@ func _flip_opponent_cards_from_pool() -> void:
 				other_peer_id = int(pid)
 				break
 		print("[BattleManager] _flip_opponent_cards: my_id=%d other_peer=%d all_keys=%s" % [my_id, other_peer_id, str(BattleSync.battle_placed_cards.keys())])
-		if other_peer_id >= 0:
+		if other_peer_id != -1:
 			var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
 			print("[BattleManager] _flip_opponent_cards: opponent slot keys=%s" % str(other_cards.keys()))
 			for slot_idx in range(_opponent_slot_nodes.size()):
@@ -1290,6 +1290,14 @@ func _spectator_on_battle_start() -> void:
 		_result_label.add_theme_color_override("font_color", _card_scene_ui.get_race_color(winner_race) if _card_scene_ui else Color.WHITE)
 		_result_label.visible = true
 
+	# Bot-vs-bot in multiplayer: the host must apply territory state since no
+	# participant runs _apply_battle_resolution_state.
+	if _is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		var att_id := BattleSync.territory_battle_attacker_id
+		var def_id := BattleSync.territory_battle_defender_id
+		if PlayerDataSync.is_bot_id(att_id) and PlayerDataSync.is_bot_id(def_id):
+			_apply_bot_vs_bot_territory_state(tid_str, _spectator_winner_role, att_id, def_id, result)
+
 	state = State.RESOLVED
 	_start_auto_return()
 	print("[BattleManager] Spectator resolved: %s (id=%d) won territory %s" % [winner_name, _spectator_winner_id, tid_str])
@@ -1304,6 +1312,45 @@ func _start_singleplayer_spectator_battle_timer() -> void:
 	if state == State.RESOLVED:
 		return
 	_spectator_on_battle_start()
+
+
+func _apply_bot_vs_bot_territory_state(tid_str: String, winner_role: String, attacker_id: int, defender_id: int, _result: Dictionary) -> void:
+	## Host-only: apply territory ownership and card changes for a bot-vs-bot battle.
+	if tid_str.is_empty() or tid_str.begins_with("battle_"):
+		return
+	print("[BattleManager] Applying bot-vs-bot territory state for territory %s (winner=%s)" % [tid_str, winner_role])
+
+	var attacker_won := (winner_role == "attacker")
+	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+
+	if attacker_won:
+		var attacker_slots: Dictionary = BattleStateManager.get_attacking_slots(tid_str) if BattleStateManager else {}
+		var cards: Array = [null, null, null]
+		for idx in attacker_slots:
+			var c: Dictionary = attacker_slots[idx]
+			if int(idx) < 3 and String(c.get("path", "")) != "":
+				cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame", 0))}
+		if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
+			TerritorySync.request_conquest_territory(int(tid_str), attacker_id, cards)
+		elif tcs and tcs.has_method("set_claim"):
+			TerritoryClaimManager.apply_conquest_claim(int(tid_str), attacker_id, cards)
+		print("[BattleManager] Bot attacker %d conquered territory %s" % [attacker_id, tid_str])
+	else:
+		if tcs and tcs.has_method("get_owner_id"):
+			var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str) if BattleStateManager else {}
+			var cards: Array = [null, null, null]
+			for idx in remaining:
+				var c: Dictionary = remaining[idx]
+				if int(idx) < 3 and String(c.get("path", "")) != "":
+					cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame", 0))}
+			if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
+				TerritorySync.request_conquest_territory(int(tid_str), defender_id, cards)
+			else:
+				TerritoryClaimManager.apply_conquest_claim(int(tid_str), defender_id, cards)
+			print("[BattleManager] Bot defender %d held territory %s" % [defender_id, tid_str])
+
+	if BattleStateManager:
+		BattleStateManager.clear_attacking_slots(tid_str)
 
 
 func _spectator_resolve_from_sync() -> Dictionary:

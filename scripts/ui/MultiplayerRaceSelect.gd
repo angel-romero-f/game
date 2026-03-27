@@ -70,32 +70,41 @@ func _ready() -> void:
 	PlayerDataSync.player_names_updated.connect(_refresh_all)
 	PlayerDataSync.player_races_updated.connect(_refresh_all)
 
-	if multiplayer.peer_connected.is_connected(_on_peer_changed):
-		multiplayer.peer_connected.disconnect(_on_peer_changed)
-	if multiplayer.peer_disconnected.is_connected(_on_peer_changed):
-		multiplayer.peer_disconnected.disconnect(_on_peer_changed)
-	multiplayer.peer_connected.connect(_on_peer_changed)
-	multiplayer.peer_disconnected.connect(_on_peer_changed)
+	var mp := _get_mp()
+	if mp:
+		if mp.peer_connected.is_connected(_on_peer_changed):
+			mp.peer_connected.disconnect(_on_peer_changed)
+		if mp.peer_disconnected.is_connected(_on_peer_changed):
+			mp.peer_disconnected.disconnect(_on_peer_changed)
+		mp.peer_connected.connect(_on_peer_changed)
+		mp.peer_disconnected.connect(_on_peer_changed)
 
 	_refresh_all()
 
 func _on_peer_changed(_id: int) -> void:
 	_refresh_all()
 
+func _get_mp() -> MultiplayerAPI:
+	return get_tree().get_multiplayer() if get_tree() else null
+
 func _my_id() -> int:
-	return multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+	var mp := _get_mp()
+	if mp and mp.has_multiplayer_peer():
+		return mp.get_unique_id()
+	return 1
 
 func _my_race() -> String:
 	var r := String(PlayerDataSync.player_races.get(_my_id(), ""))
 	return r
 
 func _all_players_have_race_selected() -> bool:
-	if not multiplayer.has_multiplayer_peer():
+	var mp := _get_mp()
+	if mp == null or not mp.has_multiplayer_peer():
 		return false
 
 	var ids: Array[int] = []
 	ids.append(_my_id())
-	for peer_id in multiplayer.get_peers():
+	for peer_id in mp.get_peers():
 		ids.append(int(peer_id))
 
 	for id in ids:
@@ -112,7 +121,8 @@ func _owner_of(race: String) -> int:
 	return 0
 
 func _on_race_pressed(race: String) -> void:
-	if not multiplayer.has_multiplayer_peer():
+	var mp := _get_mp()
+	if mp == null or not mp.has_multiplayer_peer():
 		return
 	if _my_race() == race:
 		PlayerDataSync.submit_player_race("")
@@ -122,8 +132,14 @@ func _on_race_pressed(race: String) -> void:
 		App.set_selected_race(race)
 
 func _on_start_pressed() -> void:
-	if multiplayer.is_server():
-		PhaseSync.start_game.rpc()
+	var mp := _get_mp()
+	if mp and mp.is_server():
+		PlayerDataSync.host_fill_bots_to_four()
+		PhaseSync.start_game.rpc(
+			PlayerDataSync.player_names.duplicate(true),
+			PlayerDataSync.player_races.duplicate(true),
+			PlayerDataSync._bot_ids.keys()
+		)
 
 func _on_back_pressed() -> void:
 	NetworkManager.disconnect_from_game()
@@ -243,14 +259,15 @@ func _create_hover_style(race: String) -> StyleBoxFlat:
 	return style
 
 func _refresh_players_list() -> void:
-	if not players_list or not multiplayer.has_multiplayer_peer():
+	var mp := _get_mp()
+	if not players_list or mp == null or not mp.has_multiplayer_peer():
 		return
 
 	players_list.clear()
 
 	var ids: Array[int] = []
 	ids.append(_my_id())
-	for peer_id in multiplayer.get_peers():
+	for peer_id in mp.get_peers():
 		ids.append(int(peer_id))
 	ids.sort()
 
@@ -266,7 +283,8 @@ func _refresh_players_list() -> void:
 func _refresh_start_button() -> void:
 	if not start_button:
 		return
-	start_button.visible = multiplayer.is_server()
+	var mp := _get_mp()
+	start_button.visible = mp != null and mp.is_server()
 	if start_button.visible:
 		start_button.disabled = not _all_players_have_race_selected()
 	else:

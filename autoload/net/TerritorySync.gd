@@ -67,6 +67,15 @@ func _get_player_name(peer_id: int) -> String:
 			return str(p.get("name", "Player"))
 	return "Player"
 
+## Server-only helper for host-controlled bot claims in multiplayer.
+func host_claim_territory_as_bot(territory_id: int, bot_id: int, cards: Array) -> void:
+	if not multiplayer.is_server():
+		return
+	var tcs := _get_territory_claim_state()
+	if tcs and tcs.has_method("set_claim"):
+		tcs.call("set_claim", territory_id, bot_id, cards)
+	rpc_territory_claimed.rpc(territory_id, bot_id, cards)
+
 ## Conquest: attacker takes territory from defender after winning battle. Server applies and broadcasts.
 func request_conquest_territory(territory_id: int, conqueror_id: int, cards: Array) -> void:
 	if multiplayer.is_server():
