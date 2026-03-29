@@ -79,12 +79,6 @@ theme_override_fonts/font = ExtResource("3_iwbf0")
 theme_override_font_sizes/font_size = 36
 text = "Join"
 
-[node name="SingleButton" type="Button" parent="Card/Margin/VBoxContainer"]
-layout_mode = 2
-theme_override_fonts/font = ExtResource("3_iwbf0")
-theme_override_font_sizes/font_size = 36
-text = "Single Player"
-
 [node name="BackButton" type="Button" parent="Card/Margin/VBoxContainer"]
 layout_mode = 2
 theme_override_fonts/font = ExtResource("3_iwbf0")
