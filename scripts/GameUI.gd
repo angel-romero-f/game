@@ -209,8 +209,8 @@ func show_timeout() -> void:
 	# We drain a life so _on_player_died path fires correctly
 	_auto_return_after_timeout()
 
-func _auto_return_after_timeout() -> void:
-	await get_tree().create_timer(1.8).timeout
+func _auto_return_after_timeout(delay: float = 1.8) -> void:
+	await get_tree().create_timer(delay).timeout
 	var game_node := get_parent()
 	if game_node and game_node.has_method("handle_continue"):
 		game_node.call("handle_continue")
@@ -270,13 +270,16 @@ func show_win():
 		_big_title_label.text = "Conquered the Current!"
 		_big_title_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.2))
 		_big_title_label.visible = true
+		_big_title_label.offset_top = -260
+		_big_title_label.offset_bottom = -160
 	if win_panel:
 		win_panel.visible = false
-	_auto_return_after_timeout()
+	_build_win_card_display()
+	_auto_return_after_timeout(3.5)
 
-func _show_reward_in_win_panel() -> void:
+func _build_win_card_display() -> void:
 	var reward := App.pending_minigame_reward
-	if reward.is_empty() or not win_panel:
+	if reward.is_empty():
 		return
 	var path: String = reward.get("path", "")
 	var frame: int = int(reward.get("frame", 0))
@@ -285,22 +288,64 @@ func _show_reward_in_win_panel() -> void:
 	var sf := load(path) as SpriteFrames
 	if not sf or not sf.has_animation("default"):
 		return
-	var fc := sf.get_frame_count("default")
-	if frame < 0 or frame >= fc:
+	if frame < 0 or frame >= sf.get_frame_count("default"):
 		return
-	var card_tex := TextureRect.new()
-	card_tex.texture = sf.get_frame_texture("default", frame)
-	card_tex.custom_minimum_size = Vector2(90, 126)
-	card_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	card_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	card_tex.set_anchors_preset(Control.PRESET_CENTER)
-	card_tex.offset_left = -55
-	card_tex.offset_top = -80
-	card_tex.offset_right = 55
-	card_tex.offset_bottom = 46
-	win_panel.add_child(card_tex)
-	if win_label:
-		win_label.text = "You won this card!\nPress R to return to map"
+
+	var card_name := _card_name_from_path(path)
+
+	var panel := PanelContainer.new()
+	panel.name = "WinCardPopup"
+	panel.set_anchors_preset(Control.PRESET_CENTER)
+	panel.offset_left = -130
+	panel.offset_right = 130
+	panel.offset_top = -140
+	panel.offset_bottom = 140
+	var style := StyleBoxFlat.new()
+	style.bg_color = Color(0.05, 0.05, 0.15, 0.85)
+	style.set_border_width_all(3)
+	style.border_color = Color(1.0, 0.85, 0.3, 0.9)
+	style.set_corner_radius_all(8)
+	style.set_content_margin_all(12)
+	panel.add_theme_stylebox_override("panel", style)
+
+	var vbox := VBoxContainer.new()
+	vbox.add_theme_constant_override("separation", 8)
+	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
+	panel.add_child(vbox)
+
+	var tex := TextureRect.new()
+	tex.texture = sf.get_frame_texture("default", frame)
+	tex.custom_minimum_size = Vector2(140, 196)
+	tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+	tex.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+	vbox.add_child(tex)
+
+	var lbl := Label.new()
+	lbl.text = "You won: %s!" % card_name
+	if _pixel_font:
+		lbl.add_theme_font_override("font", _pixel_font)
+	lbl.add_theme_font_size_override("font_size", 24)
+	lbl.add_theme_color_override("font_color", Color(1.0, 0.85, 0.3, 1.0))
+	lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 1.0))
+	lbl.add_theme_constant_override("outline_size", 4)
+	lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	lbl.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	vbox.add_child(lbl)
+
+	$UI.add_child(panel)
+
+func _card_name_from_path(path: String) -> String:
+	var file_name := path.get_file().get_basename()
+	file_name = file_name.replace("_cards", "").replace("_card", "")
+	var parts := file_name.split("_")
+	var name_parts: PackedStringArray = []
+	for p in parts:
+		if p.length() > 0:
+			name_parts.append(p.capitalize())
+	if name_parts.is_empty():
+		return "a New Card"
+	return " ".join(name_parts) + " Card"
 
 func _on_settings_pressed():
 	toggle_pause()

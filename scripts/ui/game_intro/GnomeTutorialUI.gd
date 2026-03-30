@@ -7,6 +7,10 @@ extends Node
 signal gnome_sequence_completed
 
 const UI_FONT := preload("res://fonts/m5x7.ttf")
+const GNOME_VOICE_STREAM := preload("res://dialog/gnome1.mp3")
+const GNOME_VOICE_BUS := "SFX"
+const GNOME_VOICE_VOLUME_DB := -7.0
+const GNOME_VOICE_PITCH_SCALE := 1.03
 const TYPEWRITER_CHARS_PER_SEC := 35.0
 const GNOME_DISPLAY_SIZE := 256.0
 const WALK_DURATION := 3.5
@@ -42,6 +46,7 @@ var _walk_anim_name: String = "default"
 # Dialogue state
 var _dialogue_panel: PanelContainer
 var _dialogue_label: RichTextLabel
+var _voice_player: AudioStreamPlayer
 var _typewriter_timer: float = 0.0
 var _visible_chars: int = 0
 var _full_text: String = ""
@@ -153,6 +158,14 @@ func _build_ui() -> void:
 	elif _front_texture:
 		_gnome_rect.texture = _front_texture
 	_gnome_container.add_child(_gnome_rect)
+	_voice_player = AudioStreamPlayer.new()
+	_voice_player.name = "GnomeVoicePlayer"
+	_voice_player.stream = GNOME_VOICE_STREAM
+	_voice_player.volume_db = GNOME_VOICE_VOLUME_DB
+	_voice_player.pitch_scale = GNOME_VOICE_PITCH_SCALE
+	if AudioServer.get_bus_index(GNOME_VOICE_BUS) != -1:
+		_voice_player.bus = GNOME_VOICE_BUS
+	_gnome_container.add_child(_voice_player)
 
 	_build_dialogue_panel()
 
@@ -312,6 +325,9 @@ func _set_dialogue_text(text: String) -> void:
 	_visible_chars = 0
 	_dialogue_label.visible_characters = 0
 	_typewriter_timer = 0.0
+	if _voice_player and _voice_player.stream:
+		_voice_player.stop()
+		_voice_player.play()
 
 
 func _process_typewriter(delta: float) -> void:
@@ -328,6 +344,8 @@ func _process_typewriter(delta: float) -> void:
 
 
 func _on_typewriter_finished() -> void:
+	if _voice_player and _voice_player.playing:
+		_voice_player.stop()
 	if current_phase == Phase.DIALOGUE:
 		current_phase = Phase.WAITING_FOR_CHOICE
 		_show_choice_buttons()
@@ -386,6 +404,8 @@ func _start_tutorial() -> void:
 		territory_manager != null, card_icon_button != null,
 		hand_display_panel != null, hand_container != null])
 	current_phase = Phase.TUTORIAL
+	if _voice_player and _voice_player.playing:
+		_voice_player.stop()
 	_tutorial_seq = TutorialSequenceScript.new()
 	_tutorial_seq.name = "TutorialSequence"
 	add_child(_tutorial_seq)
@@ -421,6 +441,8 @@ func _on_tutorial_completed() -> void:
 
 func _start_fade_out() -> void:
 	current_phase = Phase.FADE_OUT
+	if _voice_player and _voice_player.playing:
+		_voice_player.stop()
 	var tween := create_tween()
 	tween.tween_property(_gnome_container, "modulate:a", 0.0, 0.6)
 	if map_overlay:
