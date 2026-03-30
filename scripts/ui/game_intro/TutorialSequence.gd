@@ -7,6 +7,20 @@ extends Node
 signal tutorial_completed
 
 const UI_FONT := preload("res://fonts/m5x7.ttf")
+const GNOME_VOICE_STREAMS := [
+	preload("res://dialog/gnome2.mp3"),
+	preload("res://dialog/gnome3.mp3"),
+	preload("res://dialog/gnome4.mp3"),
+	preload("res://dialog/gnome5.mp3"),
+	preload("res://dialog/gnome6.mp3"),
+	preload("res://dialog/gnome7.mp3"),
+	preload("res://dialog/gnome8.mp3"),
+	preload("res://dialog/gnome9.mp3"),
+	preload("res://dialog/gnome10.mp3"),
+]
+const GNOME_VOICE_BUS := "SFX"
+const GNOME_VOICE_VOLUME_DB := -7.0
+const GNOME_VOICE_PITCH_SCALE := 1.03
 const TYPEWRITER_CHARS_PER_SEC := 35.0
 const GNOME_DISPLAY_SIZE := 256.0
 
@@ -56,6 +70,8 @@ var _anim_fps: float = 8.0
 var _dialogue_panel: PanelContainer
 var _dialogue_label: RichTextLabel
 var _gnome_container: Control
+var _voice_player: AudioStreamPlayer
+var _voice_line_idx: int = 0
 var _map_overlay: ColorRect
 var _territory_manager: Node
 var _card_icon_button: Button
@@ -126,6 +142,16 @@ func initialize(refs: Dictionary) -> void:
 	_card_icon_button = refs.get("card_icon_button")
 	_hand_display_panel = refs.get("hand_display_panel")
 	_hand_container = refs.get("hand_container")
+	_voice_line_idx = 0
+
+	if _gnome_container and is_instance_valid(_gnome_container):
+		_voice_player = AudioStreamPlayer.new()
+		_voice_player.name = "TutorialGnomeVoicePlayer"
+		_voice_player.volume_db = GNOME_VOICE_VOLUME_DB
+		_voice_player.pitch_scale = GNOME_VOICE_PITCH_SCALE
+		if AudioServer.get_bus_index(GNOME_VOICE_BUS) != -1:
+			_voice_player.bus = GNOME_VOICE_BUS
+		_gnome_container.add_child(_voice_player)
 
 	print("[Tutorial] initialize — gnome_rect=%s front_tex=%s walk_frames=%s" % [
 		_gnome_rect != null, _front_texture != null, _walk_frames != null])
@@ -312,7 +338,7 @@ func _step_territory_intro() -> void:
 		print("[Tutorial] Gnome arrived at territory, starting pulse + dialogue")
 		_start_pulse(indicator)
 		_set_dialogue_text(
-			"See this glowing spot on the map? That is a territory! "
+			"See this glowing spot on the map? That is a colonly! "
 			+"You can place cards on it to claim it as your own."
 		)
 	)
@@ -347,7 +373,7 @@ func _step_claim_territory() -> void:
 		print("[Tutorial] Started pulse on territory %d" % CLAIM_TERRITORY_ID)
 
 	_set_dialogue_text(
-		"Now click the glowing territory to place your cards and claim it!"
+		"Now click the glowing colonly to place your cards and claim it!"
 	)
 
 	_connect_territory_click(CLAIM_TERRITORY_ID)
@@ -372,8 +398,8 @@ func _step_attack_intro() -> void:
 		print("[Tutorial] Gnome arrived at attack territory, starting pulse + dialogue")
 		_start_pulse(indicator)
 		_set_dialogue_text(
-			"This territory belongs to another player. You can attack it to "
-			+ "try and take it for yourself! If you win the battle, the territory becomes yours."
+			"This colonly belongs to another player. You can attack it to "
+			+ "try and take it for yourself! If you win the battle, the colonly becomes yours."
 		)
 		_connect_territory_click(ATTACK_TERRITORY_ID)
 	)
@@ -393,7 +419,7 @@ func _step_mock_battle() -> void:
 			"Now let's see a battle! In a real game, you place your cards into "
 			+ "lanes and can rearrange them before fighting. For now, watch how it "
 			+ "plays out — each card has a power number. The higher power wins the round, "
-			+ "and whoever wins more rounds takes the territory!"
+			+ "and whoever wins more rounds takes the colonly!"
 		)
 		_battle_waiting_for_typewriter = true
 	)
@@ -415,8 +441,8 @@ func _step_minigame_intro() -> void:
 		print("[Tutorial] Gnome at claimed territory for minigame intro")
 		_start_pulse(indicator)
 		_set_dialogue_text(
-			"One more thing! After everyone takes a turn claiming territories, you can play minigames to earn more cards for your collection. "
-			+ "Click on a territory you own to see what minigames are available!"
+			"One more thing! After everyone takes a turn claiming colonies, you can play minigames to earn more cards for your collection. "
+			+ "Click on a colonly you own to see what minigames are available!"
 		)
 		_connect_territory_click(CLAIM_TERRITORY_ID)
 	)
@@ -589,6 +615,7 @@ func _step_done() -> void:
 # ---------- TYPEWRITER CALLBACK ----------
 
 func _on_typewriter_complete() -> void:
+	_stop_voice_playback()
 	_typewriter_done = true
 	print("[Tutorial] Typewriter complete at step=%s" % Step.keys()[_step])
 	match _step:
@@ -623,6 +650,7 @@ func _set_dialogue_text(text: String) -> void:
 	if _dialogue_label:
 		_dialogue_label.text = _full_text
 		_dialogue_label.visible_characters = 0
+	_play_next_voice_line()
 
 
 func _process_typewriter(delta: float) -> void:
@@ -1006,7 +1034,7 @@ func _apply_claim_territory() -> void:
 				_hand_display_panel.visible = false
 		)
 
-	_set_dialogue_text("Excellent! You've claimed the territory! Now it belongs to you.")
+	_set_dialogue_text("Excellent! You've claimed the colonly! Now it belongs to you.")
 	_auto_advance_timer = 3.0
 
 
@@ -1330,6 +1358,7 @@ func _remove_battle_overlay() -> void:
 
 func _cleanup() -> void:
 	print("[Tutorial] _cleanup()")
+	_stop_voice_playback()
 	_stop_pulse()
 	_stop_card_icon_pulse()
 	_disconnect_territory_click()
@@ -1356,6 +1385,22 @@ func _cleanup() -> void:
 		_next_container.queue_free()
 
 	print("[Tutorial] _cleanup() done")
+
+
+func _play_next_voice_line() -> void:
+	if not _voice_player:
+		return
+	_stop_voice_playback()
+	if _voice_line_idx >= GNOME_VOICE_STREAMS.size():
+		return
+	_voice_player.stream = GNOME_VOICE_STREAMS[_voice_line_idx]
+	_voice_line_idx += 1
+	_voice_player.play()
+
+
+func _stop_voice_playback() -> void:
+	if _voice_player and _voice_player.playing:
+		_voice_player.stop()
 
 
 # ---------- STYLE HELPER ----------
