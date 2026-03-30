@@ -10,6 +10,7 @@ const TerritorySystemUIScript := preload("res://scripts/ui/game_intro/TerritoryS
 const PlayerHandUIScript := preload("res://scripts/ui/game_intro/PlayerHandUI.gd")
 const GameFlowUIScript := preload("res://scripts/ui/game_intro/GameFlowUI.gd")
 const TurnOrderBarUIScript := preload("res://scripts/ui/game_intro/TurnOrderBarUI.gd")
+const BotControllerScript := preload("res://scripts/bots/BotController.gd")
 const GnomeTutorialUIScript := preload("res://scripts/ui/game_intro/GnomeTutorialUI.gd")
 
 # Component instances
@@ -23,6 +24,7 @@ var flow_ui: Node
 var turn_order_bar: Node
 var claim_ui: PanelContainer  # Script-on-node (ClaimTerritoryUI)
 var settings_panel: Panel      # Script-on-node (SettingsPanelUI)
+var bot_controller: Node
 
 var _showcase_container: CenterContainer
 var intro_complete: bool = false
@@ -232,6 +234,12 @@ func _ready() -> void:
 		"claim_ui": claim_ui,
 	})
 
+	# Single-player bot coordinator (kept as a scene child so it can process every frame)
+	bot_controller = BotControllerScript.new()
+	bot_controller.name = "BotController"
+	add_child(bot_controller)
+	App.single_player_bot_controller = bot_controller
+
 	# ---------- Wire cross-component signals ----------
 
 	# PhaseSystemUI → others
@@ -357,6 +365,8 @@ func _ready() -> void:
 		
 		# Refresh card counts in the turn order bar (collection may have changed in minigame/battle)
 		App._notify_card_count_changed()
+		if bot_controller and bot_controller.has_method("initialize_single_player_bots"):
+			bot_controller.initialize_single_player_bots()
 		
 		# Show overlay if we missed the phase transition while in battle
 		if missed_phase_transition:
@@ -396,6 +406,8 @@ func _process(delta: float) -> void:
 		gnome_ui.process_frame(delta)
 	elif intro_ui and not intro_complete:
 		intro_ui.process_frame(delta)
+	if bot_controller and bot_controller.has_method("process_single_player_frame"):
+		bot_controller.process_single_player_frame(delta)
 	# Minigame selection countdown
 	if _selection_timer_active:
 		_selection_timer -= delta
@@ -432,16 +444,18 @@ func _on_intro_completed() -> void:
 		phase_ui.map_sub_phase = PhaseController.map_sub_phase
 		territory_ui.map_sub_phase = PhaseController.map_sub_phase
 	else:
-		App.enter_contest_claim_phase()
+		App.enter_contest_command_phase()
 		phase_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
 		territory_ui.map_sub_phase = PhaseController.MapSubPhase.CLAIMING
-		App.phase_transition_text = "Collect"
+		App.phase_transition_text = "Contest"
 
 	# Refresh territory indicators to pick up card count changes after battles
 	territory_ui.refresh_territory_claimed_visuals()
 
 	App.show_phase_transition = true
 	phase_ui.show_phase_transition_overlay()
+	if bot_controller and bot_controller.has_method("initialize_single_player_bots"):
+		bot_controller.initialize_single_player_bots()
 
 
 # ---------- CROSS-COMPONENT SIGNAL HANDLERS ----------

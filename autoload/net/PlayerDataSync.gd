@@ -4,10 +4,18 @@ extends Node
 ## No game flow logic — only player identity data.
 
 const RACES := ["Elf", "Orc", "Fairy", "Infernal"]
+const TARGET_PLAYER_COUNT := 4
+## Bot IDs are fixed slots -100 .. -103 so they never collide with ENet peer IDs.
+const BOT_ID_BASE := -100
+const MAX_BOT_SLOTS := 4
+const BOT_NAMES := ["Bot Ash", "Bot Briar", "Bot Cinder", "Bot Dusk", "Bot Ember", "Bot Frost"]
 
 var player_names: Dictionary = {}
 var player_races: Dictionary = {} # peer_id -> race_name (String)
 var player_rolls: Dictionary = {} # peer_id -> roll value (int)
+var _bot_ids: Dictionary = {}     # bot_id -> true  (explicit set of generated bot IDs)
+## Order bots were added (for remove-one-at-a-time: pop last).
+var _bot_id_order: Array[int] = []
 
 signal player_names_updated
 signal player_races_updated
@@ -22,6 +30,8 @@ func _on_connection_closing() -> void:
 	player_names.clear()
 	player_races.clear()
 	player_rolls.clear()
+	_bot_ids.clear()
+	_bot_id_order.clear()
 
 func _on_peer_disconnected(id: int) -> void:
 	if multiplayer.is_server():
@@ -31,6 +41,108 @@ func _on_peer_disconnected(id: int) -> void:
 		if player_races.has(id):
 			player_races.erase(id)
 			_sync_player_races()
+
+func is_bot_id(id: int) -> bool:
+	return _bot_ids.has(id)
+
+func register_bot_ids(ids: Array) -> void:
+	_bot_ids.clear()
+	_bot_id_order.clear()
+	for bid in ids:
+		var i := int(bid)
+		_bot_ids[i] = true
+		_bot_id_order.append(i)
+	_bot_id_order.sort()
+
+
+func get_bot_ids_array() -> Array:
+	return _bot_ids.keys()
+
+
+func get_bot_count() -> int:
+	return _bot_ids.size()
+
+
+## Host: total humans (connected) + bots must be <= 4.
+func get_total_participant_count() -> int:
+	if not multiplayer.has_multiplayer_peer():
+		return 0
+	return NetworkManager.get_all_peer_ids().size() + _bot_ids.size()
+
+
+func host_add_bot() -> bool:
+	if not multiplayer.is_server():
+		return false
+	if get_total_participant_count() >= TARGET_PLAYER_COUNT:
+		return false
+	var new_id := -1
+	for s in range(MAX_BOT_SLOTS):
+		var bid := BOT_ID_BASE - s
+		if not _bot_ids.has(bid):
+			new_id = bid
+			break
+	if new_id == -1:
+		return false
+
+	## Race is assigned later (when host starts game) so humans keep first pick of the four races.
+	var bot_index: int = _bot_id_order.size()
+	var bot_name: String = BOT_NAMES[bot_index] if bot_index < BOT_NAMES.size() else ("Bot %d" % (bot_index + 1))
+
+	player_names[new_id] = bot_name
+	player_races[new_id] = ""
+	_bot_ids[new_id] = true
+	_bot_id_order.append(new_id)
+	_sync_player_names()
+	_sync_player_races()
+	return true
+
+
+## Host only: after every human has chosen a race, assign each bot one of the remaining races
+## (random order among leftovers). Call immediately before `start_game` RPC.
+func host_assign_bot_races_after_humans() -> void:
+	if not multiplayer.is_server():
+		return
+	var human_ids: Array[int] = []
+	for pid in NetworkManager.get_all_peer_ids():
+		human_ids.append(int(pid))
+	var taken: Array[String] = []
+	for hid in human_ids:
+		var r: String = String(player_races.get(hid, "")).strip_edges()
+		if not r.is_empty():
+			taken.append(r)
+	var need_race: Array[int] = []
+	for bid in _bot_ids.keys():
+		var br: String = String(player_races.get(bid, "")).strip_edges()
+		if br.is_empty():
+			need_race.append(int(bid))
+	need_race.sort()
+	var pool: Array[String] = []
+	for race in RACES:
+		if not taken.has(race):
+			pool.append(race)
+	pool.shuffle()
+	var idx := 0
+	for bid in need_race:
+		if idx < pool.size():
+			player_races[bid] = pool[idx]
+			idx += 1
+		else:
+			# Fallback if counts are inconsistent (should be rare)
+			player_races[bid] = RACES[randi() % RACES.size()]
+
+
+func host_remove_bot() -> bool:
+	if not multiplayer.is_server():
+		return false
+	if _bot_id_order.is_empty():
+		return false
+	var bid: int = _bot_id_order.pop_back()
+	player_names.erase(bid)
+	player_races.erase(bid)
+	_bot_ids.erase(bid)
+	_sync_player_names()
+	_sync_player_races()
+	return true
 
 # ---------- NAME SYNC ----------
 

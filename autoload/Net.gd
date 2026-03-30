@@ -203,6 +203,12 @@ func start_race_select() -> void:
 	App.go("res://scenes/ui/MultiplayerRaceSelect.tscn")
 
 @rpc("authority", "call_local", "reliable")
-func start_game() -> void:
+func start_game(all_names: Dictionary = {}, all_races: Dictionary = {}, bot_ids: Array = []) -> void:
+	if not all_names.is_empty():
+		PlayerDataSync.player_names = all_names.duplicate(true)
+	if not all_races.is_empty():
+		PlayerDataSync.player_races = all_races.duplicate(true)
+	if not bot_ids.is_empty():
+		PlayerDataSync.register_bot_ids(bot_ids)
 	App.setup_multiplayer_game()
 	App.go("res://scenes/ui/game_intro.tscn")

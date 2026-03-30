@@ -165,9 +165,11 @@ func _server_set_battle_ready(peer_id: int) -> void:
 	## For territory battles only the attacker and defender are in the scene; for 3+ players we must not wait for the third.
 	battle_ready_peers[peer_id] = true
 	var all_ready := false
-	if territory_battle_attacker_id >= 0 and territory_battle_defender_id >= 0:
-		# Territory battle: only the two participants need to be ready (third player is still on map)
-		all_ready = battle_ready_peers.get(territory_battle_attacker_id, false) and battle_ready_peers.get(territory_battle_defender_id, false)
+	if territory_battle_attacker_id != -1 and territory_battle_defender_id != -1:
+		# Territory battle: only the two participants need to be ready. Bots are always ready.
+		var attacker_ready: bool = battle_ready_peers.get(territory_battle_attacker_id, false) or PlayerDataSync.is_bot_id(territory_battle_attacker_id)
+		var defender_ready: bool = battle_ready_peers.get(territory_battle_defender_id, false) or PlayerDataSync.is_bot_id(territory_battle_defender_id)
+		all_ready = attacker_ready and defender_ready
 	else:
 		# Non-territory (e.g. queue battle): all peers must be ready
 		var all_peers: Array = []
@@ -229,7 +231,11 @@ func server_handle_start_territory_battle(territory_id: int) -> void:
 		id = multiplayer.get_unique_id()
 	_server_handle_start_territory_battle(id, territory_id)
 
-func _server_handle_start_territory_battle(attacker_id: int, territory_id: int) -> void:
+func _server_handle_start_territory_battle(_requester_id: int, territory_id: int) -> void:
+	# Resolve the actual attacker from territory_pending_attackers (set by BotCommandBehavior
+	# or human claim flow), falling back to the requester if not found.
+	var attacker_id: int = int(App.territory_pending_attackers.get(territory_id, _requester_id))
+
 	# Use TerritoryClaimState (persists across scenes); App.territory_manager is null when we're in card battle scene.
 	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
 	if not tcs or not tcs.has_method("is_claimed"):
@@ -247,9 +253,39 @@ func _server_handle_start_territory_battle(attacker_id: int, territory_id: int) 
 		print("[BattleSync] request_start_territory_battle: Territory ", territory_id, " has no owner!")
 		return
 
-	print("[BattleSync] Starting Territory Battle: ID=", territory_id, " Attacker=", attacker_id, " Defender=", defender_id)
+	print("[BattleSync] Starting Territory Battle: ID=", territory_id, " Attacker=", attacker_id, " (requester=", _requester_id, ") Defender=", defender_id)
 	clear_battle_state()
+
+	# Pre-populate bot cards into battle_placed_cards so all peers see them.
+	var tid_str: String = str(territory_id)
+	var attacker_is_bot: bool = PlayerDataSync.is_bot_id(attacker_id)
+	var defender_is_bot: bool = PlayerDataSync.is_bot_id(defender_id)
+	if attacker_is_bot and BattleStateManager:
+		var bot_cards: Dictionary = BattleStateManager.get_attacking_slots(tid_str)
+		if not bot_cards.is_empty():
+			battle_placed_cards[attacker_id] = bot_cards.duplicate(true)
+			print("[BattleSync] Injected bot attacker %d cards: %s" % [attacker_id, str(bot_cards.keys())])
+	if defender_is_bot and BattleStateManager:
+		var bot_cards: Dictionary = BattleStateManager.get_defending_slots(tid_str)
+		if not bot_cards.is_empty():
+			battle_placed_cards[defender_id] = bot_cards.duplicate(true)
+			print("[BattleSync] Injected bot defender %d cards: %s" % [defender_id, str(bot_cards.keys())])
+
 	start_territory_battle.rpc(territory_id, attacker_id, defender_id)
+	# Sync pre-populated bot cards to all peers.
+	if not battle_placed_cards.is_empty():
+		sync_battle_cards.rpc(battle_placed_cards)
+
+	# Bot-vs-bot: no human participant will call request_battle_ready,
+	# so auto-fire start_battle after a delay for spectators to load.
+	if attacker_is_bot and defender_is_bot:
+		var saved_att := attacker_id
+		var saved_def := defender_id
+		get_tree().create_timer(2.0).timeout.connect(func() -> void:
+			if territory_battle_attacker_id == saved_att and territory_battle_defender_id == saved_def:
+				print("[BattleSync] Bot-vs-bot: auto-starting battle for territory %d" % territory_id)
+				start_battle.rpc()
+		, CONNECT_ONE_SHOT)
 
 @rpc("authority", "call_local", "reliable")
 func start_territory_battle(territory_id: int, attacker_id: int, defender_id: int) -> void:

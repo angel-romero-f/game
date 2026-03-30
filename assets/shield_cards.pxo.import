@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://7xlcm03qk6f0"
+path="res://.godot/imported/shield_cards.pxo-eece8c94ec2628561bd8236324c384af.res"
+
+[deps]
+
+source_file="res://assets/shield_cards.pxo"
+dest_files=["res://.godot/imported/shield_cards.pxo-eece8c94ec2628561bd8236324c384af.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

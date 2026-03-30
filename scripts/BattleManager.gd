@@ -157,6 +157,9 @@ func _ready() -> void:
 			_card_manager.call_deferred("respace_hand_cards")
 	else:
 		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER (SPECTATOR mode)")
+		# Single-player bot-vs-bot spectator battles: auto-resolve after 10 seconds.
+		if not _is_multiplayer:
+			call_deferred("_start_singleplayer_spectator_battle_timer")
 
 
 func _cache_nodes() -> void:
@@ -345,10 +348,9 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 		if area:
 			area.input_pickable = true
 
-	# Update deck visibility and respace hand cards after restoration
+	# Respace hand cards after restoration
 	# Wait a frame to ensure cards are properly registered
 	await get_tree().process_frame
-	call_deferred("_update_deck_visibility")
 	if _card_manager:
 		_card_manager.call_deferred("respace_hand_cards")
 
@@ -412,7 +414,7 @@ func _update_opponent_cards_from_net() -> void:
 		if int(pid) != my_id:
 			other_peer_id = int(pid)
 			break
-	if other_peer_id < 0:
+	if other_peer_id == -1:
 		print("[BattleManager] _update_opponent_cards_from_net: no opponent found (my_id=%d, keys=%s). Clearing." % [my_id, str(BattleSync.battle_placed_cards.keys())])
 		_clear_opponent_slot_cards()
 		return
@@ -636,7 +638,7 @@ func _animate_card_bump_sequence() -> void:
 		[2, 0],  # PR + OR
 	]
 	var bump_distance := 10.0
-	var bump_duration := 0.15
+	var bump_duration := 0.30
 
 	var local_is_defender := _is_local_defender()
 	print("[BattleManager] local_is_defender=%s, _round_results=%s" % [str(local_is_defender), str(_round_results)])
@@ -702,17 +704,17 @@ func _animate_card_bump_sequence() -> void:
 
 		if round_result == "win":
 			if has_ocard and is_instance_valid(ocard):
-				await _fade_out_card(ocard)
+				await _grey_out_card(ocard)
 		elif round_result == "lose":
 			if has_pcard and is_instance_valid(pcard):
-				await _fade_out_card(pcard)
+				await _grey_out_card(pcard)
 		else:
 			if local_is_defender:
 				if has_ocard and is_instance_valid(ocard):
-					await _fade_out_card(ocard)
+					await _grey_out_card(ocard)
 			else:
 				if has_pcard and is_instance_valid(pcard):
-					await _fade_out_card(pcard)
+					await _grey_out_card(pcard)
 
 		print("[BattleManager] Fade complete for pair p_idx=%d" % p_idx)
 		# Brief pause between pairs
@@ -746,18 +748,14 @@ func _is_local_defender() -> bool:
 	return true
 
 
-func _fade_out_card(card: Node) -> void:
-	## Quickly fade out and hide a card.
+func _grey_out_card(card: Node) -> void:
+	## Smoothly desaturate a losing card to grey.
 	if not card or not is_instance_valid(card):
-		print("[BattleManager] _fade_out_card: card invalid, skipping")
 		return
-	print("[BattleManager] _fade_out_card: fading card %s" % card.name)
-	var fade_tween: Tween = create_tween()
-	fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
-	await fade_tween.finished
-	if is_instance_valid(card):
-		card.visible = false
-	print("[BattleManager] _fade_out_card: done for %s" % card.name)
+	var grey := Color(0.35, 0.35, 0.35, 1.0)
+	var grey_tween: Tween = create_tween()
+	grey_tween.tween_property(card, "modulate", grey, 0.3)
+	await grey_tween.finished
 
 
 func _final_winner_bump_and_clear(winner_side: String) -> void:
@@ -766,7 +764,7 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 	## 2. Then the loser's remaining visible cards vanish.
 	print("[BattleManager] _final_winner_bump_and_clear START winner_side=%s" % winner_side)
 	var bump_distance := 10.0
-	var bump_duration := 0.15
+	var bump_duration := 0.30
 
 	var winner_cards: Array = []
 	var loser_cards: Array = []
@@ -830,22 +828,20 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 			return_tween.kill()
 		print("[BattleManager] _final_winner_bump_and_clear: winner return done")
 
-	# Loser's remaining cards vanish
-	print("[BattleManager] _final_winner_bump_and_clear: fading %d loser cards" % loser_cards.size())
-	var fade_tween: Tween = create_tween()
-	fade_tween.set_parallel(true)
-	var fade_count := 0
+	# Loser's remaining cards grey out
+	print("[BattleManager] _final_winner_bump_and_clear: greying %d loser cards" % loser_cards.size())
+	var grey := Color(0.35, 0.35, 0.35, 1.0)
+	var grey_tween: Tween = create_tween()
+	grey_tween.set_parallel(true)
+	var grey_count := 0
 	for card in loser_cards:
 		if is_instance_valid(card):
-			fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
-			fade_count += 1
-	if fade_count > 0:
-		await fade_tween.finished
+			grey_tween.tween_property(card, "modulate", grey, 0.3)
+			grey_count += 1
+	if grey_count > 0:
+		await grey_tween.finished
 	else:
-		fade_tween.kill()
-	for card in loser_cards:
-		if card and is_instance_valid(card):
-			card.visible = false
+		grey_tween.kill()
 	await get_tree().create_tween().tween_interval(0.15).finished
 	print("[BattleManager] _final_winner_bump_and_clear DONE")
 
@@ -859,6 +855,8 @@ func _place_opponent_backs() -> void:
 	var back_frames: SpriteFrames = CARD_BACK_FRAMES
 	var back_frame_index: int = CARD_BACK_FRAME_INDEX
 
+	var is_sp_territory := BattleStateManager and BattleStateManager.current_territory_id != ""
+
 	for slot in _opponent_slot_nodes:
 		if not slot:
 			continue
@@ -868,6 +866,11 @@ func _place_opponent_backs() -> void:
 		if existing and is_instance_valid(existing):
 			existing.card_sprite_frames = back_frames
 			existing.frame_index = back_frame_index
+			continue
+
+		# In single-player territory battles, _restore_and_sync_placed_cards already
+		# created cards for slots with real data. Don't fill empty slots with phantom backs.
+		if is_sp_territory:
 			continue
 
 		var card := CARD_SCENE.instantiate()
@@ -907,7 +910,7 @@ func _flip_opponent_cards_from_pool() -> void:
 				other_peer_id = int(pid)
 				break
 		print("[BattleManager] _flip_opponent_cards: my_id=%d other_peer=%d all_keys=%s" % [my_id, other_peer_id, str(BattleSync.battle_placed_cards.keys())])
-		if other_peer_id >= 0:
+		if other_peer_id != -1:
 			var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
 			print("[BattleManager] _flip_opponent_cards: opponent slot keys=%s" % str(other_cards.keys()))
 			for slot_idx in range(_opponent_slot_nodes.size()):
@@ -1259,12 +1262,15 @@ func _apply_battle_resolution_state() -> void:
 
 func _spectator_on_battle_start() -> void:
 	## Called when both battlers are ready and we are spectating.
-	## Compute battle result from BattleSync.battle_placed_cards and display winner.
+	## Compute battle result and display winner.
 	state = State.FLIPPING
-	# Short delay to allow synced data to settle
-	await get_tree().create_tween().tween_interval(0.5).finished
-
-	var result := _spectator_resolve_from_sync()
+	var result: Dictionary = {}
+	if _is_multiplayer:
+		# Short delay to allow synced data to settle
+		await get_tree().create_tween().tween_interval(0.5).finished
+		result = _spectator_resolve_from_sync()
+	else:
+		result = _spectator_resolve_single_player_from_state()
 	_spectator_winner_role = result.get("winner", "defender")
 	_spectator_winner_id = int(result.get("winner_id", -1))
 
@@ -1284,9 +1290,67 @@ func _spectator_on_battle_start() -> void:
 		_result_label.add_theme_color_override("font_color", _card_scene_ui.get_race_color(winner_race) if _card_scene_ui else Color.WHITE)
 		_result_label.visible = true
 
+	# Bot-vs-bot in multiplayer: the host must apply territory state since no
+	# participant runs _apply_battle_resolution_state.
+	if _is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		var att_id := BattleSync.territory_battle_attacker_id
+		var def_id := BattleSync.territory_battle_defender_id
+		if PlayerDataSync.is_bot_id(att_id) and PlayerDataSync.is_bot_id(def_id):
+			_apply_bot_vs_bot_territory_state(tid_str, _spectator_winner_role, att_id, def_id, result)
+
 	state = State.RESOLVED
 	_start_auto_return()
 	print("[BattleManager] Spectator resolved: %s (id=%d) won territory %s" % [winner_name, _spectator_winner_id, tid_str])
+
+
+func _start_singleplayer_spectator_battle_timer() -> void:
+	## In single-player bot-vs-bot battles, run an automatic 5-second battle window.
+	if not _is_spectator or _is_multiplayer:
+		return
+	print("[BattleManager] Single-player spectator battle timer started (5.0s).")
+	await get_tree().create_tween().tween_interval(5.0).finished
+	if state == State.RESOLVED:
+		return
+	_spectator_on_battle_start()
+
+
+func _apply_bot_vs_bot_territory_state(tid_str: String, winner_role: String, attacker_id: int, defender_id: int, _result: Dictionary) -> void:
+	## Host-only: apply territory ownership and card changes for a bot-vs-bot battle.
+	if tid_str.is_empty() or tid_str.begins_with("battle_"):
+		return
+	print("[BattleManager] Applying bot-vs-bot territory state for territory %s (winner=%s)" % [tid_str, winner_role])
+
+	var attacker_won := (winner_role == "attacker")
+	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+
+	if attacker_won:
+		var attacker_slots: Dictionary = BattleStateManager.get_attacking_slots(tid_str) if BattleStateManager else {}
+		var cards: Array = [null, null, null]
+		for idx in attacker_slots:
+			var c: Dictionary = attacker_slots[idx]
+			if int(idx) < 3 and String(c.get("path", "")) != "":
+				cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame", 0))}
+		if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
+			TerritorySync.request_conquest_territory(int(tid_str), attacker_id, cards)
+		elif tcs and tcs.has_method("set_claim"):
+			TerritoryClaimManager.apply_conquest_claim(int(tid_str), attacker_id, cards)
+		print("[BattleManager] Bot attacker %d conquered territory %s" % [attacker_id, tid_str])
+	else:
+		if tcs and tcs.has_method("get_owner_id"):
+			var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str) if BattleStateManager else {}
+			var cards: Array = [null, null, null]
+			for idx in remaining:
+				var c: Dictionary = remaining[idx]
+				if int(idx) < 3 and String(c.get("path", "")) != "":
+					cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame", 0))}
+			if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
+				TerritorySync.request_conquest_territory(int(tid_str), defender_id, cards)
+			else:
+				TerritoryClaimManager.apply_conquest_claim(int(tid_str), defender_id, cards)
+			print("[BattleManager] Bot defender %d held territory %s" % [defender_id, tid_str])
+
+	if BattleStateManager:
+		BattleStateManager.clear_attacking_slots(tid_str)
 
 
 func _spectator_resolve_from_sync() -> Dictionary:
@@ -1355,6 +1419,56 @@ func _spectator_resolve_from_sync() -> Dictionary:
 		return {"winner": "defender", "winner_id": defender_id}
 	else:
 		return {"winner": "attacker", "winner_id": attacker_id}
+
+
+func _spectator_resolve_single_player_from_state() -> Dictionary:
+	## Resolve single-player bot-vs-bot battle from BattleStateManager attacking/defending slots.
+	var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+	var attacker_id := App.pending_territory_battle_attacker_id
+	var defender_id := App.pending_territory_battle_defender_id
+	var attacker_cards: Dictionary = BattleStateManager.get_attacking_slots(tid_str) if BattleStateManager else {}
+	var defender_cards: Dictionary = BattleStateManager.get_defending_slots(tid_str) if BattleStateManager else {}
+
+	var defender_wins := 0
+	var attacker_wins := 0
+	var defender_indices := [2, 1, 0]
+	var attacker_indices := [0, 1, 2]
+
+	for pair_idx in range(3):
+		var d_idx: int = defender_indices[pair_idx]
+		var a_idx: int = attacker_indices[pair_idx]
+		var d_data: Dictionary = defender_cards.get(d_idx, {})
+		var a_data: Dictionary = attacker_cards.get(a_idx, {})
+
+		var d_power: float = float(int(d_data.get("frame", 0)) + 1) if not d_data.is_empty() else 0.0
+		var a_power: float = float(int(a_data.get("frame", 0)) + 1) if not a_data.is_empty() else 0.0
+
+		var da: String = _card_manager.get_attribute_from_path(d_data.get("path", ""), attribute_config) if _card_manager else "unknown"
+		var aa: String = _card_manager.get_attribute_from_path(a_data.get("path", ""), attribute_config) if _card_manager else "unknown"
+		var d_modifier: float = 0.0
+		var a_modifier: float = 0.0
+		if da != "unknown" and aa != "unknown" and da != aa:
+			var da_beats = attribute_config.beats.get(da, null)
+			if da_beats == aa:
+				d_modifier = 0.5
+				a_modifier = -0.5
+			else:
+				var aa_beats = attribute_config.beats.get(aa, null)
+				if aa_beats == da:
+					a_modifier = 0.5
+					d_modifier = -0.5
+
+		var d_final := d_power + d_modifier
+		var a_final := a_power + a_modifier
+		if d_final > a_final:
+			defender_wins += 1
+		elif a_final > d_final:
+			attacker_wins += 1
+
+	var defender_points := defender_wins - attacker_wins
+	if defender_points >= 0:
+		return {"winner": "defender", "winner_id": defender_id}
+	return {"winner": "attacker", "winner_id": attacker_id}
 
 
 func _clear_player_slots() -> void:
