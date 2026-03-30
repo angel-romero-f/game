@@ -13,6 +13,8 @@ var _command_behavior: RefCounted
 var _battle_behavior: RefCounted
 var _last_collect_phase_key: String = ""
 var _bot_turn_cooldown: float = 0.0
+## Multiplayer: wall-clock delay between bot actions (frame delta is unreliable for visible pacing).
+var _mp_bot_placement_timer: Timer
 
 # Step-by-step placement state (shared by SP and MP paths).
 var _placing_active: bool = false
@@ -23,6 +25,11 @@ func _ready() -> void:
 	_collect_behavior = BotCollectBehaviorScript.new()
 	_command_behavior = BotCommandBehaviorScript.new()
 	_battle_behavior = BotBattleBehaviorScript.new()
+	_mp_bot_placement_timer = Timer.new()
+	_mp_bot_placement_timer.name = "MPBotPlacementDelay"
+	_mp_bot_placement_timer.wait_time = BOT_PLACEMENT_DELAY_SEC
+	_mp_bot_placement_timer.one_shot = true
+	add_child(_mp_bot_placement_timer)
 
 
 func _get_mp() -> MultiplayerAPI:
@@ -46,15 +53,24 @@ func process_single_player_frame(delta: float) -> void:
 	var mp := _get_mp()
 	if App.is_multiplayer and not (mp and mp.has_multiplayer_peer() and mp.is_server()):
 		return
-	if _bot_turn_cooldown > 0.0:
-		_bot_turn_cooldown = maxf(0.0, _bot_turn_cooldown - delta)
-		if _bot_turn_cooldown > 0.0:
+	if App.is_multiplayer:
+		if _mp_bot_placement_timer != null and not _mp_bot_placement_timer.is_stopped():
 			return
+	else:
+		if _bot_turn_cooldown > 0.0:
+			_bot_turn_cooldown = maxf(0.0, _bot_turn_cooldown - delta)
+			if _bot_turn_cooldown > 0.0:
+				return
 	_maybe_run_collect_behavior()
 	if App.is_multiplayer:
 		_maybe_run_multiplayer_bot_command_turn()
 	else:
 		_maybe_run_bot_command_turn()
+
+
+func _start_mp_bot_placement_delay() -> void:
+	if _mp_bot_placement_timer:
+		_mp_bot_placement_timer.start()
 
 
 func on_local_command_done() -> void:
@@ -180,9 +196,13 @@ func _maybe_run_multiplayer_bot_command_turn() -> void:
 		return
 	if PhaseController.current_phase != 0:
 		_placing_active = false
+		if _mp_bot_placement_timer:
+			_mp_bot_placement_timer.stop()
 		return
 	if not _is_current_turn_bot():
 		_placing_active = false
+		if _mp_bot_placement_timer:
+			_mp_bot_placement_timer.stop()
 		return
 
 	# Start a new bot turn: prepare, then do the first placement.
@@ -220,9 +240,10 @@ func _maybe_run_multiplayer_bot_command_turn() -> void:
 		# No battles — advance the turn now.
 		PhaseSync.host_advance_bot_command_turn()
 		if _is_current_turn_bot() and PhaseController.current_phase == 0:
-			_bot_turn_cooldown = BOT_PLACEMENT_DELAY_SEC
+			_start_mp_bot_placement_delay()
 	else:
-		_bot_turn_cooldown = BOT_PLACEMENT_DELAY_SEC
+		## More placements this turn — wait 1s (wall clock) before next territory.
+		_start_mp_bot_placement_delay()
 
 
 # ---------- TURN ADVANCEMENT (SINGLE-PLAYER) ----------

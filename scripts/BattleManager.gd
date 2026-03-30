@@ -348,10 +348,9 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 		if area:
 			area.input_pickable = true
 
-	# Update deck visibility and respace hand cards after restoration
+	# Respace hand cards after restoration
 	# Wait a frame to ensure cards are properly registered
 	await get_tree().process_frame
-	call_deferred("_update_deck_visibility")
 	if _card_manager:
 		_card_manager.call_deferred("respace_hand_cards")
 
@@ -639,7 +638,7 @@ func _animate_card_bump_sequence() -> void:
 		[2, 0],  # PR + OR
 	]
 	var bump_distance := 10.0
-	var bump_duration := 0.15
+	var bump_duration := 0.30
 
 	var local_is_defender := _is_local_defender()
 	print("[BattleManager] local_is_defender=%s, _round_results=%s" % [str(local_is_defender), str(_round_results)])
@@ -705,17 +704,17 @@ func _animate_card_bump_sequence() -> void:
 
 		if round_result == "win":
 			if has_ocard and is_instance_valid(ocard):
-				await _fade_out_card(ocard)
+				await _grey_out_card(ocard)
 		elif round_result == "lose":
 			if has_pcard and is_instance_valid(pcard):
-				await _fade_out_card(pcard)
+				await _grey_out_card(pcard)
 		else:
 			if local_is_defender:
 				if has_ocard and is_instance_valid(ocard):
-					await _fade_out_card(ocard)
+					await _grey_out_card(ocard)
 			else:
 				if has_pcard and is_instance_valid(pcard):
-					await _fade_out_card(pcard)
+					await _grey_out_card(pcard)
 
 		print("[BattleManager] Fade complete for pair p_idx=%d" % p_idx)
 		# Brief pause between pairs
@@ -749,18 +748,14 @@ func _is_local_defender() -> bool:
 	return true
 
 
-func _fade_out_card(card: Node) -> void:
-	## Quickly fade out and hide a card.
+func _grey_out_card(card: Node) -> void:
+	## Smoothly desaturate a losing card to grey.
 	if not card or not is_instance_valid(card):
-		print("[BattleManager] _fade_out_card: card invalid, skipping")
 		return
-	print("[BattleManager] _fade_out_card: fading card %s" % card.name)
-	var fade_tween: Tween = create_tween()
-	fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
-	await fade_tween.finished
-	if is_instance_valid(card):
-		card.visible = false
-	print("[BattleManager] _fade_out_card: done for %s" % card.name)
+	var grey := Color(0.35, 0.35, 0.35, 1.0)
+	var grey_tween: Tween = create_tween()
+	grey_tween.tween_property(card, "modulate", grey, 0.3)
+	await grey_tween.finished
 
 
 func _final_winner_bump_and_clear(winner_side: String) -> void:
@@ -769,7 +764,7 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 	## 2. Then the loser's remaining visible cards vanish.
 	print("[BattleManager] _final_winner_bump_and_clear START winner_side=%s" % winner_side)
 	var bump_distance := 10.0
-	var bump_duration := 0.15
+	var bump_duration := 0.30
 
 	var winner_cards: Array = []
 	var loser_cards: Array = []
@@ -833,22 +828,20 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 			return_tween.kill()
 		print("[BattleManager] _final_winner_bump_and_clear: winner return done")
 
-	# Loser's remaining cards vanish
-	print("[BattleManager] _final_winner_bump_and_clear: fading %d loser cards" % loser_cards.size())
-	var fade_tween: Tween = create_tween()
-	fade_tween.set_parallel(true)
-	var fade_count := 0
+	# Loser's remaining cards grey out
+	print("[BattleManager] _final_winner_bump_and_clear: greying %d loser cards" % loser_cards.size())
+	var grey := Color(0.35, 0.35, 0.35, 1.0)
+	var grey_tween: Tween = create_tween()
+	grey_tween.set_parallel(true)
+	var grey_count := 0
 	for card in loser_cards:
 		if is_instance_valid(card):
-			fade_tween.tween_property(card, "modulate:a", 0.0, 0.2)
-			fade_count += 1
-	if fade_count > 0:
-		await fade_tween.finished
+			grey_tween.tween_property(card, "modulate", grey, 0.3)
+			grey_count += 1
+	if grey_count > 0:
+		await grey_tween.finished
 	else:
-		fade_tween.kill()
-	for card in loser_cards:
-		if card and is_instance_valid(card):
-			card.visible = false
+		grey_tween.kill()
 	await get_tree().create_tween().tween_interval(0.15).finished
 	print("[BattleManager] _final_winner_bump_and_clear DONE")
 
@@ -862,6 +855,8 @@ func _place_opponent_backs() -> void:
 	var back_frames: SpriteFrames = CARD_BACK_FRAMES
 	var back_frame_index: int = CARD_BACK_FRAME_INDEX
 
+	var is_sp_territory := BattleStateManager and BattleStateManager.current_territory_id != ""
+
 	for slot in _opponent_slot_nodes:
 		if not slot:
 			continue
@@ -871,6 +866,11 @@ func _place_opponent_backs() -> void:
 		if existing and is_instance_valid(existing):
 			existing.card_sprite_frames = back_frames
 			existing.frame_index = back_frame_index
+			continue
+
+		# In single-player territory battles, _restore_and_sync_placed_cards already
+		# created cards for slots with real data. Don't fill empty slots with phantom backs.
+		if is_sp_territory:
 			continue
 
 		var card := CARD_SCENE.instantiate()

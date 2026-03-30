@@ -40,7 +40,7 @@ func _ready() -> void:
 	if title_label:
 		title_label.text = "Select Race"
 	if info_label:
-		info_label.text = "One race per player."
+		info_label.text = "One race per human player. Bots get a random unused race when the host starts."
 
 	# Store default card styles
 	for race in RACES:
@@ -116,7 +116,10 @@ func _all_players_have_race_selected() -> bool:
 
 func _owner_of(race: String) -> int:
 	for pid in PlayerDataSync.player_races.keys():
-		if String(PlayerDataSync.player_races[pid]) == race:
+		var r := String(PlayerDataSync.player_races[pid])
+		if r.is_empty():
+			continue
+		if r == race:
 			return int(pid)
 	return 0
 
@@ -134,11 +137,11 @@ func _on_race_pressed(race: String) -> void:
 func _on_start_pressed() -> void:
 	var mp := _get_mp()
 	if mp and mp.is_server():
-		PlayerDataSync.host_fill_bots_to_four()
+		PlayerDataSync.host_assign_bot_races_after_humans()
 		PhaseSync.start_game.rpc(
 			PlayerDataSync.player_names.duplicate(true),
 			PlayerDataSync.player_races.duplicate(true),
-			PlayerDataSync._bot_ids.keys()
+			PlayerDataSync.get_bot_ids_array()
 		)
 
 func _on_back_pressed() -> void:
@@ -265,19 +268,19 @@ func _refresh_players_list() -> void:
 
 	players_list.clear()
 
-	var ids: Array[int] = []
-	ids.append(_my_id())
-	for peer_id in mp.get_peers():
-		ids.append(int(peer_id))
-	ids.sort()
+	var ids: Array = PlayerDataSync.player_names.keys()
+	ids.sort_custom(func(a, b): return int(a) < int(b))
 
-	for id in ids:
+	for pid in ids:
+		var id := int(pid)
 		var player_name := String(PlayerDataSync.player_names.get(id, "Player"))
 		if id == _my_id():
 			player_name += " (You)"
-		var race := String(PlayerDataSync.player_races.get(id, "—"))
+		if PlayerDataSync.is_bot_id(id):
+			player_name += " [Bot]"
+		var race := String(PlayerDataSync.player_races.get(id, ""))
 		if race.is_empty():
-			race = "—"
+			race = "pending" if PlayerDataSync.is_bot_id(id) else "—"
 		players_list.add_item("%s — %s" % [player_name, race])
 
 func _refresh_start_button() -> void:
