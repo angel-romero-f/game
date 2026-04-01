@@ -84,6 +84,11 @@ func on_ice_fishing_pressed() -> void:
 	App.reset_lives()
 	App.go("res://scenes/IceFishingGame.tscn")
 
+func on_courtly_cuisine_pressed() -> void:
+	App.pre_roll_minigame_reward()
+	App.reset_lives()
+	App.go("res://scenes/CourtlyCuisineGame.tscn")
+
 func on_play_minigames_pressed() -> void:
 	## Mock button: 50/50 chance of giving a card
 	if not play_minigames_button:

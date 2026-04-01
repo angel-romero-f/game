@@ -57,6 +57,28 @@ func _ready() -> void:
 	var minigame_button := $MinigameButton as Button
 	var bridge_minigame_button := $BridgeMinigameButton as Button
 	var ice_fishing_button := $IceFishingButton as Button
+
+	# Courtly Cuisine button (created in code — not in the .tscn)
+	var courtly_cuisine_button := Button.new()
+	courtly_cuisine_button.name = "CourtlyCuisineButton"
+	courtly_cuisine_button.visible = false
+	courtly_cuisine_button.text = "Courtly Cuisine"
+	courtly_cuisine_button.layout_mode = 1
+	courtly_cuisine_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	courtly_cuisine_button.anchor_left = 0.5
+	courtly_cuisine_button.anchor_top = 1.0
+	courtly_cuisine_button.anchor_right = 0.5
+	courtly_cuisine_button.anchor_bottom = 1.0
+	courtly_cuisine_button.offset_left = 240.0
+	courtly_cuisine_button.offset_top = -80.0
+	courtly_cuisine_button.offset_right = 400.0
+	courtly_cuisine_button.offset_bottom = -40.0
+	courtly_cuisine_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	var cc_font = load("res://fonts/m5x7.ttf")
+	if cc_font:
+		courtly_cuisine_button.add_theme_font_override("font", cc_font)
+		courtly_cuisine_button.add_theme_font_size_override("font_size", 22)
+	add_child(courtly_cuisine_button)
 	var play_minigames_button := $PlayMinigamesButton as Button
 	var battle_button := $BattleButton as Button
 	var skip_to_battle_button := $SkipToBattleButton as Button
@@ -89,8 +111,8 @@ func _ready() -> void:
 	showcase_container.modulate.a = 1.0
 	d20_container.visible = false
 	order_center_container.visible = false
-	for btn in [minigame_button, bridge_minigame_button, ice_fishing_button, play_minigames_button,
-				battle_button, skip_to_battle_button, battle_button_right]:
+	for btn in [minigame_button, bridge_minigame_button, courtly_cuisine_button, ice_fishing_button,
+				play_minigames_button, battle_button, skip_to_battle_button, battle_button_right]:
 		btn.visible = false
 	var victory_overlay := get_node_or_null("VictoryOverlay") as ColorRect
 	for node in [settings_button, settings_panel, player_roll_container, phase_overlay,
@@ -219,6 +241,7 @@ func _ready() -> void:
 		"turn_banner_label": turn_banner_label,
 		"minigame_button": minigame_button,
 		"bridge_minigame_button": bridge_minigame_button,
+		"courtly_cuisine_button": courtly_cuisine_button,
 		"ice_fishing_button": ice_fishing_button,
 		"play_minigames_button": play_minigames_button,
 		"battle_button": battle_button,
@@ -285,9 +308,10 @@ func _ready() -> void:
 
 	minigame_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_minigame_pressed))
 	bridge_minigame_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_bridge_minigame_pressed))
+	courtly_cuisine_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_courtly_cuisine_pressed))
 	ice_fishing_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_ice_fishing_pressed))
 	play_minigames_button.pressed.connect(flow_ui.on_play_minigames_pressed)
-	_minigame_buttons_ref = [minigame_button, bridge_minigame_button, ice_fishing_button]
+	_minigame_buttons_ref = [minigame_button, bridge_minigame_button, courtly_cuisine_button, ice_fishing_button]
 	skip_to_battle_button.pressed.connect(phase_ui.on_skip_to_battle_pressed)
 	battle_button.pressed.connect(flow_ui.on_battle_button_pressed)
 	if finish_claiming_button:

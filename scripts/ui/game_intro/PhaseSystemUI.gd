@@ -31,6 +31,7 @@ var waiting_label: Label
 var turn_banner_label: Label  # Non-modal "(Name)'s Turn" text
 var minigame_button: Button
 var bridge_minigame_button: Button
+var courtly_cuisine_button: Button
 var ice_fishing_button: Button
 var play_minigames_button: Button
 var battle_button: Button
@@ -55,6 +56,7 @@ func initialize(nodes: Dictionary, refs: Dictionary) -> void:
 	turn_banner_label = nodes.get("turn_banner_label")
 	minigame_button = nodes.get("minigame_button")
 	bridge_minigame_button = nodes.get("bridge_minigame_button")
+	courtly_cuisine_button = nodes.get("courtly_cuisine_button")
 	ice_fishing_button = nodes.get("ice_fishing_button")
 	play_minigames_button = nodes.get("play_minigames_button")
 	battle_button = nodes.get("battle_button")
@@ -261,6 +263,7 @@ func _hide_battle_selection_ui() -> void:
 func _apply_contest_command_ui() -> void:
 	minigame_button.visible = false
 	bridge_minigame_button.visible = false
+	if courtly_cuisine_button: courtly_cuisine_button.visible = false
 	ice_fishing_button.visible = false
 	play_minigames_button.visible = false
 	skip_to_battle_button.visible = false
@@ -303,6 +306,7 @@ func _apply_contest_command_ui() -> void:
 func _apply_contest_claim_ui() -> void:
 	minigame_button.visible = false
 	bridge_minigame_button.visible = false
+	if courtly_cuisine_button: courtly_cuisine_button.visible = false
 	ice_fishing_button.visible = false
 	play_minigames_button.visible = false
 	skip_to_battle_button.visible = false
@@ -413,6 +417,7 @@ func _apply_battle_ready_ui() -> void:
 func _apply_collect_ui() -> void:
 	minigame_button.visible = true
 	bridge_minigame_button.visible = true
+	if courtly_cuisine_button: courtly_cuisine_button.visible = true
 	ice_fishing_button.visible = true
 	play_minigames_button.visible = false
 	skip_to_battle_button.visible = true
@@ -432,6 +437,7 @@ func _apply_collect_ui() -> void:
 	if should_disable_minigames:
 		minigame_button.disabled = true
 		bridge_minigame_button.disabled = true
+		if courtly_cuisine_button: courtly_cuisine_button.disabled = true
 		ice_fishing_button.disabled = true
 		play_minigames_button.disabled = true
 		skip_to_battle_button.disabled = true
@@ -445,6 +451,7 @@ func _apply_collect_ui() -> void:
 	else:
 		minigame_button.disabled = false
 		bridge_minigame_button.disabled = false
+		if courtly_cuisine_button: courtly_cuisine_button.disabled = false
 		ice_fishing_button.disabled = false
 		play_minigames_button.disabled = false
 		skip_to_battle_button.disabled = false
@@ -459,6 +466,7 @@ func animate_phase_buttons() -> void:
 	btn_tween.set_parallel(true)
 	_fade_if_visible(btn_tween, minigame_button)
 	_fade_if_visible(btn_tween, bridge_minigame_button)
+	if courtly_cuisine_button: _fade_if_visible(btn_tween, courtly_cuisine_button)
 	_fade_if_visible(btn_tween, ice_fishing_button)
 	_fade_if_visible(btn_tween, play_minigames_button)
 	_fade_if_visible(btn_tween, battle_button)
@@ -562,6 +570,7 @@ func _on_net_phase_changed(phase_id: int) -> void:
 		# Hide ALL game buttons immediately to prevent flashing during overlay
 		minigame_button.visible = false
 		bridge_minigame_button.visible = false
+		if courtly_cuisine_button: courtly_cuisine_button.visible = false
 		ice_fishing_button.visible = false
 		play_minigames_button.visible = false
 		skip_to_battle_button.visible = false
@@ -570,6 +579,7 @@ func _on_net_phase_changed(phase_id: int) -> void:
 		_hide_battle_selection_ui()
 		minigame_button.disabled = false
 		bridge_minigame_button.disabled = false
+		if courtly_cuisine_button: courtly_cuisine_button.disabled = false
 		ice_fishing_button.disabled = false
 		play_minigames_button.disabled = false
 		skip_to_battle_button.disabled = false
