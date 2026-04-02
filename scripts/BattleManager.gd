@@ -369,6 +369,10 @@ func _on_battle_start_requested() -> void:
 	## Battle runs only when both players have pressed Ready in the card battle scene (not when Attack is pressed in GameIntro).
 	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
 		return
+	if App and App.game_victor_id >= 0:
+		state = State.RESOLVED
+		_start_auto_return()
+		return
 
 	if _is_spectator:
 		_spectator_on_battle_start()
@@ -568,6 +572,13 @@ func _update_timer_visibility() -> void:
 		_timer_sub_label.visible = visible_now
 
 func _process(delta: float) -> void:
+	if App and App.game_victor_id >= 0 and state != State.RESOLVED:
+		# Game already has a winner; skip unresolved battles.
+		state = State.RESOLVED
+		is_timer_active = false
+		_update_timer_visibility()
+		_start_auto_return()
+		return
 	# Auto-return to map countdown
 	if _auto_return_active:
 		_auto_return_timer -= delta
@@ -602,6 +613,10 @@ func _on_battle_timer_expired() -> void:
 
 func _trigger_battle_start() -> void:
 	if state != State.WAITING_FOR_PLAYER:
+		return
+	if App and App.game_victor_id >= 0:
+		state = State.RESOLVED
+		_start_auto_return()
 		return
 
 	if _is_multiplayer:

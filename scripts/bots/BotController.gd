@@ -162,9 +162,14 @@ func _maybe_run_bot_command_turn() -> void:
 
 	if not _placing_active:
 		_initialize_bot_hands_if_needed()
-		_command_behavior.prepare_turn(App.current_turn_player_id)
+		var bot_id_sp: int = App.current_turn_player_id
+		var diff_sp: int = int(PlayerDataSync.get_bot_difficulty(bot_id_sp))
+		_command_behavior.prepare_turn(bot_id_sp, diff_sp)
 		_placing_active = true
 		_placing_attacked = false
+		# Ensure a visible delay before the first placement too.
+		_bot_turn_cooldown = BOT_PLACEMENT_DELAY_SEC
+		return
 
 	var result: Dictionary = _command_behavior.place_next()
 	_placing_attacked = _placing_attacked or result.get("attacked", false)
@@ -209,9 +214,13 @@ func _maybe_run_multiplayer_bot_command_turn() -> void:
 	if not _placing_active:
 		var bot_id: int = PhaseController.current_turn_peer_id
 		_initialize_bot_hands_if_needed()
-		_command_behavior.prepare_turn(bot_id)
+		var diff_mp: int = int(PlayerDataSync.get_bot_difficulty(bot_id))
+		_command_behavior.prepare_turn(bot_id, diff_mp)
 		_placing_active = true
 		_placing_attacked = false
+		# Ensure a visible delay before the first placement too.
+		_start_mp_bot_placement_delay()
+		return
 
 	var result: Dictionary = _command_behavior.place_next()
 	_placing_attacked = _placing_attacked or result.get("attacked", false)

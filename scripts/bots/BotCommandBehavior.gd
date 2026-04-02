@@ -7,10 +7,11 @@ extends RefCounted
 var _active_bot_id: int = -1
 var _active_hand: Array = []
 var _turn_attacked_claimed: bool = false
+var _active_difficulty: int = 0
 
 
 func run_command_turn(bot_player_id: int) -> bool:
-	prepare_turn(bot_player_id)
+	prepare_turn(bot_player_id, int(PlayerDataSync.get_bot_difficulty(bot_player_id)))
 	while true:
 		var result: Dictionary = place_next()
 		if result.get("done", true):
@@ -18,8 +19,9 @@ func run_command_turn(bot_player_id: int) -> bool:
 	return _turn_attacked_claimed
 
 
-func prepare_turn(bot_player_id: int) -> void:
+func prepare_turn(bot_player_id: int, difficulty: int = 0) -> void:
 	_active_bot_id = bot_player_id
+	_active_difficulty = clampi(difficulty, 0, 5)
 	_turn_attacked_claimed = false
 	var hand: Array = App.bot_card_collections.get(bot_player_id, [])
 	_active_hand = []
@@ -37,12 +39,12 @@ func place_next() -> Dictionary:
 		_finalize_hand()
 		return {"attacked": false, "done": true}
 
-	var target_tid := _pick_random_target_territory(_active_bot_id)
+	var target_tid := _pick_target_territory_by_difficulty(_active_bot_id, _active_difficulty)
 	if target_tid < 0:
 		_finalize_hand()
 		return {"attacked": false, "done": true}
 
-	var to_place := randi_range(1, mini(3, _active_hand.size()))
+	var to_place := _choose_cards_to_place_count_by_difficulty(_active_hand.size(), _active_difficulty)
 	var placed_cards: Array = []
 	for _i in range(to_place):
 		if _active_hand.is_empty():
@@ -57,7 +59,7 @@ func place_next() -> Dictionary:
 		_turn_attacked_claimed = _turn_attacked_claimed or attacked
 
 	# 50% chance to stop, or stop if out of cards.
-	if _active_hand.is_empty() or randf() >= 0.5:
+	if _active_hand.is_empty() or not _should_continue_placing_by_difficulty(_active_difficulty):
 		_finalize_hand()
 		return {"attacked": attacked, "done": true}
 
@@ -98,6 +100,64 @@ func _pick_random_target_territory(bot_player_id: int) -> int:
 	if eligible.is_empty():
 		return -1
 	return eligible[randi() % eligible.size()]
+
+
+func _pick_target_territory_by_difficulty(bot_player_id: int, difficulty: int) -> int:
+	match difficulty:
+		0:
+			return _pick_random_target_territory(bot_player_id)
+		1:
+			return _pick_target_difficulty_1_stub(bot_player_id)
+		2:
+			return _pick_target_difficulty_2_stub(bot_player_id)
+		3:
+			return _pick_target_difficulty_3_stub(bot_player_id)
+		4:
+			return _pick_target_difficulty_4_stub(bot_player_id)
+		5:
+			return _pick_target_difficulty_5_stub(bot_player_id)
+		_:
+			return _pick_random_target_territory(bot_player_id)
+
+
+func _choose_cards_to_place_count_by_difficulty(hand_size: int, difficulty: int) -> int:
+	match difficulty:
+		0:
+			return randi_range(1, mini(3, hand_size))
+		_:
+			return _choose_cards_to_place_count_stub(hand_size, difficulty)
+
+
+func _should_continue_placing_by_difficulty(difficulty: int) -> bool:
+	match difficulty:
+		0:
+			return randf() < 0.5
+		_:
+			return _should_continue_placing_stub(difficulty)
+
+
+# ---------- Difficulty stubs (fallback to level 0 for now) ----------
+
+func _pick_target_difficulty_1_stub(bot_player_id: int) -> int:
+	return _pick_random_target_territory(bot_player_id)
+
+func _pick_target_difficulty_2_stub(bot_player_id: int) -> int:
+	return _pick_random_target_territory(bot_player_id)
+
+func _pick_target_difficulty_3_stub(bot_player_id: int) -> int:
+	return _pick_random_target_territory(bot_player_id)
+
+func _pick_target_difficulty_4_stub(bot_player_id: int) -> int:
+	return _pick_random_target_territory(bot_player_id)
+
+func _pick_target_difficulty_5_stub(bot_player_id: int) -> int:
+	return _pick_random_target_territory(bot_player_id)
+
+func _choose_cards_to_place_count_stub(hand_size: int, _difficulty: int) -> int:
+	return randi_range(1, mini(3, hand_size))
+
+func _should_continue_placing_stub(_difficulty: int) -> bool:
+	return randf() < 0.5
 
 
 func _is_territory_owned_by_bot(territory_id: int, bot_player_id: int, tcs: Node) -> bool:

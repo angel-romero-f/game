@@ -153,6 +153,13 @@ func on_minigame_completed() -> void:
 func on_battle_completed() -> void:
 	## Called when a single battle ends - handles territory battle sequence or multi-battle queue
 	print("[DEBUG] App.on_battle_completed() called. Pending IDs: ", pending_territory_battle_ids)
+	if game_victor_id >= 0:
+		# A winner exists; stop any remaining queued battles and return to map/victory flow.
+		pending_territory_battle_ids.clear()
+		territory_pending_attackers.clear()
+		returning_from_territory_battles = true
+		go("res://scenes/ui/game_intro.tscn")
+		return
 	
 	# Territory battle sequence (Finish Claiming): run next territory battle or return to map
 	if pending_territory_battle_ids.size() > 0:
@@ -968,6 +975,9 @@ func play_blip_select() -> void:
 
 func _on_player_won(player_id: int) -> void:
 	game_victor_id = player_id
+	# End any remaining battle sequence immediately; the game already has a winner.
+	pending_territory_battle_ids.clear()
+	territory_pending_attackers.clear()
 
 func _on_node_added(node: Node) -> void:
 	if node is BaseButton:
