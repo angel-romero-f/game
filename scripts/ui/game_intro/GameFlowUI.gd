@@ -94,6 +94,11 @@ func on_conjurers_chorus_pressed() -> void:
 	App.reset_lives()
 	App.go("res://scenes/ConjurersChorusGame.tscn")
 
+func on_cadence_pressed() -> void:
+	App.pre_roll_minigame_reward()
+	App.reset_lives()
+	App.go("res://scenes/CadenceGame.tscn")
+
 func on_play_minigames_pressed() -> void:
 	## Mock button: 50/50 chance of giving a card
 	if not play_minigames_button:

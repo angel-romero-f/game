@@ -79,6 +79,27 @@ func _ready() -> void:
 		courtly_cuisine_button.add_theme_font_override("font", cc_font)
 		courtly_cuisine_button.add_theme_font_size_override("font_size", 22)
 	add_child(courtly_cuisine_button)
+
+	# Cadence button (created in code — not in the .tscn)
+	var cadence_button := Button.new()
+	cadence_button.name = "CadenceButton"
+	cadence_button.visible = false
+	cadence_button.text = "Cadence"
+	cadence_button.layout_mode = 1
+	cadence_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
+	cadence_button.anchor_left = 0.5
+	cadence_button.anchor_top = 1.0
+	cadence_button.anchor_right = 0.5
+	cadence_button.anchor_bottom = 1.0
+	cadence_button.offset_left = 240.0
+	cadence_button.offset_top = -130.0
+	cadence_button.offset_right = 400.0
+	cadence_button.offset_bottom = -90.0
+	cadence_button.grow_horizontal = Control.GROW_DIRECTION_BOTH
+	if cc_font:
+		cadence_button.add_theme_font_override("font", cc_font)
+		cadence_button.add_theme_font_size_override("font_size", 22)
+	add_child(cadence_button)
 	var play_minigames_button := $PlayMinigamesButton as Button
 	var battle_button := $BattleButton as Button
 	var skip_to_battle_button := $SkipToBattleButton as Button
@@ -112,7 +133,7 @@ func _ready() -> void:
 	d20_container.visible = false
 	order_center_container.visible = false
 	for btn in [minigame_button, bridge_minigame_button, courtly_cuisine_button, ice_fishing_button,
-				play_minigames_button, battle_button, skip_to_battle_button, battle_button_right]:
+				cadence_button, play_minigames_button, battle_button, skip_to_battle_button, battle_button_right]:
 		btn.visible = false
 	var victory_overlay := get_node_or_null("VictoryOverlay") as ColorRect
 	for node in [settings_button, settings_panel, player_roll_container, phase_overlay,
@@ -243,6 +264,7 @@ func _ready() -> void:
 		"bridge_minigame_button": bridge_minigame_button,
 		"courtly_cuisine_button": courtly_cuisine_button,
 		"ice_fishing_button": ice_fishing_button,
+		"cadence_button": cadence_button,
 		"play_minigames_button": play_minigames_button,
 		"battle_button": battle_button,
 		"skip_to_battle_button": skip_to_battle_button,
@@ -310,8 +332,9 @@ func _ready() -> void:
 	bridge_minigame_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_bridge_minigame_pressed))
 	courtly_cuisine_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_courtly_cuisine_pressed))
 	ice_fishing_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_ice_fishing_pressed))
+	cadence_button.pressed.connect(_on_minigame_button_pressed.bind(flow_ui.on_cadence_pressed))
 	play_minigames_button.pressed.connect(flow_ui.on_play_minigames_pressed)
-	_minigame_buttons_ref = [minigame_button, bridge_minigame_button, courtly_cuisine_button, ice_fishing_button]
+	_minigame_buttons_ref = [minigame_button, bridge_minigame_button, courtly_cuisine_button, ice_fishing_button, cadence_button]
 	skip_to_battle_button.pressed.connect(phase_ui.on_skip_to_battle_pressed)
 	battle_button.pressed.connect(flow_ui.on_battle_button_pressed)
 	if finish_claiming_button:
