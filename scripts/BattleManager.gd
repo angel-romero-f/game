@@ -93,6 +93,9 @@ var _spectator_status_label: Label = null
 var _spectator_winner_role: String = ""  # "attacker" or "defender"
 var _spectator_winner_id: int = -1
 
+## Lane indicators between paired slots (LaneArrow0..2 ↔ player slot index 0..2).
+var _lane_arrow_nodes: Array = []
+
 
 func _ready() -> void:
 	_is_multiplayer = multiplayer.has_multiplayer_peer() and multiplayer.get_peers().size() > 0
@@ -147,6 +150,7 @@ func _ready() -> void:
 		print("[BattleManager] _ready() placing opponent backs. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
 		_place_opponent_backs()
 		_connect_player_slot_signals()
+		call_deferred("_setup_lane_arrows")
 
 	state = State.WAITING_FOR_PLAYER
 
@@ -197,6 +201,41 @@ func _cache_nodes() -> void:
 	_card_scene_ui = root.get_node_or_null("CardSceneUI") if root else null
 	_player_sprite = (root.get_node_or_null("Player") if root else null) as Sprite2D
 	_opponent_sprite = (root.get_node_or_null("Opponent") if root else null) as Sprite2D
+
+	_lane_arrow_nodes.clear()
+	if root:
+		var lane_parent := root.get_node_or_null("LaneArrows")
+		if lane_parent:
+			for i in range(3):
+				var n := lane_parent.get_node_or_null("LaneArrow%d" % i)
+				if n:
+					_lane_arrow_nodes.append(n)
+
+
+func _setup_lane_arrows() -> void:
+	## Midpoint between each paired slot row; Y nudge slightly toward player row (under center UI text band).
+	if _lane_arrow_nodes.is_empty():
+		return
+	var bump_pairs: Array = [
+		[0, 2],  # PL + OL
+		[1, 1],  # PM + OM
+		[2, 0],  # PR + OR
+	]
+	for pair_idx in range(mini(bump_pairs.size(), _lane_arrow_nodes.size())):
+		var pair: Array = bump_pairs[pair_idx]
+		var pidx: int = pair[0]
+		var oidx: int = pair[1]
+		var pslot: Node = _player_slot_nodes[pidx] if pidx < _player_slot_nodes.size() else null
+		var oslot: Node = _opponent_slot_nodes[oidx] if oidx < _opponent_slot_nodes.size() else null
+		if not pslot or not oslot:
+			continue
+		var mid: Vector2 = (pslot.global_position + oslot.global_position) * 0.5
+		mid.y += 7.0
+		var la: Node = _lane_arrow_nodes[pair_idx]
+		if la:
+			la.global_position = mid
+			if la.has_method("reset_neutral"):
+				la.reset_neutral()
 
 
 func _restore_and_sync_placed_cards() -> void:
@@ -696,6 +735,10 @@ func _animate_card_bump_sequence() -> void:
 	var local_is_defender := _is_local_defender()
 	print("[BattleManager] local_is_defender=%s, _round_results=%s" % [str(local_is_defender), str(_round_results)])
 
+	for la in _lane_arrow_nodes:
+		if la and la.has_method("reset_neutral"):
+			la.reset_neutral()
+
 	for pair in bump_pairs:
 		var p_idx: int = pair[0]
 		var o_idx: int = pair[1]
@@ -709,6 +752,10 @@ func _animate_card_bump_sequence() -> void:
 		print("[BattleManager] Bump pair p_idx=%d o_idx=%d has_pcard=%s has_ocard=%s" % [p_idx, o_idx, str(has_pcard), str(has_ocard)])
 
 		if not has_pcard and not has_ocard:
+			if p_idx < _lane_arrow_nodes.size():
+				var la_skip: Node = _lane_arrow_nodes[p_idx]
+				if la_skip:
+					la_skip.visible = false
 			print("[BattleManager] Skipping bump pair %d — no cards" % p_idx)
 			continue
 
@@ -768,6 +815,32 @@ func _animate_card_bump_sequence() -> void:
 			else:
 				if has_pcard and is_instance_valid(pcard):
 					await _grey_out_card(pcard)
+
+		if p_idx < _lane_arrow_nodes.size():
+			var la_res: Node = _lane_arrow_nodes[p_idx]
+			if la_res and la_res.has_method("apply_lane_result"):
+				var lane_col := Color.WHITE
+				if round_result != "tie":
+					if _card_scene_ui:
+						var win_race: String = ""
+						if round_result == "win":
+							win_race = _card_scene_ui.get_resolved_battle_player_race(int(player_default_race))
+						else:
+							win_race = _card_scene_ui.get_resolved_battle_opponent_race(int(opponent_default_race))
+						lane_col = _card_scene_ui.get_race_color(win_race)
+					elif App:
+						var wr: String = ""
+						if round_result == "win":
+							for p in App.game_players:
+								if p.get("is_local", false):
+									wr = str(p.get("race", "Fairy"))
+									break
+							if wr.is_empty() or wr == "Unknown":
+								wr = App.selected_race if App.selected_race else "Fairy"
+						else:
+							wr = String(App.current_battle_metadata.get("opponent_race", "Fairy"))
+						lane_col = App.get_race_color(wr)
+				la_res.apply_lane_result(round_result, lane_col)
 
 		print("[BattleManager] Fade complete for pair p_idx=%d" % p_idx)
 		# Brief pause between pairs

@@ -124,6 +124,33 @@ func get_player_race(peer_id: int) -> String:
 	return ""
 
 
+## Same race resolution as apply_race_textures (for battle UI colors, e.g. lane arrows).
+func get_resolved_battle_player_race(player_default_race: int) -> String:
+	if player_default_race != int(DefaultRace.USE_GAME):
+		return _default_race_to_display_name(player_default_race)
+	return _get_local_player_race()
+
+
+func get_resolved_battle_opponent_race(opponent_default_race: int) -> String:
+	if opponent_default_race != int(DefaultRace.USE_GAME):
+		return _default_race_to_display_name(opponent_default_race)
+	return _get_opponent_race()
+
+
+func _default_race_to_display_name(r: int) -> String:
+	match r:
+		int(DefaultRace.ELF):
+			return "Elf"
+		int(DefaultRace.ORC):
+			return "Orc"
+		int(DefaultRace.INFERNAL):
+			return "Infernal"
+		int(DefaultRace.FAIRY):
+			return "Fairy"
+		_:
+			return "Fairy"
+
+
 func get_race_color(race: String) -> Color:
 	match race:
 		"Elf":

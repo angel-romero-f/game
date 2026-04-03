@@ -1,4 +1,4 @@
-[gd_scene load_steps=10 format=3 uid="uid://8s4xj8qvpi8a"]
+[gd_scene load_steps=11 format=3 uid="uid://8s4xj8qvpi8a"]
 
 [ext_resource type="Script" uid="uid://bo11tt1dae0fx" path="res://scripts/CardBattleScene.gd" id="1_scene"]
 [ext_resource type="Script" uid="uid://bkwfgx4dtvma" path="res://scripts/BattleManager.gd" id="2_battle_manager"]
@@ -8,6 +8,7 @@
 [ext_resource type="Script" uid="uid://bumkisumq4jxt" path="res://scripts/battle/AttributeConfig.gd" id="9_attr_cfg_script"]
 [ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="10_iwbf0"]
 [ext_resource type="Script" uid="uid://dym2tpv1rpgby" path="res://scripts/ui/CardSceneUI.gd" id="11_card_scene_ui"]
+[ext_resource type="Script" path="res://scripts/battle/LaneArrowIndicator.gd" id="12_lane_arrow"]
 
 [sub_resource type="Resource" id="Resource_attr_cfg"]
 script = ExtResource("9_attr_cfg_script")
@@ -98,6 +99,18 @@ position = Vector2(678.5026, 206.51196)
 scale = Vector2(1.4, 1.4)
 slot_sprite_frames = ExtResource("4_aiscu")
 can_snap = false
+
+[node name="LaneArrows" type="Node2D" parent="."]
+z_index = 4
+
+[node name="LaneArrow0" type="Node2D" parent="LaneArrows"]
+script = ExtResource("12_lane_arrow")
+
+[node name="LaneArrow1" type="Node2D" parent="LaneArrows"]
+script = ExtResource("12_lane_arrow")
+
+[node name="LaneArrow2" type="Node2D" parent="LaneArrows"]
+script = ExtResource("12_lane_arrow")
 
 [node name="BattleUI" type="CanvasLayer" parent="."]
 
