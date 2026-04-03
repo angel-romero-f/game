@@ -26,17 +26,17 @@ const PERFORMER_COUNT: int = 4
 const TOTAL_ROUNDS: int = 5
 
 ## Seconds a performer stays highlighted during sequence playback.
-const NOTE_SHOW_DURATION: float = 0.35
+const NOTE_SHOW_DURATION: float = 0.25
 ## Seconds of silence between consecutive notes during playback.
-const NOTE_GAP: float = 0.12
+const NOTE_GAP: float = 0.08
 ## Pause before the first note of each round's playback.
-const PRE_SEQUENCE_DELAY: float = 0.4
+const PRE_SEQUENCE_DELAY: float = 0.25
 ## Pause after the last note before accepting player input.
-const POST_SEQUENCE_DELAY: float = 0.25
+const POST_SEQUENCE_DELAY: float = 0.18
 ## Pause between a completed round and the next playback.
-const BETWEEN_ROUND_DELAY: float = 0.5
+const BETWEEN_ROUND_DELAY: float = 0.35
 ## How long the performer flashes when the *player* presses it.
-const PLAYER_FLASH_DURATION: float = 0.18
+const PLAYER_FLASH_DURATION: float = 0.12
 
 # ── PERFORMER VISUAL CONSTANTS ──
 

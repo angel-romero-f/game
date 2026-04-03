@@ -44,6 +44,8 @@ var region_bonus_used_this_phase: Array = []
 ## Flag to show phase transition overlay when returning to GameIntro
 var show_phase_transition: bool = false
 var phase_transition_text: String = ""
+## True while the phase transition overlay is animating (blocks bot actions).
+var phase_transition_animating: bool = false
 
 ## When returning from a territory minigame: restore GameIntro map sub-phase. Use CLAIMING, RESOURCE_COLLECTION, or BATTLE_READY. Use -1 when not returning.
 var pending_return_map_sub_phase: int = -1
@@ -372,6 +374,7 @@ func reset_phase_state() -> void:
 	region_bonus_used_this_phase.clear()
 	show_phase_transition = false
 	phase_transition_text = ""
+	phase_transition_animating = false
 	current_turn_player_id = -1
 	current_turn_index = 0
 	battle_queue.clear()

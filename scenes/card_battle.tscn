@@ -190,6 +190,7 @@ text = "Press SPACE to return to menu"
 horizontal_alignment = 1
 
 [node name="LeaveButton" type="Button" parent="BattleUI/UI"]
+visible = false
 layout_mode = 1
 anchors_preset = 2
 anchor_top = 1.0

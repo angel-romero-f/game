@@ -294,6 +294,11 @@ func _check_all_done_and_advance() -> void:
 @rpc("authority", "call_local", "reliable")
 func rpc_set_phase(phase_id: int) -> void:
 	PhaseController.set_phase(phase_id)
+	# Mirror the cleanup that App.enter_*_phase() performs locally, since those
+	# functions are not called in the multiplayer flow.
+	App.region_bonus_used_this_phase.clear()
+	App.region_bonus_active = false
+	App.pending_bonus_reward.clear()
 	if multiplayer.is_server():
 		print("[HOST PhaseSync] Phase → %d ('%s')" % [phase_id, App.phase_transition_text])
 

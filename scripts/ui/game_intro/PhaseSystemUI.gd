@@ -219,6 +219,7 @@ func show_phase_transition_overlay() -> void:
 	phase_overlay.visible = true
 	phase_overlay.modulate.a = 0.0
 	is_phase_overlay_animating = true
+	App.phase_transition_animating = true
 	var tween := create_tween()
 	tween.tween_property(phase_overlay, "modulate:a", 1.0, 0.2)
 	tween.tween_interval(0.8)
@@ -228,6 +229,7 @@ func show_phase_transition_overlay() -> void:
 func _on_phase_transition_finished() -> void:
 	phase_overlay.visible = false
 	is_phase_overlay_animating = false
+	App.phase_transition_animating = false
 	# Drain any queued transition that arrived while we were animating
 	if _queued_transition_text != "":
 		var queued_text := _queued_transition_text

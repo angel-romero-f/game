@@ -8,8 +8,8 @@ var game_over: bool = false
 var player_won: bool = false
 var _has_returned: bool = false
 
-# ── Timer (shared 30-second countdown, same as all minigames) ──
-const MINIGAME_TIME_LIMIT: float = 30.0
+# ── Timer (10-second countdown) ──
+const MINIGAME_TIME_LIMIT: float = 10.0
 var _minigame_timer: float = MINIGAME_TIME_LIMIT
 var _timer_active: bool = false
 

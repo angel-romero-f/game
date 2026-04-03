@@ -11,6 +11,7 @@ var players_list: ItemList
 var start_button: Button
 var back_button: Button
 var _difficulty_sliders: Dictionary = {} # bot_id -> HSlider
+var warning_label: Label
 
 func _ready() -> void:
 	title_label = get_node_or_null("Card/Margin/VBoxContainer/TitleLabel")
@@ -30,6 +31,22 @@ func _ready() -> void:
 	if name_label:
 		var display_name := App.player_name if not App.player_name.is_empty() else "Player"
 		name_label.text = "Name: " + display_name
+
+	# Warning label for minimum player count
+	warning_label = Label.new()
+	warning_label.name = "MinPlayerWarning"
+	warning_label.text = "You need at least one other player or bot to start."
+	warning_label.add_theme_color_override("font_color", Color(1.0, 0.35, 0.25, 1.0))
+	var _pixel_font: Font = load("res://fonts/m5x7.ttf")
+	if _pixel_font:
+		warning_label.add_theme_font_override("font", _pixel_font)
+	warning_label.add_theme_font_size_override("font_size", 14)
+	warning_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	warning_label.visible = false
+	var vbox := start_button.get_parent() if start_button else null
+	if vbox:
+		vbox.add_child(warning_label)
+		vbox.move_child(warning_label, start_button.get_index())
 
 	if start_button:
 		start_button.pressed.connect(_on_start_pressed)
@@ -90,14 +107,19 @@ func _refresh_all() -> void:
 
 
 func _refresh_bot_controls() -> void:
+	var total: int = PlayerDataSync.get_total_participant_count()
+	var bots: int = PlayerDataSync.get_bot_count()
 	if slots_label:
-		var total: int = PlayerDataSync.get_total_participant_count()
-		var bots: int = PlayerDataSync.get_bot_count()
 		slots_label.text = "Players: %d / 4  (%d bot%s)" % [total, bots, "s" if bots != 1 else ""]
 	if add_bot_button:
-		add_bot_button.disabled = PlayerDataSync.get_total_participant_count() >= PlayerDataSync.TARGET_PLAYER_COUNT
+		add_bot_button.disabled = total >= PlayerDataSync.TARGET_PLAYER_COUNT
 	if remove_bot_button:
-		remove_bot_button.disabled = PlayerDataSync.get_bot_count() <= 0
+		remove_bot_button.disabled = bots <= 0
+	var enough_players := total >= 2
+	if start_button:
+		start_button.disabled = not enough_players
+	if warning_label:
+		warning_label.visible = not enough_players
 
 
 func _on_add_bot_pressed() -> void:

@@ -54,6 +54,9 @@ func process_single_player_frame(delta: float) -> void:
 	var mp := _get_mp()
 	if App.is_multiplayer and not (mp and mp.has_multiplayer_peer() and mp.is_server()):
 		return
+	# Block bot actions while a phase transition overlay is animating
+	if App.phase_transition_animating:
+		return
 	if App.is_multiplayer:
 		if _mp_bot_placement_timer != null and not _mp_bot_placement_timer.is_stopped():
 			return

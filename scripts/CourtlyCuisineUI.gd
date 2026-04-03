@@ -218,16 +218,15 @@ func show_game_over(is_final: bool):
 	_update_lives_display()
 
 	if is_final:
+		App.stop_main_music()
+		if lose_music:
+			lose_music.play()
 		if _big_title_label:
 			_big_title_label.text = "Kitchen Catastrophe!"
 			_big_title_label.add_theme_color_override("font_color", Color(1.0, 0.2, 0.2))
 			_big_title_label.visible = true
 		if game_over_panel:
 			game_over_panel.visible = false
-		if lose_music:
-			App.stop_main_music()
-			lose_music.stop()
-			lose_music.play()
 		_auto_return_after_timeout()
 	else:
 		var lives_left := App.get_lives()
