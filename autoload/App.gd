@@ -88,6 +88,8 @@ var is_battle_spectator: bool = false
 var single_player_bot_controller: Node = null
 ## Bot card collections by player id (single-player only): { bot_id: [ {"path","frame"}, ... ] }
 var bot_card_collections: Dictionary = {}
+## If true, that bot already received the one-time 4-card opening hand; empty hand later must not auto-refill.
+var bot_initial_hand_dealt: Dictionary = {}
 ## Territory -> attacker id map used to resolve single-player battle participants.
 var territory_pending_attackers: Dictionary = {}
 ## How to continue after territory-battle sequence in single-player: "", "command", or "collect".
@@ -826,6 +828,7 @@ func setup_single_player_game() -> void:
 	reset_phase_state()
 	reset_territories()
 	bot_card_collections.clear()
+	bot_initial_hand_dealt.clear()
 	single_player_bot_controller = null
 	territory_pending_attackers.clear()
 	territory_battle_resume_mode = ""
@@ -876,6 +879,7 @@ func setup_multiplayer_game() -> void:
 	reset_phase_state()
 	reset_territories()
 	bot_card_collections.clear()
+	bot_initial_hand_dealt.clear()
 	single_player_bot_controller = null
 	territory_pending_attackers.clear()
 	territory_battle_resume_mode = ""

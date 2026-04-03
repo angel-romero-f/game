@@ -7,6 +7,8 @@ extends Node
 
 const CARD_SCENE: PackedScene = preload("res://scenes/card.tscn")
 const MAIN_MENU_PATH := "res://scenes/ui/game_intro.tscn"
+## Preload so BattleManager does not depend on global `class_name` registration order.
+const _BOT_BATTLE_BEHAVIOR = preload("res://scripts/bots/BotBattleBehavior.gd")
 
 enum State { SETUP, WAITING_FOR_PLAYER, WAITING_FOR_ALL_READY, FLIPPING, RESOLVED }
 var state: State = State.SETUP
@@ -76,6 +78,10 @@ var _round_results: Array = [] # "win", "lose", "tie" from player perspective
 
 var battle_timer: float = 10.0
 var is_timer_active: bool = false
+
+## Bot difficulty 4+: defender slot alignment during coordination timer.
+var _bot_def_align_cd: float = 0.0
+var _bot_def_align_grace: float = 0.0
 
 # Auto-return to map after battle resolves
 var _auto_return_active: bool = false
@@ -152,6 +158,8 @@ func _ready() -> void:
 		if _timer_label:
 			_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(battle_timer)
 		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER, timer started")
+		_bot_def_align_cd = 0.0
+		_bot_def_align_grace = 0.0
 		# Respace hand cards after everything is set up
 		if _card_manager:
 			_card_manager.call_deferred("respace_hand_cards")
@@ -587,17 +595,47 @@ func _process(delta: float) -> void:
 			_auto_leave_battle()
 			return
 
-	if not is_timer_active or state != State.WAITING_FOR_PLAYER:
+	if state != State.WAITING_FOR_PLAYER:
 		return
-	
-	battle_timer -= delta
-	if _timer_label:
-		_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(max(0, battle_timer))
-	
-	if battle_timer <= 0.0:
-		is_timer_active = false
-		_update_timer_visibility()
-		_on_battle_timer_expired()
+
+	var timer_positive := is_timer_active and battle_timer > 0.0
+	if timer_positive or _bot_def_align_grace > 0.0:
+		if not timer_positive and _bot_def_align_grace > 0.0:
+			_bot_def_align_grace = maxf(0.0, _bot_def_align_grace - delta)
+		var run_align := (not _is_multiplayer) or (multiplayer.has_multiplayer_peer() and multiplayer.is_server())
+		if run_align and not _is_spectator:
+			_bot_def_align_cd -= delta
+			if _bot_def_align_cd <= 0.0:
+				var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+				if _BOT_BATTLE_BEHAVIOR.should_run_defender_alignment(
+					_is_spectator,
+					_player_slot_nodes,
+					_opponent_slot_nodes,
+					_opponent_cards_by_slot,
+					tid_str,
+					_is_local_defender()
+				):
+					var mv: Array = _BOT_BATTLE_BEHAVIOR.get_next_opponent_slot_move_for_alignment(
+						_player_slot_nodes,
+						_opponent_slot_nodes,
+						_opponent_cards_by_slot
+					)
+					if not mv.is_empty() and _apply_opponent_slot_move_for_bot_align(int(mv[0]), int(mv[1])):
+						_bot_def_align_cd = _BOT_BATTLE_BEHAVIOR.ALIGN_MOVE_DELAY_SEC
+
+	if is_timer_active:
+		battle_timer -= delta
+		if _timer_label:
+			_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(max(0, battle_timer))
+
+		if battle_timer <= 0.0:
+			is_timer_active = false
+			if not _is_multiplayer or (multiplayer.has_multiplayer_peer() and multiplayer.is_server()):
+				_bot_def_align_grace = _BOT_BATTLE_BEHAVIOR.POST_TIMER_GRACE_SEC
+			_update_timer_visibility()
+			_on_battle_timer_expired()
+	elif _bot_def_align_grace <= 0.0:
+		return
 
 
 func _on_battle_timer_expired() -> void:
@@ -761,6 +799,72 @@ func _is_local_defender() -> bool:
 		var my_id: int = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 		return int(owner_id) == my_id
 	return true
+
+
+func _apply_opponent_slot_move_for_bot_align(from_o: int, to_o: int) -> bool:
+	## Move defender (opponent) card from one slot index to another; updates BattleStateManager (+ sync in MP).
+	if from_o < 0 or from_o >= _opponent_slot_nodes.size():
+		return false
+	if to_o < 0 or to_o >= _opponent_slot_nodes.size():
+		return false
+	var sa: Node = _opponent_slot_nodes[from_o]
+	var sb: Node = _opponent_slot_nodes[to_o]
+	if not sa or not sb:
+		return false
+	var ca: Node = _opponent_cards_by_slot.get(sa, null)
+	if ca == null or not is_instance_valid(ca):
+		return false
+	var cb: Node = _opponent_cards_by_slot.get(sb, null)
+	if cb != null and is_instance_valid(cb):
+		return false
+	if sa.has_method("unsnap_card"):
+		sa.unsnap_card()
+	_opponent_cards_by_slot.erase(sa)
+	if sb.has_method("force_snap_card"):
+		sb.force_snap_card(ca)
+	else:
+		ca.global_position = sb.global_position
+		sb.set("has_card", true)
+		sb.set("snapped_card", ca)
+	_opponent_cards_by_slot[sb] = ca
+	_sync_defending_slots_after_opponent_swap(from_o, to_o)
+	return true
+
+
+func _sync_defending_slots_after_opponent_swap(from_idx: int, to_idx: int) -> void:
+	if not BattleStateManager:
+		return
+	var tid: String = BattleStateManager.current_territory_id
+	if tid.is_empty():
+		return
+	var d: Dictionary = BattleStateManager.get_defending_slots(tid)
+	var moved: Variant = d.get(from_idx)
+	if moved == null:
+		moved = d.get(str(from_idx))
+	if not (moved is Dictionary):
+		return
+	var path_m: String = String(moved.get("path", ""))
+	if path_m.is_empty():
+		return
+	var newd: Dictionary = {}
+	for k in d.keys():
+		var ki: int = int(k) if str(k).is_valid_int() else -1
+		if ki < 0:
+			continue
+		if ki == from_idx:
+			continue
+		if ki == to_idx:
+			continue
+		var entry: Variant = d[k]
+		if entry is Dictionary:
+			newd[ki] = entry
+	newd[to_idx] = moved
+	BattleStateManager.set_defending_slots(tid, newd)
+	if _is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
+		var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
+		if tcs and tcs.has_method("get_owner_id"):
+			var defender_id: int = int(tcs.call("get_owner_id", int(tid)))
+			BattleSync.host_sync_bot_defender_slots(defender_id, newd)
 
 
 func _grey_out_card(card: Node) -> void:
