@@ -201,8 +201,9 @@ func _on_territory_selected(territory_id: int) -> void:
 		and map_sub_phase == PhaseController.MapSubPhase.CLAIMING
 	)
 	var is_resource_collection := (
-		App.current_game_phase == App.GamePhase.CONTEST_CLAIM
-		and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION
+		(App.current_game_phase == App.GamePhase.CONTEST_CLAIM
+		and map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+		or App.current_game_phase == App.GamePhase.COLLECT
 	)
 	var is_claimed: bool = _territory_claim_state != null and _territory_claim_state.call("is_claimed", territory_id)
 	var owner_id: Variant = _territory_claim_state.call("get_owner_id", territory_id) if _territory_claim_state else null
@@ -213,11 +214,16 @@ func _on_territory_selected(territory_id: int) -> void:
 		if claim_ui.has_method("show_defending_preview"):
 			claim_ui.show_defending_preview(territory_id)
 		return
-	# In multiplayer, block non-turn interactions during Claiming and Card Command
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
-		if is_card_command or is_claiming_phase:
+	# Block non-turn interactions during Claiming and Card Command.
+	if is_card_command or is_claiming_phase:
+		if App.is_multiplayer and multiplayer.has_multiplayer_peer():
 			var my_id := multiplayer.get_unique_id()
 			if PhaseController.current_turn_peer_id != my_id and PhaseController.current_turn_peer_id != -1:
+				return
+		else:
+			var local_turn_id := App.current_turn_player_id
+			var local_id_sp: int = int(_get_local_player_id())
+			if local_turn_id != -1 and local_turn_id != local_id_sp:
 				return
 	if is_resource_collection:
 		if App.minigames_completed_this_phase >= App.MAX_MINIGAMES_PER_PHASE:

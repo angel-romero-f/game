@@ -67,6 +67,15 @@ func _get_player_name(peer_id: int) -> String:
 			return str(p.get("name", "Player"))
 	return "Player"
 
+## Server-only helper for host-controlled bot claims in multiplayer.
+func host_claim_territory_as_bot(territory_id: int, bot_id: int, cards: Array) -> void:
+	if not multiplayer.is_server():
+		return
+	var tcs := _get_territory_claim_state()
+	if tcs and tcs.has_method("set_claim"):
+		tcs.call("set_claim", territory_id, bot_id, cards)
+	rpc_territory_claimed.rpc(territory_id, bot_id, cards)
+
 ## Conquest: attacker takes territory from defender after winning battle. Server applies and broadcasts.
 func request_conquest_territory(territory_id: int, conqueror_id: int, cards: Array) -> void:
 	if multiplayer.is_server():
@@ -86,8 +95,20 @@ func server_conquest_territory(territory_id: int, conqueror_id: int, cards: Arra
 func _server_process_conquest(requester_id: int, territory_id: int, conqueror_id: int, cards: Array) -> void:
 	if not multiplayer.is_server():
 		return
+	# Normal case: the winning player applies for themselves.
+	# When the winner is a bot, the RPC is sent by a human participant (or the host after bot-vs-bot);
+	# conqueror_id is the bot id, so requester_id != conqueror_id — still valid.
 	if requester_id != conqueror_id:
-		return
+		if not PlayerDataSync.is_bot_id(conqueror_id):
+			return
+		var att_id: int = App.pending_territory_battle_attacker_id
+		var def_id: int = App.pending_territory_battle_defender_id
+		if conqueror_id != att_id and conqueror_id != def_id:
+			return
+		var sender_is_participant: bool = (requester_id == att_id or requester_id == def_id)
+		var sender_is_host: bool = (requester_id == multiplayer.get_unique_id())
+		if not sender_is_participant and not sender_is_host:
+			return
 	var tcs := _get_territory_claim_state()
 	if tcs and tcs.has_method("set_claim"):
 		tcs.call("set_claim", territory_id, conqueror_id, cards)

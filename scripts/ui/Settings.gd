@@ -78,8 +78,7 @@ func _on_save_pressed() -> void:
 	print("Save button pressed (not implemented yet)")
 
 func _on_how_to_play_pressed() -> void:
-	# Placeholder for how to play functionality
-	print("How to Play button pressed (not implemented yet)")
+	App.go("res://scenes/ui/HowToPlay.tscn")
 
 func _on_quit_pressed() -> void:
 	get_tree().quit()

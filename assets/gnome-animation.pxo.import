@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dfj2dw1w41xny"
+path="res://.godot/imported/gnome-animation.pxo-210e7518235d689679d64dd35de6fb44.res"
+
+[deps]
+
+source_file="res://assets/gnome-animation.pxo"
+dest_files=["res://.godot/imported/gnome-animation.pxo-210e7518235d689679d64dd35de6fb44.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false

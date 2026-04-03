@@ -286,6 +286,16 @@ func _apply_contest_command_ui() -> void:
 			print("[CLIENT PhaseSystemUI] Command turn: it's MY turn")
 		_update_turn_banner()
 	else:
+		# Single-player turn lock: only the local player can act on command turns.
+		var local_id := -1
+		for p in App.game_players:
+			if p.get("is_local", false):
+				local_id = int(p.get("id", -1))
+				break
+		if App.current_turn_player_id != -1 and App.current_turn_player_id != local_id:
+			skip_to_battle_button.visible = false
+		else:
+			skip_to_battle_button.visible = true
 		set_overlay_state(OverlayState.NONE)
 		is_waiting_for_others = false
 		_update_turn_banner()
@@ -328,8 +338,17 @@ func _apply_claiming_ui() -> void:
 			print("[CLIENT PhaseSystemUI] Claiming turn: it's MY turn")
 		_update_turn_banner()
 	else:
-		skip_to_battle_button.visible = true
-		skip_to_battle_button.text = "Done claiming"
+		# Single-player turn lock: only local player can claim/attack on their turn.
+		var local_id := -1
+		for p in App.game_players:
+			if p.get("is_local", false):
+				local_id = int(p.get("id", -1))
+				break
+		if App.current_turn_player_id != -1 and App.current_turn_player_id != local_id:
+			skip_to_battle_button.visible = false
+		else:
+			skip_to_battle_button.visible = true
+			skip_to_battle_button.text = "Done claiming"
 		set_overlay_state(OverlayState.NONE)
 		is_waiting_for_others = false
 		_update_turn_banner()
@@ -491,8 +510,12 @@ func on_skip_to_battle_pressed() -> void:
 				set_overlay_state(OverlayState.NONE)
 				is_waiting_for_others = false
 			else:
-				App.enter_contest_claim_phase()
-				show_phase_transition_overlay()
+				if App.single_player_bot_controller and App.single_player_bot_controller.has_method("on_local_command_done"):
+					App.single_player_bot_controller.on_local_command_done()
+				if App.current_game_phase == App.GamePhase.CONTEST_CLAIM:
+					show_phase_transition_overlay()
+				else:
+					apply_phase_ui()
 		App.GamePhase.CONTEST_CLAIM:
 			# Non-CLAIMING sub-phases (RESOURCE_COLLECTION, BATTLE_READY):
 			# server drives transitions, so do nothing here.

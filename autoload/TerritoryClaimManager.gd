@@ -140,6 +140,8 @@ func apply_conquest_claim(territory_id: int, conqueror_id: int, cards: Array) ->
 
 ## Register an attack on a territory. Stores attacking cards in BattleStateManager and removes from player hand.
 func register_attack(territory_id: int, attacking_slot_cards: Array) -> void:
+	# Track attacker for single-player territory battle participant resolution.
+	App.territory_pending_attackers[territory_id] = int(_get_local_id())
 	if BattleStateManager:
 		var attacking_dict: Dictionary = {}
 		for slot_idx in range(3):
