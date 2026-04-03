@@ -551,6 +551,20 @@ const AIR_CARD_POOL: Array = [
 	{"sprite_frames": "res://assets/orc_air_cards.pxo", "frame_index": 3},
 ]
 
+## In this project, "earth/life" uses the existing air card assets/pool.
+const EARTH_LIFE_CARD_POOL: Array = AIR_CARD_POOL
+
+## Region -> attribute card pool for territory minigame rewards.
+## Adjust this mapping if you want different colony/region attribute identities.
+const REGION_ATTRIBUTE_TYPE: Dictionary = {
+	1: "earth_life",
+	2: "fire",
+	3: "earth_life",
+	4: "water",
+	5: "water",
+	6: "fire",
+}
+
 ## Player's current hand - array of card data dictionaries (legacy, used for hand display)
 var player_hand: Array = []
 
@@ -680,7 +694,10 @@ func add_card_from_minigame_win() -> void:
 ## Pre-roll (deterministically pick) the reward card before the minigame scene loads.
 ## Stores it in pending_minigame_reward so the minigame UI can preview it.
 func pre_roll_minigame_reward() -> void:
-	var card_pool: Array = MIXED_CARD_POOL.duplicate()
+	pre_roll_minigame_reward_for_region(-1)
+
+func pre_roll_minigame_reward_for_region(region_id: int) -> void:
+	var card_pool: Array = _get_card_pool_for_region(region_id)
 	if card_pool.is_empty():
 		pending_minigame_reward = {}
 		return
@@ -692,13 +709,30 @@ func pre_roll_minigame_reward() -> void:
 
 ## Pre-roll a bonus reward card for the region bonus (called when player owns full region).
 func pre_roll_bonus_reward() -> void:
-	var card_pool: Array = MIXED_CARD_POOL.duplicate()
+	pre_roll_bonus_reward_for_region(-1)
+
+func pre_roll_bonus_reward_for_region(region_id: int) -> void:
+	var card_pool: Array = _get_card_pool_for_region(region_id)
 	if card_pool.is_empty():
 		pending_bonus_reward = {}
 		return
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
 	pending_bonus_reward = {"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))}
 	print("[Cards] Pre-rolled region bonus reward: %s frame %d" % [pending_bonus_reward.get("path", ""), pending_bonus_reward.get("frame", 0)])
+
+func _get_card_pool_for_region(region_id: int) -> Array:
+	if region_id < 0:
+		return MIXED_CARD_POOL.duplicate()
+	var attribute: String = str(REGION_ATTRIBUTE_TYPE.get(region_id, "mixed"))
+	match attribute:
+		"fire":
+			return FIRE_CARD_POOL.duplicate()
+		"water":
+			return WATER_CARD_POOL.duplicate()
+		"earth_life":
+			return EARTH_LIFE_CARD_POOL.duplicate()
+		_:
+			return MIXED_CARD_POOL.duplicate()
 
 ## Award the pre-rolled reward card (called on minigame WIN instead of add_card_from_minigame_win).
 ## Also awards the region bonus card if the player owns the full region.

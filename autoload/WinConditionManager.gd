@@ -7,6 +7,8 @@ extends Node
 
 const GAME_DURATION: float = 360.0  # 6 minutes
 
+signal player_won(player_id: int)
+
 var time_remaining: float = 0.0
 var timer_active: bool = false
 
@@ -76,6 +78,8 @@ func _on_timer_expired() -> void:
 	timer_active = false
 	time_remaining = 0.0
 	var winner_id: int = _determine_winner()
+	if winner_id != -1:
+		player_won.emit(winner_id)
 	_show_victory(winner_id)
 	get_tree().paused = true
 
