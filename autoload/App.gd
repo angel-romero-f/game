@@ -88,6 +88,8 @@ var is_battle_spectator: bool = false
 var single_player_bot_controller: Node = null
 ## Bot card collections by player id (single-player only): { bot_id: [ {"path","frame"}, ... ] }
 var bot_card_collections: Dictionary = {}
+## If true, that bot already received the one-time 4-card opening hand; empty hand later must not auto-refill.
+var bot_initial_hand_dealt: Dictionary = {}
 ## Territory -> attacker id map used to resolve single-player battle participants.
 var territory_pending_attackers: Dictionary = {}
 ## How to continue after territory-battle sequence in single-player: "", "command", or "collect".
@@ -153,6 +155,13 @@ func on_minigame_completed() -> void:
 func on_battle_completed() -> void:
 	## Called when a single battle ends - handles territory battle sequence or multi-battle queue
 	print("[DEBUG] App.on_battle_completed() called. Pending IDs: ", pending_territory_battle_ids)
+	if game_victor_id >= 0:
+		# A winner exists; stop any remaining queued battles and return to map/victory flow.
+		pending_territory_battle_ids.clear()
+		territory_pending_attackers.clear()
+		returning_from_territory_battles = true
+		go("res://scenes/ui/game_intro.tscn")
+		return
 	
 	# Territory battle sequence (Finish Claiming): run next territory battle or return to map
 	if pending_territory_battle_ids.size() > 0:
@@ -819,6 +828,7 @@ func setup_single_player_game() -> void:
 	reset_phase_state()
 	reset_territories()
 	bot_card_collections.clear()
+	bot_initial_hand_dealt.clear()
 	single_player_bot_controller = null
 	territory_pending_attackers.clear()
 	territory_battle_resume_mode = ""
@@ -869,6 +879,7 @@ func setup_multiplayer_game() -> void:
 	reset_phase_state()
 	reset_territories()
 	bot_card_collections.clear()
+	bot_initial_hand_dealt.clear()
 	single_player_bot_controller = null
 	territory_pending_attackers.clear()
 	territory_battle_resume_mode = ""
@@ -968,6 +979,9 @@ func play_blip_select() -> void:
 
 func _on_player_won(player_id: int) -> void:
 	game_victor_id = player_id
+	# End any remaining battle sequence immediately; the game already has a winner.
+	pending_territory_battle_ids.clear()
+	territory_pending_attackers.clear()
 
 func _on_node_added(node: Node) -> void:
 	if node is BaseButton:

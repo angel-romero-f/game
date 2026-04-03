@@ -141,7 +141,8 @@ func _on_start_pressed() -> void:
 		PhaseSync.start_game.rpc(
 			PlayerDataSync.player_names.duplicate(true),
 			PlayerDataSync.player_races.duplicate(true),
-			PlayerDataSync.get_bot_ids_array()
+			PlayerDataSync.get_bot_ids_array(),
+			PlayerDataSync.bot_difficulties.duplicate(true)
 		)
 
 func _on_back_pressed() -> void:

@@ -6,9 +6,11 @@ var code_label: Label
 var slots_label: Label
 var add_bot_button: Button
 var remove_bot_button: Button
+var bot_difficulty_container: VBoxContainer
 var players_list: ItemList
 var start_button: Button
 var back_button: Button
+var _difficulty_sliders: Dictionary = {} # bot_id -> HSlider
 
 func _ready() -> void:
 	title_label = get_node_or_null("Card/Margin/VBoxContainer/TitleLabel")
@@ -17,6 +19,7 @@ func _ready() -> void:
 	slots_label = get_node_or_null("Card/Margin/VBoxContainer/SlotsLabel")
 	add_bot_button = get_node_or_null("Card/Margin/VBoxContainer/BotHBox/AddBotButton")
 	remove_bot_button = get_node_or_null("Card/Margin/VBoxContainer/BotHBox/RemoveBotButton")
+	bot_difficulty_container = get_node_or_null("Card/Margin/VBoxContainer/BotDifficultyContainer")
 	players_list = get_node_or_null("Card/Margin/VBoxContainer/PlayersList")
 	start_button = get_node_or_null("Card/Margin/VBoxContainer/StartButton")
 	back_button = get_node_or_null("Card/Margin/VBoxContainer/BackButton")
@@ -64,11 +67,14 @@ func _ready() -> void:
 		PlayerDataSync.player_names_updated.disconnect(_on_player_data_updated)
 	if PlayerDataSync.player_races_updated.is_connected(_on_player_data_updated):
 		PlayerDataSync.player_races_updated.disconnect(_on_player_data_updated)
+	if PlayerDataSync.bot_difficulties_updated.is_connected(_on_player_data_updated):
+		PlayerDataSync.bot_difficulties_updated.disconnect(_on_player_data_updated)
 
 	multiplayer.peer_connected.connect(_on_peer_connected)
 	multiplayer.peer_disconnected.connect(_on_peer_disconnected)
 	PlayerDataSync.player_names_updated.connect(_on_player_data_updated)
 	PlayerDataSync.player_races_updated.connect(_on_player_data_updated)
+	PlayerDataSync.bot_difficulties_updated.connect(_on_player_data_updated)
 
 	_refresh_all()
 
@@ -80,6 +86,7 @@ func _on_player_data_updated() -> void:
 func _refresh_all() -> void:
 	_refresh_players_list()
 	_refresh_bot_controls()
+	_refresh_bot_difficulty_controls()
 
 
 func _refresh_bot_controls() -> void:
@@ -105,6 +112,61 @@ func _on_remove_bot_pressed() -> void:
 		return
 	if PlayerDataSync.host_remove_bot():
 		_refresh_all()
+
+
+func _refresh_bot_difficulty_controls() -> void:
+	if not bot_difficulty_container:
+		return
+	for c in bot_difficulty_container.get_children():
+		c.queue_free()
+	_difficulty_sliders.clear()
+
+	var bot_ids: Array[int] = []
+	for pid in PlayerDataSync.player_names.keys():
+		if PlayerDataSync.is_bot_id(int(pid)):
+			bot_ids.append(int(pid))
+	bot_ids.sort()
+
+	for bid in bot_ids:
+		var row := HBoxContainer.new()
+		row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+		var bot_name := String(PlayerDataSync.player_names.get(bid, "Bot"))
+		var label := Label.new()
+		label.text = "%s Difficulty" % bot_name
+		label.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+		row.add_child(label)
+
+		var slider := HSlider.new()
+		slider.min_value = 0
+		slider.max_value = 5
+		slider.step = 1
+		slider.value = float(PlayerDataSync.get_bot_difficulty(bid))
+		slider.custom_minimum_size = Vector2(140, 0)
+		row.add_child(slider)
+
+		var value_label := Label.new()
+		value_label.text = str(int(slider.value))
+		value_label.custom_minimum_size = Vector2(20, 0)
+		slider.value_changed.connect(func(v: float) -> void:
+			value_label.text = str(int(v))
+		)
+		# Commit to sync only when dragging ends to avoid rebuilding controls mid-drag.
+		slider.drag_ended.connect(_on_bot_difficulty_drag_ended.bind(bid, slider))
+		row.add_child(value_label)
+
+		_difficulty_sliders[bid] = slider
+		bot_difficulty_container.add_child(row)
+
+
+func _on_bot_difficulty_drag_ended(value_changed: bool, bot_id: int, slider: HSlider) -> void:
+	if not value_changed:
+		return
+	if not multiplayer.is_server():
+		return
+	if slider == null:
+		return
+	PlayerDataSync.host_set_bot_difficulty(bot_id, int(slider.value))
 
 
 func _on_peer_connected(_id: int) -> void:

@@ -114,6 +114,19 @@ func _server_remove_battle_card(peer_id: int, slot_index: int) -> void:
 		battle_placed_cards[peer_id].erase(slot_index)
 		sync_battle_cards.rpc(battle_placed_cards)
 
+
+## Server-only: replace a peer's battle slot layout (e.g. bot defender reordering during coordination).
+func host_sync_bot_defender_slots(defender_peer_id: int, new_slots: Dictionary) -> void:
+	if not multiplayer.has_multiplayer_peer():
+		return
+	if not multiplayer.is_server():
+		return
+	if defender_peer_id < 0:
+		return
+	battle_placed_cards[defender_peer_id] = new_slots.duplicate(true)
+	sync_battle_cards.rpc(battle_placed_cards)
+
+
 @rpc("authority", "call_local", "reliable")
 func sync_battle_cards(cards: Dictionary) -> void:
 	battle_placed_cards = cards.duplicate(true)

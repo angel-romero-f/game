@@ -11,7 +11,8 @@ const BOT_PLACEMENT_DELAY_SEC := 1.0
 var _collect_behavior: RefCounted
 var _command_behavior: RefCounted
 var _battle_behavior: RefCounted
-var _last_collect_phase_key: String = ""
+## Bots simulate at most one "collect round" per human minigame cycle (2 minigames max, see BotCollectBehavior).
+var _bot_collect_ran_for_current_zero_window: bool = false
 var _bot_turn_cooldown: float = 0.0
 ## Multiplayer: wall-clock delay between bot actions (frame delta is unreliable for visible pacing).
 var _mp_bot_placement_timer: Timer
@@ -93,20 +94,27 @@ func on_battle_started_for_bots() -> void:
 # ---------- BOT HAND INIT ----------
 
 func _initialize_bot_hands_if_needed() -> void:
+	## Deal the opening 4 cards once per bot per match. Do not refill when the hand is empty later
+	## (cards spent on territories / battles stay gone until collect phase adds more).
 	for p in App.game_players:
 		if not bool(p.get("is_bot", false)):
 			continue
 		var bot_id := int(p.get("id", -1))
 		if bot_id == -1:
 			continue
-		if App.bot_card_collections.has(bot_id) and not App.bot_card_collections[bot_id].is_empty():
+		if bool(App.bot_initial_hand_dealt.get(bot_id, false)):
 			continue
-		App.bot_card_collections[bot_id] = []
+		App.bot_initial_hand_dealt[bot_id] = true
+		if not App.bot_card_collections.has(bot_id):
+			App.bot_card_collections[bot_id] = []
+		if not App.bot_card_collections[bot_id].is_empty():
+			print("[BotController] Bot %d already has %d cards; skipping opening deal." % [bot_id, App.bot_card_collections[bot_id].size()])
+			continue
 		for _i in range(4):
 			var card := _random_card_for_bot_race(bot_id)
 			if not card.is_empty():
 				App.bot_card_collections[bot_id].append(card)
-		print("[BotController] Initialized bot %d with %d cards." % [bot_id, App.bot_card_collections[bot_id].size()])
+		print("[BotController] Opening hand: bot %d dealt %d cards." % [bot_id, App.bot_card_collections[bot_id].size()])
 	var mp_h := _get_mp()
 	if App.is_multiplayer and mp_h and mp_h.has_multiplayer_peer() and mp_h.is_server():
 		PhaseSync.host_sync_bot_card_counts()
@@ -162,9 +170,14 @@ func _maybe_run_bot_command_turn() -> void:
 
 	if not _placing_active:
 		_initialize_bot_hands_if_needed()
-		_command_behavior.prepare_turn(App.current_turn_player_id)
+		var bot_id_sp: int = App.current_turn_player_id
+		var diff_sp: int = int(PlayerDataSync.get_bot_difficulty(bot_id_sp))
+		_command_behavior.prepare_turn(bot_id_sp, diff_sp)
 		_placing_active = true
 		_placing_attacked = false
+		# Ensure a visible delay before the first placement too.
+		_bot_turn_cooldown = BOT_PLACEMENT_DELAY_SEC
+		return
 
 	var result: Dictionary = _command_behavior.place_next()
 	_placing_attacked = _placing_attacked or result.get("attacked", false)
@@ -209,9 +222,13 @@ func _maybe_run_multiplayer_bot_command_turn() -> void:
 	if not _placing_active:
 		var bot_id: int = PhaseController.current_turn_peer_id
 		_initialize_bot_hands_if_needed()
-		_command_behavior.prepare_turn(bot_id)
+		var diff_mp: int = int(PlayerDataSync.get_bot_difficulty(bot_id))
+		_command_behavior.prepare_turn(bot_id, diff_mp)
 		_placing_active = true
 		_placing_attacked = false
+		# Ensure a visible delay before the first placement too.
+		_start_mp_bot_placement_delay()
+		return
 
 	var result: Dictionary = _command_behavior.place_next()
 	_placing_attacked = _placing_attacked or result.get("attacked", false)
@@ -297,20 +314,28 @@ func _refresh_territory_visuals() -> void:
 # ---------- COLLECT PHASE ----------
 
 func _maybe_run_collect_behavior() -> void:
+	## Match GameIntro._is_collect_phase(): COLLECT always, or claim phase only during resource collection.
 	var in_collect_context := (
 		App.current_game_phase == App.GamePhase.COLLECT
-		or (App.current_game_phase == App.GamePhase.CONTEST_CLAIM and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION)
+		or (
+			App.current_game_phase == App.GamePhase.CONTEST_CLAIM
+			and PhaseController.map_sub_phase == PhaseController.MapSubPhase.RESOURCE_COLLECTION
+		)
 	)
 	if not in_collect_context:
-		_last_collect_phase_key = ""
+		_bot_collect_ran_for_current_zero_window = false
 		return
 
-	var phase_key := "%d_%d" % [int(App.current_game_phase), int(PhaseController.map_sub_phase)]
-	if phase_key == _last_collect_phase_key:
+	## One bot collect pass per "round" while no one has used a minigame slot yet (avoids firing every map_sub change).
+	if _any_minigame_started_this_collect_round():
+		_bot_collect_ran_for_current_zero_window = false
 		return
-	_last_collect_phase_key = phase_key
+	if _bot_collect_ran_for_current_zero_window:
+		return
+	_bot_collect_ran_for_current_zero_window = true
 
-	_initialize_bot_hands_if_needed()
+	## Do NOT call _initialize_bot_hands_if_needed() here: an empty bot hand would get 4 "starter"
+	## cards plus up to 4 collect cards in the same pass (e.g. 5+ total). Refill happens at command turn.
 	for p in App.game_players:
 		if not bool(p.get("is_bot", false)):
 			continue
@@ -320,3 +345,12 @@ func _maybe_run_collect_behavior() -> void:
 		PhaseSync.host_sync_bot_card_counts()
 	else:
 		App._notify_card_count_changed()
+
+
+func _any_minigame_started_this_collect_round() -> bool:
+	if App.minigames_completed_this_phase > 0:
+		return true
+	for _pid in PhaseController.player_minigame_counts.keys():
+		if int(PhaseController.player_minigame_counts[_pid]) > 0:
+			return true
+	return false
