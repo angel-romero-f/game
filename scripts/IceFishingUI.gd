@@ -280,13 +280,15 @@ func _build_win_card_display() -> void:
 	if frame < 0 or frame >= sf.get_frame_count("default"):
 		return
 
+	var has_bonus := App.region_bonus_active and not App.pending_bonus_reward.is_empty()
 	var card_name := _card_name_from_path(path)
+	var half_width := 180 if has_bonus else 130
 
 	var panel := PanelContainer.new()
 	panel.name = "WinCardPopup"
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -130
-	panel.offset_right = 130
+	panel.offset_left = -half_width
+	panel.offset_right = half_width
 	panel.offset_top = -140
 	panel.offset_bottom = 140
 	var style := StyleBoxFlat.new()
@@ -302,16 +304,38 @@ func _build_win_card_display() -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(vbox)
 
+	var cards_row := HBoxContainer.new()
+	cards_row.add_theme_constant_override("separation", 12)
+	cards_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(cards_row)
+
 	var tex := TextureRect.new()
 	tex.texture = sf.get_frame_texture("default", frame)
 	tex.custom_minimum_size = Vector2(140, 196)
 	tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tex.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vbox.add_child(tex)
+	cards_row.add_child(tex)
+
+	if has_bonus:
+		var bonus := App.pending_bonus_reward
+		var b_path: String = bonus.get("path", "")
+		var b_frame: int = int(bonus.get("frame", 0))
+		if b_path != "" and ResourceLoader.exists(b_path):
+			var b_sf := load(b_path) as SpriteFrames
+			if b_sf and b_sf.has_animation("default") and b_frame >= 0 and b_frame < b_sf.get_frame_count("default"):
+				var b_tex := TextureRect.new()
+				b_tex.texture = b_sf.get_frame_texture("default", b_frame)
+				b_tex.custom_minimum_size = Vector2(140, 196)
+				b_tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+				b_tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+				cards_row.add_child(b_tex)
 
 	var lbl := Label.new()
-	lbl.text = "You won: %s!" % card_name
+	if has_bonus:
+		var bonus_name := _card_name_from_path(App.pending_bonus_reward.get("path", ""))
+		lbl.text = "Region Bonus!\nYou won: %s + %s!" % [card_name, bonus_name]
+	else:
+		lbl.text = "You won: %s!" % card_name
 	if _pixel_font:
 		lbl.add_theme_font_override("font", _pixel_font)
 	lbl.add_theme_font_size_override("font_size", 24)

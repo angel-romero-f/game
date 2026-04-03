@@ -173,8 +173,9 @@ func clear_highlight() -> void:
 		var name_bg: StyleBoxFlat = slot_data.get("name_bg")
 		var sprite_bg: StyleBoxFlat = slot_data.get("sprite_bg")
 		var slot_root: VBoxContainer = slot_data.get("slot_root")
+		var race_color: Color = slot_data.get("race_color", Color.WHITE)
 		if name_bg:
-			name_bg.bg_color = DEFAULT_NAME_BG
+			name_bg.bg_color = _darken_color(race_color, 0.45)
 			name_bg.border_color = Color(0.3, 0.3, 0.35, 1.0)
 			name_bg.set_border_width_all(1)
 		if sprite_bg:
@@ -195,15 +196,16 @@ func highlight_current_turn(player_id: int) -> void:
 		var name_bg: StyleBoxFlat = slot_data.get("name_bg")
 		var sprite_bg: StyleBoxFlat = slot_data.get("sprite_bg")
 		var slot_root: VBoxContainer = slot_data.get("slot_root")
+		var race_color: Color = slot_data.get("race_color", Color.WHITE)
 		var is_active: bool = (pid == player_id)
 
 		if name_bg:
 			if is_active:
-				name_bg.bg_color = ACTIVE_NAME_BG
+				name_bg.bg_color = _darken_color(race_color, 0.65)
 				name_bg.border_color = HIGHLIGHT_BORDER
 				name_bg.set_border_width_all(2)
 			else:
-				name_bg.bg_color = DEFAULT_NAME_BG
+				name_bg.bg_color = _darken_color(race_color, 0.45)
 				name_bg.border_color = Color(0.3, 0.3, 0.35, 1.0)
 				name_bg.set_border_width_all(1)
 
@@ -400,6 +402,9 @@ func _create_player_slot(player: Dictionary, index: int) -> VBoxContainer:
 
 	slot.add_child(name_panel)
 
+	var race_color := App.get_race_color(race)
+	name_bg.bg_color = _darken_color(race_color, 0.45)
+
 	_player_slots[player_id] = {
 		"name_bg": name_bg,
 		"sprite_bg": sprite_bg,
@@ -407,6 +412,7 @@ func _create_player_slot(player: Dictionary, index: int) -> VBoxContainer:
 		"card_label": card_label,
 		"territory_label": territory_label,
 		"is_local": is_local,
+		"race_color": race_color,
 	}
 
 	_make_pass_through(slot)
@@ -418,6 +424,10 @@ func _make_pass_through(node: Node) -> void:
 		(node as Control).mouse_filter = Control.MOUSE_FILTER_IGNORE
 	for child in node.get_children():
 		_make_pass_through(child)
+
+
+func _darken_color(c: Color, factor: float) -> Color:
+	return Color(c.r * factor, c.g * factor, c.b * factor, 1.0)
 
 
 func _ordinal(n: int) -> String:
