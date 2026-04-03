@@ -41,8 +41,6 @@ func _on_territory_claimed_from_net(territory_id: int, owner_id: int, cards: Arr
 					defending_dict[slot_idx] = cards[slot_idx]
 			BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
 			BattleStateManager.clear_attacking_slots(str(territory_id))
-		if WinConditionManager and WinConditionManager.check_player_wins(int(owner_id)):
-			WinConditionManager.player_won.emit(int(owner_id))
 
 func _get_local_id() -> Variant:
 	for p in App.game_players:
@@ -95,8 +93,6 @@ func claim_territory(territory_id: int, local_id: Variant, slot_cards: Array, te
 			placed_slots[slot_idx] = slot_cards[slot_idx]
 	App.remove_placed_cards_from_collection_for_slots(placed_slots, "placed_defending")
 	claim_succeeded.emit(territory_id, local_id, slot_cards)
-	if WinConditionManager and WinConditionManager.check_player_wins(int(local_id)):
-		WinConditionManager.player_won.emit(int(local_id))
 	return true
 
 ## Apply a network-synced territory claim (all peers receive this).
@@ -127,8 +123,6 @@ func apply_network_claim(territory_id: int, owner_id: int, cards: Array, local_i
 				placed_slots[slot_idx] = cards[slot_idx]
 		App.remove_placed_cards_from_collection_for_slots(placed_slots, "placed_defending")
 	claim_succeeded.emit(territory_id, owner_id, cards)
-	if WinConditionManager and WinConditionManager.check_player_wins(int(owner_id)):
-		WinConditionManager.player_won.emit(int(owner_id))
 
 ## Apply conquest without territory_manager (e.g. during battle when map scene is not loaded).
 ## Updates TCS and emits claim_succeeded. Use when territory_manager may be invalid.
@@ -143,8 +137,6 @@ func apply_conquest_claim(territory_id: int, conqueror_id: int, cards: Array) ->
 		BattleStateManager.set_defending_slots(str(territory_id), defending_dict)
 		BattleStateManager.clear_attacking_slots(str(territory_id))
 	claim_succeeded.emit(territory_id, conqueror_id, cards)
-	if WinConditionManager and WinConditionManager.check_player_wins(int(conqueror_id)):
-		WinConditionManager.player_won.emit(int(conqueror_id))
 
 ## Register an attack on a territory. Stores attacking cards in BattleStateManager and removes from player hand.
 func register_attack(territory_id: int, attacking_slot_cards: Array) -> void:
@@ -188,30 +180,36 @@ func apply_saved_claims(territory_manager: TerritoryManager) -> void:
 
 ## Returns true if the given player owns every territory in the specified region.
 func player_owns_full_region(player_id: int, region_id: int) -> bool:
-	if not _territory_claim_state:
+	if not _territory_claim_state or not App.territory_manager:
 		return false
-	for tid in TerritoryManager.TERRITORY_REGIONS:
-		if TerritoryManager.TERRITORY_REGIONS[tid] != region_id:
+	var tm := App.territory_manager as TerritoryManager
+	if not tm:
+		return false
+	var found_any := false
+	for tid in tm.territory_data:
+		var territory: Territory = tm.territory_data[tid]
+		if not territory or territory.region_id != region_id:
 			continue
+		found_any = true
 		var owner_id: Variant = _territory_claim_state.call("get_owner_id", tid)
 		if owner_id == null or int(owner_id) != int(player_id):
 			return false
-	return true
+	return found_any
 
 ## Launch a territory-specific minigame based on the territory's region.
-func launch_territory_minigame(territory_id: int, region_id: int) -> void:
+func launch_territory_minigame(_territory_id: int, region_id: int) -> void:
 	var region_info: Dictionary = REGION_MINIGAMES.get(region_id, { "scene": "" })
 	var scene_path: String = region_info.get("scene", "")
 	if scene_path != "" and ResourceLoader.exists(scene_path):
 		App.pending_return_map_sub_phase = PhaseController.MapSubPhase.RESOURCE_COLLECTION
 		App.returning_from_territory_minigame = true
-		App.pre_roll_minigame_reward()
+		App.pre_roll_minigame_reward_for_region(region_id)
 
 		var local_id: int = _get_local_id()
 		var eligible := region_id not in App.region_bonus_used_this_phase and player_owns_full_region(local_id, region_id)
 		App.region_bonus_active = eligible
 		if eligible:
-			App.pre_roll_bonus_reward()
+			App.pre_roll_bonus_reward_for_region(region_id)
 			App.region_bonus_used_this_phase.append(region_id)
 
 		App.go(scene_path)

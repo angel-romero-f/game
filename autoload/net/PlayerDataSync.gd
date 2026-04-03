@@ -16,10 +16,13 @@ var player_rolls: Dictionary = {} # peer_id -> roll value (int)
 var _bot_ids: Dictionary = {}     # bot_id -> true  (explicit set of generated bot IDs)
 ## Order bots were added (for remove-one-at-a-time: pop last).
 var _bot_id_order: Array[int] = []
+## Per-bot difficulty: bot_id -> int [0..5].
+var bot_difficulties: Dictionary = {}
 
 signal player_names_updated
 signal player_races_updated
 signal player_rolls_updated
+signal bot_difficulties_updated
 signal turn_order_finalized
 
 func _ready() -> void:
@@ -32,6 +35,7 @@ func _on_connection_closing() -> void:
 	player_rolls.clear()
 	_bot_ids.clear()
 	_bot_id_order.clear()
+	bot_difficulties.clear()
 
 func _on_peer_disconnected(id: int) -> void:
 	if multiplayer.is_server():
@@ -48,10 +52,12 @@ func is_bot_id(id: int) -> bool:
 func register_bot_ids(ids: Array) -> void:
 	_bot_ids.clear()
 	_bot_id_order.clear()
+	bot_difficulties.clear()
 	for bid in ids:
 		var i := int(bid)
 		_bot_ids[i] = true
 		_bot_id_order.append(i)
+		bot_difficulties[i] = int(bot_difficulties.get(i, 0))
 	_bot_id_order.sort()
 
 
@@ -92,8 +98,10 @@ func host_add_bot() -> bool:
 	player_races[new_id] = ""
 	_bot_ids[new_id] = true
 	_bot_id_order.append(new_id)
+	bot_difficulties[new_id] = int(bot_difficulties.get(new_id, 0))
 	_sync_player_names()
 	_sync_player_races()
+	_sync_bot_difficulties()
 	return true
 
 
@@ -140,9 +148,24 @@ func host_remove_bot() -> bool:
 	player_names.erase(bid)
 	player_races.erase(bid)
 	_bot_ids.erase(bid)
+	bot_difficulties.erase(bid)
 	_sync_player_names()
 	_sync_player_races()
+	_sync_bot_difficulties()
 	return true
+
+
+func get_bot_difficulty(bot_id: int) -> int:
+	return clampi(int(bot_difficulties.get(bot_id, 0)), 0, 5)
+
+
+func host_set_bot_difficulty(bot_id: int, level: int) -> void:
+	if not multiplayer.is_server():
+		return
+	if not _bot_ids.has(bot_id):
+		return
+	bot_difficulties[bot_id] = clampi(level, 0, 5)
+	_sync_bot_difficulties()
 
 # ---------- NAME SYNC ----------
 
@@ -207,6 +230,11 @@ func sync_player_races(races: Dictionary) -> void:
 	player_races = races.duplicate(true)
 	player_races_updated.emit()
 
+@rpc("authority", "call_local", "reliable")
+func sync_bot_difficulties(levels: Dictionary) -> void:
+	bot_difficulties = levels.duplicate(true)
+	bot_difficulties_updated.emit()
+
 func _server_try_set_player_race(id: int, race: String) -> void:
 	if race.is_empty():
 		if player_races.has(id):
@@ -222,6 +250,9 @@ func _server_try_set_player_race(id: int, race: String) -> void:
 
 func _sync_player_races() -> void:
 	sync_player_races.rpc(player_races)
+
+func _sync_bot_difficulties() -> void:
+	sync_bot_difficulties.rpc(bot_difficulties)
 
 # ---------- ROLL SYNC ----------
 

@@ -11,10 +11,8 @@ const PlayerHandUIScript := preload("res://scripts/ui/game_intro/PlayerHandUI.gd
 const GameFlowUIScript := preload("res://scripts/ui/game_intro/GameFlowUI.gd")
 const TurnOrderBarUIScript := preload("res://scripts/ui/game_intro/TurnOrderBarUI.gd")
 const BotControllerScript := preload("res://scripts/bots/BotController.gd")
-const GnomeTutorialUIScript := preload("res://scripts/ui/game_intro/GnomeTutorialUI.gd")
 
 # Component instances
-var gnome_ui: Node
 var intro_ui: Node
 var battle_ui: Node
 var phase_ui: Node
@@ -26,7 +24,6 @@ var claim_ui: PanelContainer  # Script-on-node (ClaimTerritoryUI)
 var settings_panel: Panel      # Script-on-node (SettingsPanelUI)
 var bot_controller: Node
 
-var _showcase_container: CenterContainer
 var intro_complete: bool = false
 var is_paused: bool = false
 var settings_button: Button
@@ -43,7 +40,6 @@ func _ready() -> void:
 	# ---------- Resolve scene nodes ----------
 	var map_overlay := $MapOverlay as ColorRect
 	var showcase_container := $ShowcaseContainer as CenterContainer
-	_showcase_container = showcase_container
 	var showcase_race_image := $ShowcaseContainer/VBoxContainer/RaceImageContainer/RaceImage as TextureRect
 	var showcase_name_label := $ShowcaseContainer/VBoxContainer/NameLabel as Label
 	var d20_container := $D20Container as CenterContainer
@@ -135,14 +131,11 @@ func _ready() -> void:
 	for btn in [minigame_button, bridge_minigame_button, courtly_cuisine_button, ice_fishing_button,
 				cadence_button, play_minigames_button, battle_button, skip_to_battle_button, battle_button_right]:
 		btn.visible = false
-	var victory_overlay := get_node_or_null("VictoryOverlay") as ColorRect
 	for node in [settings_button, settings_panel, player_roll_container, phase_overlay,
 				 minigames_counter_label, card_icon_button, hand_display_panel,
 				 left_battle_selectors, right_battle_selectors, waiting_overlay,
 				 current_decider_label, skip_battle_decision_button]:
 		node.visible = false
-	if victory_overlay:
-		victory_overlay.visible = false
 	if finish_claiming_button:
 		finish_claiming_button.visible = false
 	if ready_for_battle_button:
@@ -342,27 +335,12 @@ func _ready() -> void:
 	if ready_for_battle_button:
 		ready_for_battle_button.pressed.connect(territory_ui.on_ready_for_battle_pressed)
 
-	# Victory overlay — wire button if it already exists in the scene tree
-	if victory_overlay:
-		var victory_btn := victory_overlay.get_node_or_null("MainMenuButton") as Button
-		if victory_btn:
-			victory_btn.pressed.connect(_on_victory_main_menu_pressed)
-
-	# Check if a player won while we were in another scene (e.g. battle)
-	if App.game_victor_id >= 0:
-		_show_victory_overlay(App.game_victor_id)
-		App.game_victor_id = -1
-
 	# Settings
 	if settings_button:
 		settings_button.pressed.connect(_on_settings_pressed)
 	if settings_panel:
 		settings_panel.resume_pressed.connect(toggle_pause)
 		settings_panel.main_menu_pressed.connect(_on_main_menu_pressed)
-
-	# Win condition: show victory when returning with game_victor_id set
-	if WinConditionManager and not WinConditionManager.player_won.is_connected(_on_player_won):
-		WinConditionManager.player_won.connect(_on_player_won)
 
 	# Card count sync → turn order bar
 	if not PhaseController.card_counts_updated.is_connected(_on_card_counts_updated):
@@ -422,36 +400,11 @@ func _ready() -> void:
 			
 		return
 
-	showcase_container.visible = false
-	gnome_ui = GnomeTutorialUIScript.new()
-	gnome_ui.name = "GnomeTutorialUI"
-	add_child(gnome_ui)
-	gnome_ui.initialize({
-		"map_overlay": map_overlay,
-		"showcase_container": showcase_container,
-		"territory_manager": territory_ui.territory_manager,
-		"card_icon_button": card_icon_button,
-		"hand_display_panel": hand_display_panel,
-		"hand_container": hand_container,
-	})
-	gnome_ui.gnome_sequence_completed.connect(_on_gnome_done)
-	gnome_ui.start_sequence()
-
-
-func _on_gnome_done() -> void:
-	if gnome_ui:
-		gnome_ui.queue_free()
-		gnome_ui = null
-	if _showcase_container:
-		_showcase_container.visible = true
-		_showcase_container.modulate.a = 1.0
 	intro_ui.start_intro()
 
 
 func _process(delta: float) -> void:
-	if gnome_ui:
-		gnome_ui.process_frame(delta)
-	elif intro_ui and not intro_complete:
+	if intro_ui and not intro_complete:
 		intro_ui.process_frame(delta)
 	if bot_controller and bot_controller.has_method("process_single_player_frame"):
 		bot_controller.process_single_player_frame(delta)
@@ -503,6 +456,9 @@ func _on_intro_completed() -> void:
 	phase_ui.show_phase_transition_overlay()
 	if bot_controller and bot_controller.has_method("initialize_single_player_bots"):
 		bot_controller.initialize_single_player_bots()
+
+	# Start the game timer (host broadcasts RPC; single-player starts directly)
+	WinConditionManager.start_timer()
 
 
 # ---------- CROSS-COMPONENT SIGNAL HANDLERS ----------
@@ -568,50 +524,6 @@ func toggle_pause() -> void:
 		settings_button.visible = !is_paused
 
 func _on_main_menu_pressed() -> void:
-	get_tree().paused = false
-	App.go("res://scenes/ui/MainMenu.tscn")
-
-func _on_player_won(player_id: int) -> void:
-	if is_inside_tree():
-		_show_victory_overlay(player_id)
-
-func _show_victory_overlay(player_id: int) -> void:
-	var victory_overlay := get_node_or_null("VictoryOverlay") as ColorRect
-	if not victory_overlay:
-		# Create overlay in code (editor cache may not have the .tscn node)
-		victory_overlay = ColorRect.new()
-		victory_overlay.name = "VictoryOverlay"
-		victory_overlay.color = Color(0, 0, 0, 0.75)
-		victory_overlay.set_anchors_preset(Control.PRESET_FULL_RECT)
-		victory_overlay.z_index = 50
-		add_child(victory_overlay)
-		var label := Label.new()
-		label.name = "VictoryLabel"
-		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		label.set_anchors_preset(Control.PRESET_FULL_RECT)
-		label.add_theme_font_size_override("font_size", 48)
-		victory_overlay.add_child(label)
-		var btn := Button.new()
-		btn.name = "MainMenuButton"
-		btn.text = "Main Menu"
-		btn.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
-		btn.position = Vector2(-60, -80)
-		btn.size = Vector2(120, 40)
-		btn.pressed.connect(_on_victory_main_menu_pressed)
-		victory_overlay.add_child(btn)
-	var victory_label := victory_overlay.get_node_or_null("VictoryLabel") as Label
-	var player_name: String = "Player"
-	for p in App.game_players:
-		if int(p.get("id", -1)) == player_id:
-			player_name = str(p.get("name", "Player"))
-			break
-	if victory_label:
-		victory_label.text = "%s Wins!" % player_name
-	victory_overlay.visible = true
-	App.game_victor_id = -1
-
-func _on_victory_main_menu_pressed() -> void:
 	get_tree().paused = false
 	App.go("res://scenes/ui/MainMenu.tscn")
 

@@ -63,6 +63,9 @@ var _gnome_container: Control
 # Linger timer after response text finishes
 var _response_linger: float = 0.0
 
+# Standalone mode (skips yes/no choice, auto-starts tutorial)
+var is_standalone: bool = false
+
 
 func initialize(nodes: Dictionary) -> void:
 	map_overlay = nodes.get("map_overlay")
@@ -71,6 +74,7 @@ func initialize(nodes: Dictionary) -> void:
 	card_icon_button = nodes.get("card_icon_button")
 	hand_display_panel = nodes.get("hand_display_panel")
 	hand_container = nodes.get("hand_container")
+	is_standalone = nodes.get("standalone", false)
 
 
 func start_sequence() -> void:
@@ -295,10 +299,16 @@ func _on_walk_complete() -> void:
 	var tween := create_tween()
 	tween.tween_property(_dialogue_panel, "modulate:a", 1.0, 0.4)
 
-	_set_dialogue_text(
-		"Greetings, brave adventurers! I am Bramblewood, keeper of the ancient game scrolls.\n"
-		+ "Before we begin your quest for dominion... would you like a rundown on how to play?"
-	)
+	if is_standalone:
+		_set_dialogue_text(
+			"Greetings, adventurer! I am Bramblewood, keeper of the ancient game scrolls.\n"
+			+ "Let me show you how to play!"
+		)
+	else:
+		_set_dialogue_text(
+			"Greetings, brave adventurers! I am Bramblewood, keeper of the ancient game scrolls.\n"
+			+ "Before we begin your quest for dominion... would you like a rundown on how to play?"
+		)
 
 
 # ---------- WALK SPRITE ANIMATION ----------
@@ -347,8 +357,11 @@ func _on_typewriter_finished() -> void:
 	if _voice_player and _voice_player.playing:
 		_voice_player.stop()
 	if current_phase == Phase.DIALOGUE:
-		current_phase = Phase.WAITING_FOR_CHOICE
-		_show_choice_buttons()
+		if is_standalone:
+			_apply_decision(true)
+		else:
+			current_phase = Phase.WAITING_FOR_CHOICE
+			_show_choice_buttons()
 	elif current_phase == Phase.RESPONSE:
 		_response_linger = RESPONSE_LINGER
 
