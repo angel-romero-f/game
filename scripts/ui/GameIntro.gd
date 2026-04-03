@@ -11,10 +11,8 @@ const PlayerHandUIScript := preload("res://scripts/ui/game_intro/PlayerHandUI.gd
 const GameFlowUIScript := preload("res://scripts/ui/game_intro/GameFlowUI.gd")
 const TurnOrderBarUIScript := preload("res://scripts/ui/game_intro/TurnOrderBarUI.gd")
 const BotControllerScript := preload("res://scripts/bots/BotController.gd")
-const GnomeTutorialUIScript := preload("res://scripts/ui/game_intro/GnomeTutorialUI.gd")
 
 # Component instances
-var gnome_ui: Node
 var intro_ui: Node
 var battle_ui: Node
 var phase_ui: Node
@@ -26,7 +24,6 @@ var claim_ui: PanelContainer  # Script-on-node (ClaimTerritoryUI)
 var settings_panel: Panel      # Script-on-node (SettingsPanelUI)
 var bot_controller: Node
 
-var _showcase_container: CenterContainer
 var intro_complete: bool = false
 var is_paused: bool = false
 var settings_button: Button
@@ -43,7 +40,6 @@ func _ready() -> void:
 	# ---------- Resolve scene nodes ----------
 	var map_overlay := $MapOverlay as ColorRect
 	var showcase_container := $ShowcaseContainer as CenterContainer
-	_showcase_container = showcase_container
 	var showcase_race_image := $ShowcaseContainer/VBoxContainer/RaceImageContainer/RaceImage as TextureRect
 	var showcase_name_label := $ShowcaseContainer/VBoxContainer/NameLabel as Label
 	var d20_container := $D20Container as CenterContainer
@@ -375,36 +371,11 @@ func _ready() -> void:
 			
 		return
 
-	showcase_container.visible = false
-	gnome_ui = GnomeTutorialUIScript.new()
-	gnome_ui.name = "GnomeTutorialUI"
-	add_child(gnome_ui)
-	gnome_ui.initialize({
-		"map_overlay": map_overlay,
-		"showcase_container": showcase_container,
-		"territory_manager": territory_ui.territory_manager,
-		"card_icon_button": card_icon_button,
-		"hand_display_panel": hand_display_panel,
-		"hand_container": hand_container,
-	})
-	gnome_ui.gnome_sequence_completed.connect(_on_gnome_done)
-	gnome_ui.start_sequence()
-
-
-func _on_gnome_done() -> void:
-	if gnome_ui:
-		gnome_ui.queue_free()
-		gnome_ui = null
-	if _showcase_container:
-		_showcase_container.visible = true
-		_showcase_container.modulate.a = 1.0
 	intro_ui.start_intro()
 
 
 func _process(delta: float) -> void:
-	if gnome_ui:
-		gnome_ui.process_frame(delta)
-	elif intro_ui and not intro_complete:
+	if intro_ui and not intro_complete:
 		intro_ui.process_frame(delta)
 	if bot_controller and bot_controller.has_method("process_single_player_frame"):
 		bot_controller.process_single_player_frame(delta)
