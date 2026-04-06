@@ -162,9 +162,10 @@ const CADENCE_CHART: Array = [
 
 @export var bpm: float = 110.0
 
-## Seconds of audio before beat 0 reaches the hit line.
-## Increase if the chart feels early; decrease if it feels late.
-## For notes to scroll in fully from the top, set >= ~1.2 s.
+## Fine-tuning offset (seconds) to align the chart with the audio file.
+## Positive = notes appear later vs the music (use if notes feel early).
+## Negative = notes appear earlier vs the music (use if notes feel late).
+## Keep near 0.0 for this chart; the lead-in is handled automatically.
 @export var song_offset: float = 0.0
 
 @export var note_scroll_speed: float = 400.0
@@ -186,9 +187,14 @@ const CADENCE_CHART: Array = [
 # ══════════════════════════════════════════════════════════════
 
 var _seconds_per_beat: float
-var _song_duration: float
-var _song_elapsed: float = 0.0
-var _intro_elapsed: float = 0.0
+var _song_duration: float   # seconds of actual gameplay (clock 0 → _song_duration)
+
+## Unified song clock.  Starts at -intro_duration when the scene loads and
+## counts upward continuously.  Clock = 0 is the moment the music begins and
+## beat 0 of the chart hits the hit line.  Notes use this clock for all
+## spawn, position, hit, and miss calculations — no separate intro counter.
+var _song_clock: float = 0.0
+
 var _scroll_distance: float
 var _travel_time: float
 
@@ -281,8 +287,8 @@ const HOLD_ACTIVE_TINT := Color(1.3, 1.15, 0.7, 1.0)
 #  AUDIO
 # ══════════════════════════════════════════════════════════════
 
-## Hook: for tighter sync, replace delta accumulation in _process_playing
-## with:  _song_elapsed = _music_player.get_playback_position()
+## Hook: for tighter sync, replace delta accumulation with:
+##   _song_clock = _music_player.get_playback_position() + song_offset
 ## This eliminates drift between game time and the audio stream.
 var _music_player: AudioStreamPlayer = null
 
@@ -313,50 +319,66 @@ func _ready() -> void:
 	_build_visuals()
 	_build_intro_overlay()
 
+	# Seed the clock at -intro_duration so it reaches 0 exactly when the
+	# countdown finishes and the music starts.  Notes use this same clock, so
+	# beat-0 notes begin scrolling from the top during the countdown and arrive
+	# at the hit line the moment the song begins.
+	_song_clock = -intro_duration
+
 	_phase = Phase.INTRO
-	print("[Minigame:Cadence] Starting (BPM %.0f, %d notes, %.1fs)" % [bpm, _total_notes, _song_duration])
+	print("[Minigame:Cadence] Starting (BPM %.0f, %d notes, %.1fs chart, ~%.1fs total)" % [
+		bpm, _total_notes, _song_duration, intro_duration + _song_duration])
 
 
 func _process(delta: float) -> void:
+	if _phase == Phase.RESULTS:
+		return
+	_song_clock += delta
 	match _phase:
 		Phase.INTRO:
-			_process_intro(delta)
+			_process_intro()
 		Phase.PLAYING:
-			_process_playing(delta)
+			_process_playing()
 
 
 # ══════════════════════════════════════════════════════════════
 #  INTRO / COUNTDOWN
 # ══════════════════════════════════════════════════════════════
 
-func _process_intro(delta: float) -> void:
-	_intro_elapsed += delta
-	var remaining := intro_duration - _intro_elapsed
-	if remaining > 3.0:
-		if _countdown_label:
+func _process_intro() -> void:
+	# Notes scroll during the countdown — the 4-second intro is the lead-in.
+	# beat-0 notes spawn at clock = -_travel_time (≈2.8 s into the intro) and
+	# arrive at the hit line exactly when the clock reaches 0 and music starts.
+	_spawn_pending_notes()
+	_update_note_positions()
+
+	# _song_clock is negative during intro; -_song_clock = seconds until start
+	var countdown := -_song_clock
+	if _countdown_label:
+		if countdown > 3.0:
 			_countdown_label.text = ""
-	elif remaining > 2.0:
-		if _countdown_label:
+		elif countdown > 2.0:
 			_countdown_label.text = "3"
-	elif remaining > 1.0:
-		if _countdown_label:
+		elif countdown > 1.0:
 			_countdown_label.text = "2"
-	elif remaining > 0.0:
-		if _countdown_label:
+		else:
 			_countdown_label.text = "1"
-	if _intro_elapsed >= intro_duration:
+
+	if _song_clock >= 0.0:
 		_start_song()
 
 
 func _start_song() -> void:
 	_phase = Phase.PLAYING
-	_song_elapsed = 0.0
 
 	if _intro_label:
 		_intro_label.visible = false
 	if _countdown_label:
 		_countdown_label.visible = false
 
+	# Clock is now 0 — start music so beat 0 of the audio aligns with the hit line.
+	# Hook: replace delta accumulation below with _music_player.get_playback_position()
+	# for drift-free sync once the chart is polished.
 	if _music_player and _music_player.stream:
 		_music_player.play()
 
@@ -373,9 +395,7 @@ func _start_song() -> void:
 #  GAMEPLAY
 # ══════════════════════════════════════════════════════════════
 
-func _process_playing(delta: float) -> void:
-	_song_elapsed += delta
-
+func _process_playing() -> void:
 	_spawn_pending_notes()
 	_update_note_positions()
 	_check_missed_notes()
@@ -383,12 +403,12 @@ func _process_playing(delta: float) -> void:
 
 	var ui := get_node_or_null("UI")
 	if ui and ui.has_method("update_timer_display"):
-		ui.update_timer_display(maxf(0.0, _song_duration - _song_elapsed))
+		ui.update_timer_display(maxf(0.0, _song_duration - _song_clock))
 	if ui and ui.has_method("update_accuracy_display"):
 		ui.update_accuracy_display(_hits, _total_notes)
 
-	var all_done := _song_elapsed >= _song_duration and _all_notes_resolved()
-	var hard_cap := _song_elapsed >= _song_duration + 2.0
+	var all_done := _song_clock >= _song_duration and _all_notes_resolved()
+	var hard_cap := _song_clock >= _song_duration + 2.0
 	if all_done or hard_cap:
 		_end_song()
 
@@ -397,7 +417,7 @@ func _spawn_pending_notes() -> void:
 	while _next_spawn_index < _notes.size():
 		var note: Dictionary = _notes[_next_spawn_index]
 		var spawn_time: float = note["hit_time"] - _travel_time
-		if _song_elapsed < spawn_time:
+		if _song_clock < spawn_time:
 			break
 		if note["is_hold"]:
 			_spawn_hold_visual(note)
@@ -484,7 +504,7 @@ func _update_note_positions() -> void:
 	for note in _notes:
 		var s = note["state"]
 		if (s == &"active" or s == &"holding") and note.has("node") and is_instance_valid(note["node"]):
-			var time_until_hit: float = note["hit_time"] - _song_elapsed
+			var time_until_hit: float = note["hit_time"] - _song_clock
 			note["node"].position.y = HIT_LINE_Y - time_until_hit * note_scroll_speed
 
 
@@ -492,7 +512,7 @@ func _check_missed_notes() -> void:
 	for note in _notes:
 		if note["state"] != &"active":
 			continue
-		if _song_elapsed - note["hit_time"] > hit_window_secs:
+		if _song_clock - note["hit_time"] > hit_window_secs:
 			note["state"] = &"missed"
 			_misses += 1
 			_fade_note(note)
@@ -502,7 +522,7 @@ func _check_active_holds() -> void:
 	for note in _notes:
 		if note["state"] != &"holding":
 			continue
-		if _song_elapsed >= note["end_time"]:
+		if _song_clock >= note["end_time"]:
 			note["state"] = &"hit"
 			_hits += 1
 			_pop_note(note)
@@ -603,7 +623,7 @@ func _handle_lane_press(lane: int) -> void:
 				break
 		if not all_held:
 			continue
-		var diff: float = absf(_song_elapsed - note["hit_time"])
+		var diff: float = absf(_song_clock - note["hit_time"])
 		if diff <= hit_window_secs and diff < best_diff:
 			best_note = note
 			best_diff = diff
@@ -640,7 +660,7 @@ func _handle_lane_release(lane: int) -> void:
 		if not lanes.has(lane):
 			continue
 		# Grace: if within 50 ms of the hold's end, count as a hit
-		if _song_elapsed >= note["end_time"] - 0.05:
+		if _song_clock >= note["end_time"] - 0.05:
 			note["state"] = &"hit"
 			_hits += 1
 			_pop_note(note)
