@@ -92,6 +92,8 @@ var single_player_bot_controller: Node = null
 var bot_card_collections: Dictionary = {}
 ## If true, that bot already received the one-time 4-card opening hand; empty hand later must not auto-refill.
 var bot_initial_hand_dealt: Dictionary = {}
+## VS-AI only: command/collect/battle difficulty per bot id 100–102 (0–5). Multiplayer uses host lobby sliders.
+var single_player_bot_difficulty: int = 3
 ## Territory -> attacker id map used to resolve single-player battle participants.
 var territory_pending_attackers: Dictionary = {}
 ## How to continue after territory-battle sequence in single-player: "", "command", or "collect".
@@ -903,6 +905,8 @@ func set_selected_race(race: String) -> void:
 
 func setup_single_player_game() -> void:
 	is_multiplayer = false
+	## Drop multiplayer bot registry so VS-AI ids 100+ and is_bot_id() stay consistent.
+	PlayerDataSync.register_bot_ids([])
 	game_players.clear()
 	turn_order.clear()
 	reset_lives()
@@ -943,14 +947,18 @@ func setup_single_player_game() -> void:
 	ai_names.shuffle()
 	
 	for i in range(3):
+		var bot_id := i + 100  # AI IDs start at 100 (must match PlayerDataSync.is_bot_id SP rule)
 		var ai_player := {
-			"id": i + 100,  # AI IDs start at 100
+			"id": bot_id,
 			"name": ai_names[i],
 			"race": available_races[i],
 			"roll": 0,
-			"is_local": false
+			"is_local": false,
+			"is_bot": true,
 		}
 		game_players.append(ai_player)
+		## Command/battle AI reads difficulty here (host lobby sliders only apply in multiplayer).
+		PlayerDataSync.bot_difficulties[bot_id] = single_player_bot_difficulty
 
 func setup_multiplayer_game() -> void:
 	is_multiplayer = true

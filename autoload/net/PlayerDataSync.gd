@@ -47,7 +47,12 @@ func _on_peer_disconnected(id: int) -> void:
 			_sync_player_races()
 
 func is_bot_id(id: int) -> bool:
-	return _bot_ids.has(id)
+	if _bot_ids.has(id):
+		return true
+	## VS-AI mode uses bot player ids 100+ (see App.setup_single_player_game). They are not in _bot_ids.
+	if App and not App.is_multiplayer and id >= 100:
+		return true
+	return false
 
 func register_bot_ids(ids: Array) -> void:
 	_bot_ids.clear()

@@ -128,9 +128,9 @@ func process_battle_resolution(overall_result: String, local_won: bool, is_defen
 	
 	var is_winner := false
 	if overall_result == "win":
-		is_winner = local_won
+		is_winner = true
 	elif overall_result == "lose":
-		is_winner = not local_won
+		is_winner = false
 	else: # tie
 		is_winner = is_defender # defending wins ties
 	

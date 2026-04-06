@@ -40,15 +40,39 @@ func place_next() -> Dictionary:
 		return {"attacked": false, "done": true}
 
 	var hand_sz := _active_hand.size()
-	var target_tid := _pick_target_territory_by_difficulty(_active_bot_id, _active_difficulty, hand_sz)
+	var tcs: Node = App.get_node_or_null("/root/TerritoryClaimState")
+	var target_tid := -1
+	var is_attack := false
+	var to_place := 0
+
+	# Try preferred target first, then fall back to other eligible territories if attack
+	# card-count window is invalid (e.g. hi < lo for level 5 constraints).
+	var preferred_tid := _pick_target_territory_by_difficulty(_active_bot_id, _active_difficulty, hand_sz)
+	var candidates: Array[int] = []
+	if preferred_tid >= 0:
+		candidates.append(preferred_tid)
+	var eligible: Array[int] = _eligible_target_territories(_active_bot_id)
+	eligible.shuffle()
+	for tid in eligible:
+		if tid == preferred_tid:
+			continue
+		candidates.append(tid)
+
+	for cand_tid in candidates:
+		var owner_id := _get_territory_owner_id(cand_tid, tcs)
+		var cand_attack := owner_id != -1 and owner_id != _active_bot_id
+		var cand_to_place := _choose_cards_to_place_count_for_target(hand_sz, _active_difficulty, cand_tid, cand_attack)
+		if cand_attack and cand_to_place <= 0:
+			continue
+		target_tid = cand_tid
+		is_attack = cand_attack
+		to_place = cand_to_place
+		break
+
 	if target_tid < 0:
 		_finalize_hand()
 		return {"attacked": false, "done": true}
 
-	var tcs: Node = App.get_node_or_null("/root/TerritoryClaimState")
-	var owner_id := _get_territory_owner_id(target_tid, tcs)
-	var is_attack := owner_id != -1 and owner_id != _active_bot_id
-	var to_place := _choose_cards_to_place_count_for_target(hand_sz, _active_difficulty, target_tid, is_attack)
 	var placed_cards: Array = []
 	for _i in range(to_place):
 		if _active_hand.is_empty():
@@ -140,7 +164,7 @@ func _choose_cards_to_place_count_for_target(hand_size: int, difficulty: int, te
 			return randi_range(1, mini(3, hand_size))
 		1, 2:
 			return randi_range(1, mini(3, hand_size))
-		3, 4, 5:
+		3, 4:
 			if is_attack:
 				var def_n := _defender_card_count_on_territory(territory_id)
 				var lo := clampi(def_n, 1, 3)
@@ -150,6 +174,18 @@ func _choose_cards_to_place_count_for_target(hand_size: int, difficulty: int, te
 				if lo == hi:
 					return lo
 				return randi_range(lo, hi)
+			return randi_range(1, mini(3, hand_size))
+		5:
+			if is_attack:
+				var def_n5 := _defender_card_count_on_territory(territory_id)
+				# Level 5 attack count rule: [defenders - 1, 3], constrained by hand size.
+				var lo5 := clampi(def_n5 - 1, 1, 3)
+				var hi5 := mini(3, hand_size)
+				if lo5 > hi5:
+					return 0
+				if lo5 == hi5:
+					return lo5
+				return randi_range(lo5, hi5)
 			return randi_range(1, mini(3, hand_size))
 		_:
 			return randi_range(1, mini(3, hand_size))
@@ -162,6 +198,8 @@ func _get_territory_owner_id(territory_id: int, tcs: Node) -> int:
 	if tcs == null or not tcs.has_method("get_owner_id"):
 		return -1
 	var owner_raw: Variant = tcs.get_owner_id(territory_id)
+	if owner_raw == null:
+		return -1
 	if owner_raw is int:
 		return owner_raw
 	if owner_raw is float:
@@ -172,16 +210,24 @@ func _get_territory_owner_id(territory_id: int, tcs: Node) -> int:
 
 
 func _defender_card_count_on_territory(territory_id: int) -> int:
-	if not BattleStateManager:
-		return 0
-	var d: Dictionary = BattleStateManager.get_defending_slots(str(territory_id))
 	var n := 0
-	for k in d.keys():
-		var card: Variant = d[k]
-		if card is Dictionary:
-			var path: String = String(card.get("path", ""))
-			if not path.is_empty():
-				n += 1
+	if BattleStateManager:
+		var d: Dictionary = BattleStateManager.get_defending_slots(str(territory_id))
+		for k in d.keys():
+			var card: Variant = d[k]
+			if card is Dictionary:
+				var path: String = String(card.get("path", ""))
+				if not path.is_empty():
+					n += 1
+	## If defending slots were not mirrored into BattleStateManager yet, use persisted claim cards (common on server).
+	if n == 0:
+		var tcs: Node = App.get_node_or_null("/root/TerritoryClaimState")
+		if tcs != null and tcs.has_method("get_cards"):
+			var cards: Variant = tcs.get_cards(territory_id)
+			if cards is Array:
+				for c in cards:
+					if c != null and c is Dictionary and String(c.get("path", "")) != "":
+						n += 1
 	return n
 
 
@@ -394,6 +440,8 @@ func _is_territory_owned_by_bot(territory_id: int, bot_player_id: int, tcs: Node
 	if tcs == null or not tcs.has_method("get_owner_id"):
 		return false
 	var owner_raw: Variant = tcs.get_owner_id(territory_id)
+	if owner_raw == null:
+		return false
 	var owner_id: int = -1
 	if owner_raw is int:
 		owner_id = owner_raw

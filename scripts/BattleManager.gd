@@ -81,7 +81,6 @@ var is_timer_active: bool = false
 
 ## Bot difficulty 4+: defender slot alignment during coordination timer.
 var _bot_def_align_cd: float = 0.0
-var _bot_def_align_grace: float = 0.0
 
 # Auto-return to map after battle resolves
 var _auto_return_active: bool = false
@@ -163,7 +162,6 @@ func _ready() -> void:
 			_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(battle_timer)
 		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER, timer started")
 		_bot_def_align_cd = 0.0
-		_bot_def_align_grace = 0.0
 		# Respace hand cards after everything is set up
 		if _card_manager:
 			_card_manager.call_deferred("respace_hand_cards")
@@ -576,6 +574,8 @@ func _on_card_snapped_to_slot(card: Node, slot_idx: int) -> void:
 			_card_manager.call_deferred("respace_hand_cards")
 
 	_update_timer_visibility()
+	# Bot reacts after a short delay when player changes lane setup.
+	_bot_def_align_cd = _BOT_BATTLE_BEHAVIOR.ALIGN_MOVE_DELAY_SEC
 
 
 func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
@@ -598,6 +598,8 @@ func _on_card_unsnapped_from_slot(card: Node, slot_idx: int) -> void:
 
 	# Reset deck spawned flag so it can be used again
 	_update_timer_visibility()
+	# Bot reacts after a short delay when player changes lane setup.
+	_bot_def_align_cd = _BOT_BATTLE_BEHAVIOR.ALIGN_MOVE_DELAY_SEC
 
 
 func _player_ready() -> bool:
@@ -638,9 +640,9 @@ func _process(delta: float) -> void:
 		return
 
 	var timer_positive := is_timer_active and battle_timer > 0.0
-	if timer_positive or _bot_def_align_grace > 0.0:
-		if not timer_positive and _bot_def_align_grace > 0.0:
-			_bot_def_align_grace = maxf(0.0, _bot_def_align_grace - delta)
+	# Stop bot alignment shortly before timeout so final player adjustments remain stable.
+	var align_window_open := is_timer_active and battle_timer > _BOT_BATTLE_BEHAVIOR.POST_TIMER_GRACE_SEC
+	if align_window_open:
 		var run_align := (not _is_multiplayer) or (multiplayer.has_multiplayer_peer() and multiplayer.is_server())
 		if run_align and not _is_spectator:
 			_bot_def_align_cd -= delta
@@ -669,11 +671,9 @@ func _process(delta: float) -> void:
 
 		if battle_timer <= 0.0:
 			is_timer_active = false
-			if not _is_multiplayer or (multiplayer.has_multiplayer_peer() and multiplayer.is_server()):
-				_bot_def_align_grace = _BOT_BATTLE_BEHAVIOR.POST_TIMER_GRACE_SEC
 			_update_timer_visibility()
 			_on_battle_timer_expired()
-	elif _bot_def_align_grace <= 0.0:
+	elif not timer_positive:
 		return
 
 
@@ -1396,19 +1396,31 @@ func _apply_battle_resolution_state() -> void:
 	# Territory battle: current_territory_id is set when we entered; pending_territory_battle_ids is already popped, so don't require it.
 	var is_territory_battle: bool = not tid_str.is_empty() and not tid_str.begins_with("battle_")
 	if BattleStateManager and is_territory_battle:
-		var is_defender := false
 		var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
-		if tcs and tcs.has_method("get_owner_id"):
-			var owner_id = tcs.call("get_owner_id", int(tid_str))
-			var my_id = multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
-			is_defender = (int(owner_id) == int(my_id))
+		var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
+		var is_defender := false
+		# Prefer explicit participants from App (authoritative for this battle instance).
+		if App and App.pending_territory_battle_defender_id != -1:
+			is_defender = int(App.pending_territory_battle_defender_id) == int(my_id)
+		else:
+			if tcs and tcs.has_method("get_owner_id"):
+				var owner_id = tcs.call("get_owner_id", int(tid_str))
+				is_defender = (int(owner_id) == int(my_id))
 
 		var lost_cards := BattleStateManager.process_battle_resolution(result, player_wins, is_defender, tid_str)
 		if not lost_cards.is_empty():
 			App.remove_placed_cards_from_collection_for_slots(lost_cards)
 
 		var attacker_id: int = App.pending_territory_battle_attacker_id
-		var attacker_won: bool = (is_defender and not player_wins) or (not is_defender and player_wins)
+		# Defender keeps territory on tie.
+		var attacker_won: bool = false
+		if result == "win":
+			attacker_won = not is_defender
+		elif result == "lose":
+			attacker_won = is_defender
+		print("[BattleManager] Resolution context tid=%s my_id=%d is_defender=%s result=%s attacker_won=%s" % [
+			tid_str, my_id, str(is_defender), result, str(attacker_won)
+		])
 
 		if attacker_won:
 			var attacker_slots: Dictionary = BattleStateManager.get_attacking_slots(tid_str)
