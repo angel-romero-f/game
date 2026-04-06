@@ -22,7 +22,7 @@ const CLAIM_PANEL_ART_ALPHA := 1
 ## Inset of the panel art from the panel edges in pixels (left, top, right, bottom). Use to shift or shrink the art.
 const CLAIM_PANEL_ART_OFFSET := Vector4(0.0, 0.0, 0.0, 0.0)
 const CARD_SIZE_CLAIM := Vector2(260, 390)  # ~3x original 60x90
-## Max cards visible at once in the claim hand; slider scrolls through the rest.
+## Max cards visible at once in the claim hand; arrows cycle through the rest.
 const CLAIM_HAND_CARDS_VISIBLE := 3
 const CLAIM_HAND_SEPARATION := 8
 const RACE_FRAME_BASE: Dictionary = { "elf": 1, "orc": 4, "fairy": 7, "infernal": 10 }
@@ -54,6 +54,11 @@ var claim_panel_attack_mode: bool = false
 var original_claim_slot_cards: Array = [null, null, null]
 var claim_preview_mode: bool = false  # true when showing defending cards on hover (no buttons, close on mouse move)
 
+# Arrow navigation for card hand
+var _hand_view_offset: int = 0
+var _arrow_left: Button
+var _arrow_right: Button
+
 # Message panel
 var message_panel: PanelContainer
 var message_label: Label
@@ -81,12 +86,15 @@ func _ready() -> void:
 
 	_apply_claim_panel_art()
 
-	# Limit visible hand to 3 cards; slider scrolls horizontally
+	# Size the scroll container to fit exactly CLAIM_HAND_CARDS_VISIBLE cards; hide scrollbar
 	if claim_hand_scroll:
 		var w: float = CLAIM_HAND_CARDS_VISIBLE * CARD_SIZE_CLAIM.x + (CLAIM_HAND_CARDS_VISIBLE - 1) * CLAIM_HAND_SEPARATION
 		claim_hand_scroll.custom_minimum_size = Vector2(w, CARD_SIZE_CLAIM.y)
-		claim_hand_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_AUTO
+		claim_hand_scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_SHOW_NEVER
 		claim_hand_scroll.vertical_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+
+	_build_arrow_buttons()
+
 	if claim_cancel_button:
 		claim_cancel_button.pressed.connect(_on_cancel_clicked)
 	if claim_button:
@@ -217,6 +225,7 @@ func open_claim_panel(territory_id: int, map_sub_phase: int, _game_phase: int) -
 	_deselect_current()
 	current_claim_territory_id = territory_id
 	claim_highlighted_indices.clear()
+	_hand_view_offset = 0
 	var root_vbox: VBoxContainer = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer") as VBoxContainer
 	if root_vbox:
 		root_vbox.alignment = BoxContainer.ALIGNMENT_BEGIN
@@ -350,6 +359,7 @@ func open_play_only_panel(territory_id: int) -> void:
 	_apply_panel_style_for_phase(PhaseController.MapSubPhase.RESOURCE_COLLECTION)
 	_deselect_current()
 	current_claim_territory_id = territory_id
+	_hand_view_offset = 0
 	claim_panel_play_only_mode = true
 	claim_preview_mode = false
 	offset_left = CLAIM_PANEL_PLAY_ONLY_OFFSET.x
@@ -439,6 +449,7 @@ func show_defending_preview(territory_id: int) -> void:
 	claim_preview_mode = true
 	current_claim_territory_id = territory_id
 	claim_highlighted_indices.clear()
+	_hand_view_offset = 0
 	var title_label: Label = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/TitleLabel") as Label
 	if title_label:
 		title_label.text = "Cards Defending Territory"
@@ -669,14 +680,116 @@ func _update_attack_button_state() -> void:
 	var n := claim_highlighted_indices.size()
 	claim_attack_button.disabled = (n < 1 or n > 3)
 
+func _build_arrow_buttons() -> void:
+	var hand_scroll_vbox: Node = get_node_or_null("ContentWrap/CenterContainer/MarginContainer/VBoxContainer/HandScrollVBox")
+	if not hand_scroll_vbox:
+		return
+
+	var arrow_row := HBoxContainer.new()
+	arrow_row.name = "ArrowRow"
+	arrow_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	arrow_row.add_theme_constant_override("separation", 8)
+
+	var btn_normal := _make_arrow_style(Color(0.18, 0.15, 0.25, 1.0), Color(0.65, 0.55, 0.35, 1.0))
+	var btn_hover := _make_arrow_style(Color(0.28, 0.24, 0.38, 1.0), Color(0.85, 0.75, 0.45, 1.0))
+
+	_arrow_left = Button.new()
+	_arrow_left.text = "<"
+	_arrow_left.add_theme_font_override("font", UI_FONT)
+	_arrow_left.add_theme_font_size_override("font_size", 32)
+	_arrow_left.add_theme_color_override("font_color", Color(0.95, 0.9, 0.75))
+	_arrow_left.add_theme_stylebox_override("normal", btn_normal)
+	_arrow_left.add_theme_stylebox_override("hover", btn_hover)
+	_arrow_left.custom_minimum_size = Vector2(50, 50)
+	_arrow_left.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_arrow_left.pressed.connect(_on_arrow_left_pressed)
+	_arrow_left.visible = false
+
+	_arrow_right = Button.new()
+	_arrow_right.text = ">"
+	_arrow_right.add_theme_font_override("font", UI_FONT)
+	_arrow_right.add_theme_font_size_override("font_size", 32)
+	_arrow_right.add_theme_color_override("font_color", Color(0.95, 0.9, 0.75))
+	_arrow_right.add_theme_stylebox_override("normal", btn_normal.duplicate())
+	_arrow_right.add_theme_stylebox_override("hover", btn_hover.duplicate())
+	_arrow_right.custom_minimum_size = Vector2(50, 50)
+	_arrow_right.size_flags_vertical = Control.SIZE_SHRINK_CENTER
+	_arrow_right.pressed.connect(_on_arrow_right_pressed)
+	_arrow_right.visible = false
+
+	var scroll_or_container: Control = claim_hand_scroll if claim_hand_scroll else claim_hand_container
+	if not scroll_or_container:
+		return
+
+	var parent := scroll_or_container.get_parent()
+	var idx_in_parent := scroll_or_container.get_index()
+	parent.remove_child(scroll_or_container)
+
+	arrow_row.add_child(_arrow_left)
+	arrow_row.add_child(scroll_or_container)
+	arrow_row.add_child(_arrow_right)
+
+	parent.add_child(arrow_row)
+	parent.move_child(arrow_row, idx_in_parent)
+
+
+func _make_arrow_style(bg: Color, border: Color) -> StyleBoxFlat:
+	var s := StyleBoxFlat.new()
+	s.bg_color = bg
+	s.border_color = border
+	s.set_border_width_all(2)
+	s.set_corner_radius_all(4)
+	s.content_margin_left = 12.0
+	s.content_margin_right = 12.0
+	s.content_margin_top = 8.0
+	s.content_margin_bottom = 8.0
+	return s
+
+
+func _on_arrow_left_pressed() -> void:
+	if claim_hand_cards.is_empty():
+		return
+	_hand_view_offset = (_hand_view_offset - 1 + claim_hand_cards.size()) % claim_hand_cards.size()
+	_populate_claim_hand()
+
+
+func _on_arrow_right_pressed() -> void:
+	if claim_hand_cards.is_empty():
+		return
+	_hand_view_offset = (_hand_view_offset + 1) % claim_hand_cards.size()
+	_populate_claim_hand()
+
+
+func _update_arrow_visibility() -> void:
+	var show_arrows := claim_hand_cards.size() > CLAIM_HAND_CARDS_VISIBLE
+	if _arrow_left:
+		_arrow_left.visible = show_arrows
+	if _arrow_right:
+		_arrow_right.visible = show_arrows
+
+
 func _populate_claim_hand() -> void:
-	var saved_scroll: int = 0
-	if claim_hand_scroll:
-		saved_scroll = claim_hand_scroll.scroll_horizontal
 	for child in claim_hand_container.get_children():
 		child.queue_free()
+
+	var valid_count := 0
+	for c in claim_hand_cards:
+		if c != null and c is Dictionary:
+			valid_count += 1
+
+	if _hand_view_offset >= claim_hand_cards.size() and claim_hand_cards.size() > 0:
+		_hand_view_offset = _hand_view_offset % claim_hand_cards.size()
+
 	var all_highlighted := claim_highlighted_indices.size() >= 3
-	for i in range(claim_hand_cards.size()):
+	var cards_to_show := mini(CLAIM_HAND_CARDS_VISIBLE, valid_count)
+	var shown := 0
+	var check_idx := _hand_view_offset
+
+	for _j in range(claim_hand_cards.size()):
+		if shown >= cards_to_show:
+			break
+		var i: int = check_idx % claim_hand_cards.size()
+		check_idx += 1
 		var card_data: Variant = claim_hand_cards[i]
 		if card_data == null or not (card_data is Dictionary):
 			continue
@@ -714,10 +827,9 @@ func _populate_claim_hand() -> void:
 		panel.add_child(tex)
 		panel.gui_input.connect(_on_hand_card_gui_input.bind(i))
 		claim_hand_container.add_child(panel)
+		shown += 1
 
-	# Restore scroll position so selecting a card doesn't jump the slider
-	if claim_hand_scroll:
-		claim_hand_scroll.scroll_horizontal = saved_scroll
+	_update_arrow_visibility()
 
 func _on_hand_card_gui_input(event: InputEvent, hand_index: int) -> void:
 	if event is InputEventMouseButton:
