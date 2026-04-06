@@ -784,6 +784,8 @@ func get_lives() -> int:
 var main_music: AudioStreamPlayer
 var menu_music: AudioStreamPlayer
 var battle_music: AudioStreamPlayer
+var win_music: AudioStreamPlayer
+var lose_music: AudioStreamPlayer
 var ui_sfx: AudioStreamPlayer
 var blip_select_stream: AudioStream
 
@@ -845,6 +847,27 @@ func _ready() -> void:
 		battle_stream.loop = true
 		battle_music.stream = battle_stream
 		print("Battle music loaded in App autoload")
+
+	# Win / lose stingers (one-shot, no loop)
+	win_music = AudioStreamPlayer.new()
+	win_music.name = "WinMusic"
+	win_music.bus = "Music"
+	add_child(win_music)
+	var win_stream: AudioStreamMP3 = load("res://music/win_music.mp3")
+	if win_stream:
+		win_stream.loop = false
+		win_music.stream = win_stream
+		print("Win music loaded in App autoload")
+
+	lose_music = AudioStreamPlayer.new()
+	lose_music.name = "LoseMusic"
+	lose_music.bus = "Music"
+	add_child(lose_music)
+	var lose_stream: AudioStreamMP3 = load("res://music/lose_music.mp3")
+	if lose_stream:
+		lose_stream.loop = false
+		lose_music.stream = lose_stream
+		print("Lose music loaded in App autoload")
 
 	# UI SFX (button blips, etc.)
 	ui_sfx = AudioStreamPlayer.new()
@@ -1035,6 +1058,25 @@ func switch_to_battle_music() -> void:
 func switch_to_main_music() -> void:
 	stop_battle_music()
 	play_main_music()
+
+func stop_all_music() -> void:
+	stop_menu_music()
+	stop_main_music()
+	stop_battle_music()
+	if win_music and win_music.playing:
+		win_music.stop()
+	if lose_music and lose_music.playing:
+		lose_music.stop()
+
+func play_win_music() -> void:
+	stop_all_music()
+	if win_music and win_music.stream:
+		win_music.play()
+
+func play_lose_music() -> void:
+	stop_all_music()
+	if lose_music and lose_music.stream:
+		lose_music.play()
 
 func play_blip_select() -> void:
 	if not ui_sfx or not ui_sfx.stream:

@@ -111,12 +111,31 @@ func _show_victory(player_id: int) -> void:
 	if _victory_overlay:
 		_victory_overlay.visible = true
 
+	# Determine if the local player is the winner and play the appropriate music.
+	var local_id: int
+	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+		local_id = multiplayer.get_unique_id()
+	else:
+		local_id = -1
+		for p in App.game_players:
+			if p.get("is_local", false):
+				local_id = int(p.get("id", -1))
+				break
+
+	if local_id == player_id:
+		App.play_win_music()
+	else:
+		App.play_lose_music()
+
 
 func _on_main_menu_pressed() -> void:
 	get_tree().paused = false
 	monitoring = false
 	if _victory_overlay:
 		_victory_overlay.visible = false
+	App.stop_all_music()
+	App._menu_music_stopped = false
+	App.play_menu_music()
 	App.go("res://scenes/ui/MainMenu.tscn")
 
 
