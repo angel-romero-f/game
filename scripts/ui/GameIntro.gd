@@ -355,6 +355,8 @@ func _ready() -> void:
 	# ---------- Return-from-scene check ----------
 
 	if App.turn_order.size() > 0:
+		App.stop_menu_music()
+		App.play_main_music()
 		intro_ui.skip_intro()
 		intro_complete = true
 		territory_ui.intro_complete = true
@@ -400,6 +402,9 @@ func _ready() -> void:
 			
 		return
 
+	# For multiplayer non-host clients who arrive here via RPC (no button press on their end).
+	App.stop_menu_music()
+	App.play_main_music()
 	intro_ui.start_intro()
 
 
@@ -425,6 +430,7 @@ func _process(delta: float) -> void:
 # ---------- INTRO COMPLETION ----------
 
 func _on_intro_completed() -> void:
+	App.stop_menu_music()
 	intro_complete = true
 	territory_ui.intro_complete = true
 	phase_ui.intro_complete = true

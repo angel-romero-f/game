@@ -137,6 +137,8 @@ func _on_race_pressed(race: String) -> void:
 func _on_start_pressed() -> void:
 	var mp := _get_mp()
 	if mp and mp.is_server():
+		App.stop_menu_music()
+		App.play_main_music()
 		PlayerDataSync.host_assign_bot_races_after_humans()
 		PhaseSync.start_game.rpc(
 			PlayerDataSync.player_names.duplicate(true),

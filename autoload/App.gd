@@ -782,14 +782,36 @@ func get_lives() -> int:
 	return current_lives
 
 var main_music: AudioStreamPlayer
+var menu_music: AudioStreamPlayer
 var battle_music: AudioStreamPlayer
 var ui_sfx: AudioStreamPlayer
 var blip_select_stream: AudioStream
 
+# Tracks whether the menu music has ever been stopped (so returning to menus
+# mid-session doesn't restart it from the very beginning again).
+var _menu_music_stopped: bool = false
+
+const MENU_MUSIC_LOOP_OFFSET: float = 1.39
+
 func _ready() -> void:
 	# Ensure audio buses exist
 	_setup_audio_buses()
-	
+
+	# Menu music: plays from game launch through the intro/setup, then stops
+	# once the actual game begins. Loops back to MENU_MUSIC_LOOP_OFFSET to
+	# skip the one-shot pickup measure on every repeat.
+	menu_music = AudioStreamPlayer.new()
+	menu_music.name = "MenuMusic"
+	menu_music.bus = "Music"
+	add_child(menu_music)
+	var menu_stream: AudioStreamMP3 = load("res://music/menu_music.mp3")
+	if menu_stream:
+		menu_stream.loop = true
+		menu_stream.loop_offset = MENU_MUSIC_LOOP_OFFSET
+		menu_music.stream = menu_stream
+		menu_music.play()
+		print("Menu music started from App autoload")
+
 	# Create and start main music immediately on game launch
 	main_music = AudioStreamPlayer.new()
 	main_music.name = "MainMusic"
@@ -805,8 +827,7 @@ func _ready() -> void:
 	if stream:
 		stream.loop = true
 		main_music.stream = stream
-		main_music.play()
-		print("Main music started from App autoload")
+		print("Main music loaded in App autoload")
 	
 	# Create battle music player
 	battle_music = AudioStreamPlayer.new()
@@ -981,6 +1002,15 @@ func get_region_color(region_id: int) -> Color:
 		1:
 			return Color(0.82, 0.7, 0.45, 1.0)    # Tan / Beige
 	return Color(0.8, 0.8, 0.8, 1.0)
+
+func stop_menu_music() -> void:
+	_menu_music_stopped = true
+	if menu_music and menu_music.playing:
+		menu_music.stop()
+
+func play_menu_music() -> void:
+	if menu_music and not menu_music.playing and not _menu_music_stopped:
+		menu_music.play()
 
 func stop_main_music() -> void:
 	if main_music and main_music.playing:
