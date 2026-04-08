@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://dp5xsds8x47hu"
+path="res://.godot/imported/firesong (1).pxo-78eca3835f41eed2d59171768ec68209.res"
+
+[deps]
+
+source_file="res://scenes/firesong (1).pxo"
+dest_files=["res://.godot/imported/firesong (1).pxo-78eca3835f41eed2d59171768ec68209.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
