@@ -6,7 +6,7 @@ extends Node
 
 const PORT := 9999
 const MAX_CLIENTS := 4
-const DEBUG_NETWORKING := true
+const DEBUG_NETWORKING := false
 
 var peer: ENetMultiplayerPeer
 

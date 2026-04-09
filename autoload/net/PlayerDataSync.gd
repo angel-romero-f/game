@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## PlayerDataSync — Synchronizes player metadata (names, races, rolls) across the network.
 ## No game flow logic — only player identity data.
@@ -270,7 +271,7 @@ func host_generate_and_sync_rolls() -> void:
 	for pid in player_races.keys():
 		player_rolls[pid] = randi_range(1, 20)
 	_resolve_roll_ties()
-	print("Host generated rolls: ", player_rolls)
+	if DEBUG_LOGS: print("Host generated rolls: ", player_rolls)
 	_sync_player_rolls()
 
 func _resolve_roll_ties() -> void:
@@ -287,7 +288,7 @@ func _resolve_roll_ties() -> void:
 		for roll_val in roll_counts.keys():
 			if roll_counts[roll_val].size() > 1:
 				has_ties = true
-				print("Tie at roll ", roll_val, " - rerolling for: ", roll_counts[roll_val])
+				if DEBUG_LOGS: print("Tie at roll ", roll_val, " - rerolling for: ", roll_counts[roll_val])
 				for pid in roll_counts[roll_val]:
 					player_rolls[pid] = randi_range(1, 20)
 		if not has_ties:
@@ -302,13 +303,13 @@ func _sync_player_rolls() -> void:
 @rpc("authority", "call_local", "reliable")
 func sync_player_rolls(rolls: Dictionary) -> void:
 	player_rolls = rolls.duplicate(true)
-	print("Received synced rolls: ", player_rolls)
+	if DEBUG_LOGS: print("Received synced rolls: ", player_rolls)
 	# Update App.game_players with the synced rolls
 	for i in range(App.game_players.size()):
 		var pid = App.game_players[i].get("id", -1)
 		if player_rolls.has(pid):
 			App.game_players[i]["roll"] = player_rolls[pid]
-			print("Updated player ", App.game_players[i].get("name"), " roll to ", player_rolls[pid])
+			if DEBUG_LOGS: print("Updated player ", App.game_players[i].get("name"), " roll to ", player_rolls[pid])
 	player_rolls_updated.emit()
 
 ## Request host to generate rolls (called by GameIntro when ready)
@@ -332,10 +333,10 @@ func finalize_turn_order() -> void:
 	var sorted_players := App.game_players.duplicate()
 	sorted_players.sort_custom(func(a, b): return a.get("roll", 0) > b.get("roll", 0))
 	App.turn_order = sorted_players
-	print("Turn order finalized:")
+	if DEBUG_LOGS: print("Turn order finalized:")
 	for i in range(App.turn_order.size()):
 		var p = App.turn_order[i]
-		print("  ", i + 1, ". ", p.get("name", "Unknown"), " - Roll: ", p.get("roll", 0))
+		if DEBUG_LOGS: print("  ", i + 1, ". ", p.get("name", "Unknown"), " - Roll: ", p.get("roll", 0))
 	turn_order_finalized.emit()
 
 func _resolve_single_player_ties() -> void:
@@ -346,7 +347,7 @@ func _resolve_single_player_ties() -> void:
 		var current_roll: int = int(App.game_players[i].get("roll", 0))
 		if current_roll <= 0:
 			App.game_players[i]["roll"] = randi_range(1, 20)
-			print("Fixed invalid roll for player: ", App.game_players[i].get("name", "Unknown"))
+			if DEBUG_LOGS: print("Fixed invalid roll for player: ", App.game_players[i].get("name", "Unknown"))
 	while attempts < max_attempts:
 		var has_ties := false
 		var rolls_count := {}
@@ -358,11 +359,11 @@ func _resolve_single_player_ties() -> void:
 		for roll in rolls_count.keys():
 			if rolls_count[roll].size() > 1:
 				has_ties = true
-				print("Tie detected at roll ", roll, " - rerolling for tied players")
+				if DEBUG_LOGS: print("Tie detected at roll ", roll, " - rerolling for tied players")
 				for idx in rolls_count[roll]:
 					var new_roll := randi_range(1, 20)
 					App.game_players[idx]["roll"] = new_roll
-					print("  ", App.game_players[idx].get("name", "Unknown"), " rerolled: ", new_roll)
+					if DEBUG_LOGS: print("  ", App.game_players[idx].get("name", "Unknown"), " rerolled: ", new_roll)
 		if not has_ties:
 			break
 		attempts += 1

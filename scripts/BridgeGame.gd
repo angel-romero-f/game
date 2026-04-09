@@ -1,5 +1,7 @@
 extends Node2D
 
+const DEBUG_LOGS := false
+
 var game_over: bool = false
 var player_won: bool = false
 var _has_returned: bool = false
@@ -45,7 +47,7 @@ func _ready():
 		_minigame_timer = MINIGAME_TIME_LIMIT
 		App.minigame_time_remaining = _minigame_timer
 	_timer_active = true
-	print("[Minigame:Bridge] Timer started (%.1fs)" % _minigame_timer)
+	if DEBUG_LOGS: print("[Minigame:Bridge] Timer started (%.1fs)" % _minigame_timer)
 
 func _process(delta: float) -> void:
 	# Countdown timer — keeps running even during death screen
@@ -63,7 +65,7 @@ func _on_timeout() -> void:
 	if _has_returned:
 		return
 	_has_returned = true
-	print("[Minigame:Bridge] Time's up! Returning to map.")
+	if DEBUG_LOGS: print("[Minigame:Bridge] Time's up! Returning to map.")
 	game_over = true
 	player_won = false
 	App.minigame_time_remaining = -1.0

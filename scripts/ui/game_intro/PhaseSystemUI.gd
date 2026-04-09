@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## PhaseSystemUI — Phase-aware button visibility, overlay management, and multiplayer sync handlers.
 ## Merges phase UI + multiplayer sync because every sync handler terminates by calling apply_phase_ui/set_overlay.
@@ -284,14 +285,14 @@ func _apply_contest_command_ui() -> void:
 			# No gray overlay — just show the turn banner
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
-			print("[CLIENT PhaseSystemUI] Command turn: waiting for %s (peer %d)" % [_get_player_name_for_peer(PhaseController.current_turn_peer_id), PhaseController.current_turn_peer_id])
+			if DEBUG_LOGS: print("[CLIENT PhaseSystemUI] Command turn: waiting for %s (peer %d)" % [_get_player_name_for_peer(PhaseController.current_turn_peer_id), PhaseController.current_turn_peer_id])
 		else:
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
 			# Clear stale attacking slots from previous battles to prevent phantom battles
 			if BattleStateManager:
 				BattleStateManager.clear_all_attacking_slots()
-			print("[CLIENT PhaseSystemUI] Command turn: it's MY turn")
+			if DEBUG_LOGS: print("[CLIENT PhaseSystemUI] Command turn: it's MY turn")
 		_update_turn_banner()
 	else:
 		# Single-player turn lock: only the local player can act on command turns.
@@ -339,13 +340,13 @@ func _apply_claiming_ui() -> void:
 			# No gray overlay — just show the turn banner
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
-			print("[CLIENT PhaseSystemUI] Claiming turn: waiting for %s (peer %d)" % [_get_player_name_for_peer(PhaseController.current_turn_peer_id), PhaseController.current_turn_peer_id])
+			if DEBUG_LOGS: print("[CLIENT PhaseSystemUI] Claiming turn: waiting for %s (peer %d)" % [_get_player_name_for_peer(PhaseController.current_turn_peer_id), PhaseController.current_turn_peer_id])
 		else:
 			skip_to_battle_button.visible = true
 			skip_to_battle_button.text = "Done claiming"
 			set_overlay_state(OverlayState.NONE)
 			is_waiting_for_others = false
-			print("[CLIENT PhaseSystemUI] Claiming turn: it's MY turn")
+			if DEBUG_LOGS: print("[CLIENT PhaseSystemUI] Claiming turn: it's MY turn")
 		_update_turn_banner()
 	else:
 		# Single-player turn lock: only local player can claim/attack on their turn.
@@ -604,17 +605,17 @@ func _on_net_phase_changed(phase_id: int) -> void:
 				App.phase_transition_text = "Collect"
 			App.GamePhase.COLLECT:
 				App.phase_transition_text = "Collect"
-		print("[CLIENT PhaseSystemUI] Phase changed to %d — showing transition overlay" % phase_id)
+		if DEBUG_LOGS: print("[CLIENT PhaseSystemUI] Phase changed to %d — showing transition overlay" % phase_id)
 		show_phase_transition_overlay()
 	else:
-		print("[CLIENT PhaseSystemUI] apply_phase_ui phase=%d sub=%d turn=%d" % [PhaseController.current_phase, PhaseController.map_sub_phase, PhaseController.current_turn_peer_id])
+		if DEBUG_LOGS: print("[CLIENT PhaseSystemUI] apply_phase_ui phase=%d sub=%d turn=%d" % [PhaseController.current_phase, PhaseController.map_sub_phase, PhaseController.current_turn_peer_id])
 		apply_phase_ui()
 
 func _on_turn_changed(_peer_id: int) -> void:
 	if intro_complete and not is_phase_overlay_animating:
 		apply_phase_ui()
 		if multiplayer.has_multiplayer_peer():
-			print("[CLIENT PhaseSystemUI] Turn changed → peer %d" % _peer_id)
+			if DEBUG_LOGS: print("[CLIENT PhaseSystemUI] Turn changed → peer %d" % _peer_id)
 
 func _on_done_counts_updated(done: int, total: int) -> void:
 	local_done_count = done

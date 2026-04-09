@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## BattleSync — Battle card placement, ready state, decision system, and territory battles.
 ## Server-authoritative: clients send requests, server validates and broadcasts.
@@ -45,7 +46,7 @@ signal battle_finished_broadcast()
 func clear_battle_state() -> void:
 	var caller_role := "SERVER" if multiplayer.is_server() else "CLIENT"
 	var old_keys: Array = battle_placed_cards.keys()
-	print("[BattleSync] clear_battle_state() called by %s (peer %d). Clearing peer keys: %s" % [caller_role, multiplayer.get_unique_id(), str(old_keys)])
+	if DEBUG_LOGS: print("[BattleSync] clear_battle_state() called by %s (peer %d). Clearing peer keys: %s" % [caller_role, multiplayer.get_unique_id(), str(old_keys)])
 	battle_placed_cards.clear()
 	battle_ready_peers.clear()
 
@@ -97,7 +98,7 @@ func _server_place_battle_card(peer_id: int, slot_index: int, sprite_frames_path
 	if not battle_placed_cards.has(peer_id):
 		battle_placed_cards[peer_id] = {}
 	battle_placed_cards[peer_id][slot_index] = {"path": sprite_frames_path, "frame": frame_index}
-	print("[BattleSync] _server_place_battle_card: peer=%d slot=%d path=%s. Current peers in dict: %s" % [peer_id, slot_index, sprite_frames_path.get_file(), str(battle_placed_cards.keys())])
+	if DEBUG_LOGS: print("[BattleSync] _server_place_battle_card: peer=%d slot=%d path=%s. Current peers in dict: %s" % [peer_id, slot_index, sprite_frames_path.get_file(), str(battle_placed_cards.keys())])
 	sync_battle_cards.rpc(battle_placed_cards)
 
 @rpc("any_peer", "reliable")
@@ -134,7 +135,7 @@ func sync_battle_cards(cards: Dictionary) -> void:
 	for pid in battle_placed_cards:
 		var slots: Dictionary = battle_placed_cards[pid]
 		summary.append("peer %s: %d cards" % [str(pid), slots.size()])
-	print("[BattleSync] sync_battle_cards received (peer %d): {%s}" % [multiplayer.get_unique_id(), ", ".join(summary)])
+	if DEBUG_LOGS: print("[BattleSync] sync_battle_cards received (peer %d): {%s}" % [multiplayer.get_unique_id(), ", ".join(summary)])
 	battle_cards_updated.emit()
 
 ## Client requests the server to re-broadcast the full battle_placed_cards state.
@@ -152,7 +153,7 @@ func _rpc_request_full_sync() -> void:
 	_server_full_sync()
 
 func _server_full_sync() -> void:
-	print("[BattleSync] _server_full_sync: re-broadcasting battle_placed_cards (peers: %s)" % str(battle_placed_cards.keys()))
+	if DEBUG_LOGS: print("[BattleSync] _server_full_sync: re-broadcasting battle_placed_cards (peers: %s)" % str(battle_placed_cards.keys()))
 	sync_battle_cards.rpc(battle_placed_cards)
 
 # ---------- BATTLE READY ----------
@@ -203,7 +204,7 @@ func start_battle() -> void:
 	for pid in battle_placed_cards:
 		var slots: Dictionary = battle_placed_cards[pid]
 		summary.append("peer %s: %d cards" % [str(pid), slots.size()])
-	print("[BattleSync] start_battle RPC on peer %d. battle_placed_cards: {%s}" % [multiplayer.get_unique_id(), ", ".join(summary)])
+	if DEBUG_LOGS: print("[BattleSync] start_battle RPC on peer %d. battle_placed_cards: {%s}" % [multiplayer.get_unique_id(), ", ".join(summary)])
 	battle_start_requested.emit()
 
 # ---------- BATTLE LEFT / PERSISTENCE ----------
@@ -252,10 +253,10 @@ func _server_handle_start_territory_battle(_requester_id: int, territory_id: int
 	# Use TerritoryClaimState (persists across scenes); App.territory_manager is null when we're in card battle scene.
 	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
 	if not tcs or not tcs.has_method("is_claimed"):
-		print("[BattleSync] request_start_territory_battle: TerritoryClaimState not available!")
+		if DEBUG_LOGS: print("[BattleSync] request_start_territory_battle: TerritoryClaimState not available!")
 		return
 	if not tcs.call("is_claimed", territory_id):
-		print("[BattleSync] request_start_territory_battle: Territory ", territory_id, " is not claimed (no defender).")
+		if DEBUG_LOGS: print("[BattleSync] request_start_territory_battle: Territory ", territory_id, " is not claimed (no defender).")
 		return
 
 	var owner_val: Variant = tcs.call("get_owner_id", territory_id)
@@ -263,10 +264,10 @@ func _server_handle_start_territory_battle(_requester_id: int, territory_id: int
 	if owner_val != null:
 		defender_id = int(owner_val)
 	else:
-		print("[BattleSync] request_start_territory_battle: Territory ", territory_id, " has no owner!")
+		if DEBUG_LOGS: print("[BattleSync] request_start_territory_battle: Territory ", territory_id, " has no owner!")
 		return
 
-	print("[BattleSync] Starting Territory Battle: ID=", territory_id, " Attacker=", attacker_id, " (requester=", _requester_id, ") Defender=", defender_id)
+	if DEBUG_LOGS: print("[BattleSync] Starting Territory Battle: ID=", territory_id, " Attacker=", attacker_id, " (requester=", _requester_id, ") Defender=", defender_id)
 	clear_battle_state()
 
 	# Pre-populate bot cards into battle_placed_cards so all peers see them.
@@ -277,12 +278,12 @@ func _server_handle_start_territory_battle(_requester_id: int, territory_id: int
 		var bot_cards: Dictionary = BattleStateManager.get_attacking_slots(tid_str)
 		if not bot_cards.is_empty():
 			battle_placed_cards[attacker_id] = bot_cards.duplicate(true)
-			print("[BattleSync] Injected bot attacker %d cards: %s" % [attacker_id, str(bot_cards.keys())])
+			if DEBUG_LOGS: print("[BattleSync] Injected bot attacker %d cards: %s" % [attacker_id, str(bot_cards.keys())])
 	if defender_is_bot and BattleStateManager:
 		var bot_cards: Dictionary = BattleStateManager.get_defending_slots(tid_str)
 		if not bot_cards.is_empty():
 			battle_placed_cards[defender_id] = bot_cards.duplicate(true)
-			print("[BattleSync] Injected bot defender %d cards: %s" % [defender_id, str(bot_cards.keys())])
+			if DEBUG_LOGS: print("[BattleSync] Injected bot defender %d cards: %s" % [defender_id, str(bot_cards.keys())])
 
 	start_territory_battle.rpc(territory_id, attacker_id, defender_id)
 	# Sync pre-populated bot cards to all peers.
@@ -296,13 +297,13 @@ func _server_handle_start_territory_battle(_requester_id: int, territory_id: int
 		var saved_def := defender_id
 		get_tree().create_timer(2.0).timeout.connect(func() -> void:
 			if territory_battle_attacker_id == saved_att and territory_battle_defender_id == saved_def:
-				print("[BattleSync] Bot-vs-bot: auto-starting battle for territory %d" % territory_id)
+				if DEBUG_LOGS: print("[BattleSync] Bot-vs-bot: auto-starting battle for territory %d" % territory_id)
 				start_battle.rpc()
 		, CONNECT_ONE_SHOT)
 
 @rpc("authority", "call_local", "reliable")
 func start_territory_battle(territory_id: int, attacker_id: int, defender_id: int) -> void:
-	print("[BattleSync] Received start_territory_battle: ", territory_id)
+	if DEBUG_LOGS: print("[BattleSync] Received start_territory_battle: ", territory_id)
 	territory_battle_attacker_id = attacker_id
 	territory_battle_defender_id = defender_id
 	battle_ready_peers.clear()
@@ -342,7 +343,7 @@ func _advance_decider_to_next_eligible() -> void:
 		for pid in battle_choices.keys():
 			if battle_choices[pid] == "UNDECIDED":
 				battle_choices[pid] = "SKIP"
-				print("[BattleSync] Auto-skipped player ", pid, " (both queues full)")
+				if DEBUG_LOGS: print("[BattleSync] Auto-skipped player ", pid, " (both queues full)")
 		_sync_battle_state()
 		_check_battle_phase_complete()
 		return
@@ -368,7 +369,7 @@ func _advance_decider_to_next_eligible() -> void:
 		break
 
 	if found:
-		print("[BattleSync] Battle decider set to: ", battle_decider_peer_id)
+		if DEBUG_LOGS: print("[BattleSync] Battle decider set to: ", battle_decider_peer_id)
 		rpc_set_battle_decider.rpc(battle_decider_peer_id)
 		_sync_battle_state()
 	else:
@@ -386,7 +387,7 @@ func _check_battle_phase_complete() -> void:
 			break
 
 	if all_decided:
-		print("[BattleSync] Battles complete, entering next round (Claim -> Minigames -> Battle)")
+		if DEBUG_LOGS: print("[BattleSync] Battles complete, entering next round (Claim -> Minigames -> Battle)")
 		PhaseSync.server_enter_contest_claim_from_battles()
 
 @rpc("authority", "call_local", "reliable")
@@ -412,22 +413,22 @@ func server_battle_choice(choice: String) -> void:
 
 func _server_process_battle_choice(peer_id: int, choice: String) -> void:
 	if peer_id != battle_decider_peer_id:
-		print("[BattleSync] Rejected choice from ", peer_id, " (not their turn)")
+		if DEBUG_LOGS: print("[BattleSync] Rejected choice from ", peer_id, " (not their turn)")
 		return
 
 	if choice not in ["LEFT", "RIGHT", "SKIP"]:
-		print("[BattleSync] Invalid choice: ", choice)
+		if DEBUG_LOGS: print("[BattleSync] Invalid choice: ", choice)
 		return
 
 	if choice == "LEFT" and left_queue.size() >= 2:
-		print("[BattleSync] Left queue full, rejecting")
+		if DEBUG_LOGS: print("[BattleSync] Left queue full, rejecting")
 		return
 	if choice == "RIGHT" and right_queue.size() >= 2:
-		print("[BattleSync] Right queue full, rejecting")
+		if DEBUG_LOGS: print("[BattleSync] Right queue full, rejecting")
 		return
 
 	battle_choices[peer_id] = choice
-	print("[BattleSync] Player ", peer_id, " chose: ", choice)
+	if DEBUG_LOGS: print("[BattleSync] Player ", peer_id, " chose: ", choice)
 
 	if choice == "LEFT":
 		left_queue.append(peer_id)
@@ -472,7 +473,7 @@ func _start_paired_battle(p1_id: int, p2_id: int, side: String) -> void:
 	if not multiplayer.is_server():
 		return
 
-	print("[BattleSync] Starting paired battle: ", p1_id, " vs ", p2_id, " on ", side)
+	if DEBUG_LOGS: print("[BattleSync] Starting paired battle: ", p1_id, " vs ", p2_id, " on ", side)
 	clear_battle_state()
 	battle_in_progress = true
 	active_battle_participants = [p1_id, p2_id]
@@ -509,7 +510,7 @@ func _server_battle_finished_report(peer_id: int) -> void:
 		return
 
 	battle_finished_reports[peer_id] = true
-	print("[BattleSync] Battle finished report from: ", peer_id)
+	if DEBUG_LOGS: print("[BattleSync] Battle finished report from: ", peer_id)
 
 	# Check if BOTH participants reported
 	var both_done := true
@@ -519,7 +520,7 @@ func _server_battle_finished_report(peer_id: int) -> void:
 			break
 
 	if both_done:
-		print("[BattleSync] Both participants finished, resuming decisions")
+		if DEBUG_LOGS: print("[BattleSync] Both participants finished, resuming decisions")
 		var p1: int = int(active_battle_participants[0]) if active_battle_participants.size() > 0 else -1
 		var p2: int = int(active_battle_participants[1]) if active_battle_participants.size() > 1 else -1
 		var side: String = String(active_battle_side)

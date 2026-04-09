@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## TerritorySync — Territory claiming network coordination.
 ## Server validates claims and broadcasts results.
@@ -36,12 +37,12 @@ func _server_process_claim_territory(requester_id: int, territory_id: int, owner
 		or (PhaseController.current_phase == 1 and PhaseController.map_sub_phase == PhaseController.MapSubPhase.CLAIMING)
 	)
 	if not is_turn_based_claim_window:
-		print("[TerritorySync] REJECTED claim from %d for territory %d (phase=%d sub=%d)" % [
+		if DEBUG_LOGS: print("[TerritorySync] REJECTED claim from %d for territory %d (phase=%d sub=%d)" % [
 			requester_id, territory_id, PhaseController.current_phase, PhaseController.map_sub_phase
 		])
 		return
 	if PhaseController.current_turn_peer_id != -1 and requester_id != PhaseController.current_turn_peer_id:
-		print("[TerritorySync] REJECTED out-of-turn claim from %d (current turn: %d)" % [
+		if DEBUG_LOGS: print("[TerritorySync] REJECTED out-of-turn claim from %d (current turn: %d)" % [
 			requester_id, PhaseController.current_turn_peer_id
 		])
 		return

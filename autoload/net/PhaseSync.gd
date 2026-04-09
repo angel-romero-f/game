@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## PhaseSync — Network synchronization for game phases and turns.
 ## Server-authoritative RPCs that delegate state updates to PhaseController.
@@ -53,7 +54,7 @@ func host_init_contest_command_phase() -> void:
 
 	var all_peers := NetworkManager.get_all_peer_ids()
 	var total := all_peers.size()
-	print("[PhaseSync] Host init Contest Command phase with ", total, " participants. First turn: ", PhaseController.current_turn_peer_id)
+	if DEBUG_LOGS: print("[PhaseSync] Host init Contest Command phase with ", total, " participants. First turn: ", PhaseController.current_turn_peer_id)
 
 	# IMPORTANT: Sync turn and done state BEFORE phase change, because phase_changed
 	# signal triggers UI update which reads current_turn_peer_id
@@ -75,7 +76,7 @@ func host_init_collect_phase() -> void:
 
 	var all_peers := NetworkManager.get_all_peer_ids()
 	var total := all_peers.size()
-	print("[PhaseSync] Host init Collect phase with ", total, " participants")
+	if DEBUG_LOGS: print("[PhaseSync] Host init Collect phase with ", total, " participants")
 
 	# Sync done state BEFORE phase change (phase_changed triggers UI update)
 	rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
@@ -89,7 +90,7 @@ func host_init_collect_phase() -> void:
 func rpc_set_current_turn(peer_id: int) -> void:
 	PhaseController.set_turn(peer_id)
 	if multiplayer.is_server():
-		print("[HOST PhaseSync] Turn → peer %d" % peer_id)
+		if DEBUG_LOGS: print("[HOST PhaseSync] Turn → peer %d" % peer_id)
 
 ## Client requests to end their Contest Command turn
 func request_end_contest_command_turn() -> void:
@@ -112,10 +113,10 @@ func _server_advance_contest_command_turn(peer_id: int) -> void:
 		return
 
 	if peer_id != PhaseController.current_turn_peer_id:
-		print("[PhaseSync] REJECTED turn end from ", peer_id, " (not their turn, current: ", PhaseController.current_turn_peer_id, ")")
+		if DEBUG_LOGS: print("[PhaseSync] REJECTED turn end from ", peer_id, " (not their turn, current: ", PhaseController.current_turn_peer_id, ")")
 		return
 
-	print("[PhaseSync] Player ", peer_id, " finished Contest Command turn (index ", PhaseController.current_turn_index, ")")
+	if DEBUG_LOGS: print("[PhaseSync] Player ", peer_id, " finished Contest Command turn (index ", PhaseController.current_turn_index, ")")
 
 	PhaseController.player_done_state[peer_id] = true
 
@@ -130,21 +131,21 @@ func _server_advance_contest_command_turn(peer_id: int) -> void:
 			if App.territory_pending_attackers.has(tid_int):
 				pending_battles.append(tid_str)
 			elif BattleStateManager:
-				print("[PhaseSync] Cleaning stale attacking slots for territory %s (no registered attacker)" % tid_str)
+				if DEBUG_LOGS: print("[PhaseSync] Cleaning stale attacking slots for territory %s (no registered attacker)" % tid_str)
 				BattleStateManager.clear_attacking_slots(str(tid_str))
 		if pending_battles.size() > 0:
-			print("[PhaseSync] All command turns done — %d territory battles pending. Starting battle sequence." % pending_battles.size())
+			if DEBUG_LOGS: print("[PhaseSync] All command turns done — %d territory battles pending. Starting battle sequence." % pending_battles.size())
 			App.pending_territory_battle_ids = pending_battles.duplicate()
 			App.territory_battle_resume_mode = "mp_collect"
 			App.is_territory_battle_attacker = true
 			App.on_battle_completed()
 			return
-		print("[PhaseSync] All players finished Contest Command - entering Contest Claim")
+		if DEBUG_LOGS: print("[PhaseSync] All players finished Contest Command - entering Contest Claim")
 		_server_enter_contest_claim_phase()
 	else:
 		var next_player = App.turn_order[PhaseController.current_turn_index]
 		PhaseController.current_turn_peer_id = next_player.get("id", -1)
-		print("[PhaseSync] Next Contest Command turn: ", PhaseController.current_turn_peer_id, " (index ", PhaseController.current_turn_index, ")")
+		if DEBUG_LOGS: print("[PhaseSync] Next Contest Command turn: ", PhaseController.current_turn_peer_id, " (index ", PhaseController.current_turn_index, ")")
 		rpc_set_current_turn.rpc(PhaseController.current_turn_peer_id)
 		rpc_sync_done_state.rpc(PhaseController.player_done_state.duplicate(), PhaseController.player_minigame_counts.duplicate())
 
@@ -190,7 +191,7 @@ func _server_advance_claiming_turn(peer_id: int) -> void:
 	if not multiplayer.is_server():
 		return
 	if peer_id != PhaseController.current_turn_peer_id:
-		print("[PhaseSync] REJECTED claiming turn end from ", peer_id, " (not their turn)")
+		if DEBUG_LOGS: print("[PhaseSync] REJECTED claiming turn end from ", peer_id, " (not their turn)")
 		return
 	PhaseController.current_turn_index += 1
 	if PhaseController.current_turn_index >= App.turn_order.size():
@@ -226,22 +227,22 @@ func _server_increment_minigame(peer_id: int) -> void:
 		return
 	# Minigames only count during Contest Claim resource collection.
 	if PhaseController.current_phase != 1 or PhaseController.map_sub_phase != PhaseController.MapSubPhase.RESOURCE_COLLECTION:
-		print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (phase=", PhaseController.current_phase, " sub=", PhaseController.map_sub_phase, ")")
+		if DEBUG_LOGS: print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (phase=", PhaseController.current_phase, " sub=", PhaseController.map_sub_phase, ")")
 		return
 	if PhaseController.player_done_state.get(peer_id, false):
-		print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (already done)")
+		if DEBUG_LOGS: print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (already done)")
 		return
 	var current_count: int = PhaseController.player_minigame_counts.get(peer_id, 0)
 	if current_count >= 2:
-		print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (already at 2)")
+		if DEBUG_LOGS: print("[PhaseSync] REJECTED minigame increment from ", peer_id, " (already at 2)")
 		return
 
 	var count: int = PhaseController.increment_minigame(peer_id)
-	print("[PhaseSync] Player ", peer_id, " minigame count: ", count)
+	if DEBUG_LOGS: print("[PhaseSync] Player ", peer_id, " minigame count: ", count)
 
 	if count >= 2:
 		PhaseController.mark_done(peer_id)
-		print("[PhaseSync] Player ", peer_id, " auto-marked done (2 minigames)")
+		if DEBUG_LOGS: print("[PhaseSync] Player ", peer_id, " auto-marked done (2 minigames)")
 
 	_check_all_done_and_advance()
 
@@ -263,7 +264,7 @@ func server_skip_to_done() -> void:
 
 func _server_mark_done(peer_id: int) -> void:
 	PhaseController.mark_done(peer_id)
-	print("[PhaseSync] Player ", peer_id, " marked done (skip)")
+	if DEBUG_LOGS: print("[PhaseSync] Player ", peer_id, " marked done (skip)")
 	_check_all_done_and_advance()
 
 ## Check if all players are done and advance phase if so
@@ -300,7 +301,7 @@ func rpc_set_phase(phase_id: int) -> void:
 	App.region_bonus_active = false
 	App.pending_bonus_reward.clear()
 	if multiplayer.is_server():
-		print("[HOST PhaseSync] Phase → %d ('%s')" % [phase_id, App.phase_transition_text])
+		if DEBUG_LOGS: print("[HOST PhaseSync] Phase → %d ('%s')" % [phase_id, App.phase_transition_text])
 
 ## Authority broadcasts done state dictionaries to clients
 @rpc("authority", "call_local", "reliable")

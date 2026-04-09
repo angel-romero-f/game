@@ -1,6 +1,8 @@
 class_name TerritoryIndicator
 extends Control
 
+const DEBUG_LOGS := false
+
 ## TerritoryIndicator — Clickable sprite-based territory on the map.
 ## Created programmatically by TerritoryManager at the center of each TerritoryNode.
 ## Handles clicking, claim visuals (race-colored sprite), and selection glow.
@@ -188,7 +190,7 @@ func _gui_input(event: InputEvent) -> void:
 		var mb := event as InputEventMouseButton
 		if mb.pressed and mb.button_index == MOUSE_BUTTON_LEFT:
 			if territory_data:
-				print("[TerritoryIndicator] Clicked territory_id=%d  region_id=%d  position=%s" % [territory_id, get_region_id(), global_position])
+				if DEBUG_LOGS: print("[TerritoryIndicator] Clicked territory_id=%d  region_id=%d  position=%s" % [territory_id, get_region_id(), global_position])
 				territory_selected.emit(territory_data.territory_id)
 
 

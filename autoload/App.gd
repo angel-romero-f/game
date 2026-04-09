@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## Simple scene navigation helper + small UI state
 var player_name: String = ""
@@ -107,7 +108,7 @@ func enter_contest_command_phase() -> void:
 	region_bonus_used_this_phase.clear()
 	phase_transition_text = "Contest"
 	show_phase_transition = true
-	print("[HOST Phase] Entering CONTEST_COMMAND")
+	if DEBUG_LOGS: print("[HOST Phase] Entering CONTEST_COMMAND")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_contest_claim_phase() -> void:
@@ -118,7 +119,7 @@ func enter_contest_claim_phase() -> void:
 	region_bonus_used_this_phase.clear()
 	phase_transition_text = "Collect"
 	show_phase_transition = true
-	print("[HOST Phase] Entering CONTEST_CLAIM")
+	if DEBUG_LOGS: print("[HOST Phase] Entering CONTEST_CLAIM")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_collect_phase() -> void:
@@ -129,7 +130,7 @@ func enter_collect_phase() -> void:
 	region_bonus_used_this_phase.clear()
 	phase_transition_text = "Collect"
 	show_phase_transition = true
-	print("[HOST Phase] Entering COLLECT")
+	if DEBUG_LOGS: print("[HOST Phase] Entering COLLECT")
 	game_phase_changed.emit(current_game_phase)
 
 func enter_battle_phase() -> void:
@@ -140,7 +141,7 @@ func enter_battle_phase() -> void:
 func on_minigame_completed() -> void:
 	## Called when player wins a minigame
 	minigames_completed_this_phase += 1
-	print("[Phase] Minigame completed. Count: ", minigames_completed_this_phase, "/", MAX_MINIGAMES_PER_PHASE)
+	if DEBUG_LOGS: print("[Phase] Minigame completed. Count: ", minigames_completed_this_phase, "/", MAX_MINIGAMES_PER_PHASE)
 	minigame_completed_signal.emit()
 	
 	# In multiplayer, notify host of minigame completion (host controls phase)
@@ -152,13 +153,13 @@ func on_minigame_completed() -> void:
 	# Single player: when max minigames reached, transition depends on current phase
 	if minigames_completed_this_phase >= MAX_MINIGAMES_PER_PHASE:
 		if current_game_phase == GamePhase.COLLECT:
-			print("[Phase] Max minigames reached, looping to Contest Command")
+			if DEBUG_LOGS: print("[Phase] Max minigames reached, looping to Contest Command")
 			enter_contest_command_phase()
 		# If in CONTEST_CLAIM, GameIntro handles BATTLE_READY transition (delayed overlay)
 
 func on_battle_completed() -> void:
 	## Called when a single battle ends - handles territory battle sequence or multi-battle queue
-	print("[DEBUG] App.on_battle_completed() called. Pending IDs: ", pending_territory_battle_ids)
+	if DEBUG_LOGS: print("[DEBUG] App.on_battle_completed() called. Pending IDs: ", pending_territory_battle_ids)
 	if game_victor_id >= 0:
 		# A winner exists; stop any remaining queued battles and return to map/victory flow.
 		pending_territory_battle_ids.clear()
@@ -174,13 +175,13 @@ func on_battle_completed() -> void:
 		
 		# If Multiplayer, trigger via Net
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
-			print("[DEBUG] Requesting Multi-Player Territory Battle: ", next_id)
+			if DEBUG_LOGS: print("[DEBUG] Requesting Multi-Player Territory Battle: ", next_id)
 			BattleSync.request_start_territory_battle(next_id)
 			territory_pending_attackers.erase(next_id)
 			return # Wait for RPC to call enter_territory_battle
 			
 		# Single Player (Local)
-		print("[DEBUG] Starting Single-Player Territory Battle: ", next_id)
+		if DEBUG_LOGS: print("[DEBUG] Starting Single-Player Territory Battle: ", next_id)
 		var tcs := get_node_or_null("/root/TerritoryClaimState")
 		var defender_id: int = int(tcs.get_owner_id(next_id)) if (tcs and tcs.has_method("get_owner_id") and tcs.get_owner_id(next_id) != null) else -1
 		var attacker_id: int = int(territory_pending_attackers.get(next_id, current_turn_player_id))
@@ -215,7 +216,7 @@ func on_battle_completed() -> void:
 	var just_finished_territory_battle = (BattleStateManager and BattleStateManager.current_territory_id != "" and not BattleStateManager.current_territory_id.begins_with("battle_"))
 	
 	if just_finished_territory_battle and pending_territory_battle_ids.size() == 0:
-		print("[DEBUG] All territory battles completed. Returning to GameIntro with flag set.")
+		if DEBUG_LOGS: print("[DEBUG] All territory battles completed. Returning to GameIntro with flag set.")
 		pending_territory_battle_ids.clear()
 		# Single-player bot flow: resume according to explicit mode.
 		if not is_multiplayer and territory_battle_resume_mode != "":
@@ -235,7 +236,7 @@ func on_battle_completed() -> void:
 			returning_from_territory_battles = false
 			is_territory_battle_attacker = false
 			if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-				print("[DEBUG] Multiplayer: Bot mid-command battles done. Host advancing bot turn.")
+				if DEBUG_LOGS: print("[DEBUG] Multiplayer: Bot mid-command battles done. Host advancing bot turn.")
 				PhaseSync.host_advance_bot_command_turn()
 				# Advancing the turn may have triggered end-of-round battles
 				# (via _server_advance_contest_command_turn) which already
@@ -250,7 +251,7 @@ func on_battle_completed() -> void:
 			returning_from_territory_battles = false
 			is_territory_battle_attacker = false
 			if multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-				print("[DEBUG] Multiplayer: All command-phase battles done. Host entering Contest Claim (collect).")
+				if DEBUG_LOGS: print("[DEBUG] Multiplayer: All command-phase battles done. Host entering Contest Claim (collect).")
 				PhaseSync._server_enter_contest_claim_phase()
 			go("res://scenes/ui/game_intro.tscn")
 			return
@@ -259,17 +260,17 @@ func on_battle_completed() -> void:
 		
 		# If Multiplayer, we need to notify the server we are done with battles/claiming
 		if is_multiplayer and multiplayer.has_multiplayer_peer():
-			print("[DEBUG] Multiplayer: Requesting end claiming turn after battles.")
+			if DEBUG_LOGS: print("[DEBUG] Multiplayer: Requesting end claiming turn after battles.")
 			pass # Logic will be handled in GameIntro._ready()
 		else:
 			# SINGLE PLAYER LOGIC
 			# Current turn player finished claiming & battles.
 			current_turn_index += 1
-			print("[DEBUG] Advanced turn index locally to: ", current_turn_index)
+			if DEBUG_LOGS: print("[DEBUG] Advanced turn index locally to: ", current_turn_index)
 			if current_turn_index < turn_order.size():
 				# Next player's turn
 				current_turn_player_id = turn_order[current_turn_index].get("id", -1)
-				print("[DEBUG] Next player ID: ", current_turn_player_id)
+				if DEBUG_LOGS: print("[DEBUG] Next player ID: ", current_turn_player_id)
 				go("res://scenes/ui/game_intro.tscn")
 				return
 
@@ -279,11 +280,11 @@ func on_battle_completed() -> void:
 	# Check if more battles in queue
 	if battle_queue.size() > 0 and current_battle_queue_index < battle_queue.size() - 1:
 		current_battle_queue_index += 1
-		print("[Phase] Loading next battle from queue: ", current_battle_queue_index + 1, "/", battle_queue.size())
+		if DEBUG_LOGS: print("[Phase] Loading next battle from queue: ", current_battle_queue_index + 1, "/", battle_queue.size())
 		_load_next_queued_battle()
 	else:
 		# Queue exhausted - clear and return to GameIntro
-		print("[Phase] Battle queue exhausted, returning to GameIntro")
+		if DEBUG_LOGS: print("[Phase] Battle queue exhausted, returning to GameIntro")
 		battle_queue.clear()
 		current_battle_queue_index = -1
 		current_battle_metadata.clear()
@@ -298,7 +299,7 @@ func _load_next_queued_battle() -> void:
 	## Load the next battle from the queue
 	var battle_idx: int = battle_queue[current_battle_queue_index]
 	current_battle_metadata = _get_battle_metadata(battle_idx)
-	print("[Phase] Loading battle ", battle_idx, " vs ", current_battle_metadata.get("opponent_name", "Unknown"))
+	if DEBUG_LOGS: print("[Phase] Loading battle ", battle_idx, " vs ", current_battle_metadata.get("opponent_name", "Unknown"))
 	
 	if BattleStateManager:
 		var territory_id := "battle_%d" % battle_idx
@@ -313,7 +314,7 @@ func start_battle_queue(selected_battles: Array) -> void:
 	
 	if battle_queue.is_empty():
 		# No battles selected - skip to next player/phase
-		print("[Phase] No battles selected, skipping")
+		if DEBUG_LOGS: print("[Phase] No battles selected, skipping")
 		on_battle_completed()
 		return
 	
@@ -342,7 +343,7 @@ func _get_battle_metadata(battle_idx: int) -> Dictionary:
 
 func skip_to_done() -> void:
 	## Called when player chooses to skip (during Card Collection)
-	print("[Phase] Player skipping to done")
+	if DEBUG_LOGS: print("[Phase] Player skipping to done")
 	
 	# In multiplayer, request host to mark us as done
 	if is_multiplayer and multiplayer.has_multiplayer_peer():
@@ -628,13 +629,13 @@ func initialize_player_hand(hand_size: int = 3) -> void:
 			card_pool = FAIRY_CARDS.duplicate()
 		"Orc":
 			card_pool = ORC_CARDS.duplicate()
-			print("[Hand] Using Infernal card pool")
+			if DEBUG_LOGS: print("[Hand] Using Infernal card pool")
 		_:
 			card_pool = MIXED_CARD_POOL.duplicate()	
 	card_pool.shuffle()
 	for i in range(mini(hand_size, card_pool.size())):
 		player_hand.append(card_pool[i].duplicate())
-	print("[Hand] Initialized player hand with ", player_hand.size(), " cards")
+	if DEBUG_LOGS: print("[Hand] Initialized player hand with ", player_hand.size(), " cards")
 
 func reset_player_hand() -> void:
 	## Clears the player's hand
@@ -656,7 +657,7 @@ func remove_placed_cards_from_collection_for_slots(placed_slots: Dictionary, rea
 				removed += 1
 				break
 	if removed > 0:
-		print("[Cards] Removed ", removed, " placed cards from collection (", reason, ")")
+		if DEBUG_LOGS: print("[Cards] Removed ", removed, " placed cards from collection (", reason, ")")
 		_notify_card_count_changed()
 
 
@@ -683,7 +684,7 @@ func initialize_player_card_collection() -> void:
 	for i in range(mini(4, card_pool.size())):
 		var c: Dictionary = card_pool[i].duplicate()
 		player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
-	print("[Cards] Initialized collection with ", player_card_collection.size(), " cards")
+	if DEBUG_LOGS: print("[Cards] Initialized collection with ", player_card_collection.size(), " cards")
 	_notify_card_count_changed()
 
 ## Add a random card when player wins a minigame
@@ -693,7 +694,7 @@ func add_card_from_minigame_win() -> void:
 		return
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
 	player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
-	print("[Cards] Added card from minigame win. Collection size: ", player_card_collection.size())
+	if DEBUG_LOGS: print("[Cards] Added card from minigame win. Collection size: ", player_card_collection.size())
 	_notify_card_count_changed()
 
 ## Pre-roll (deterministically pick) the reward card before the minigame scene loads.
@@ -710,7 +711,7 @@ func pre_roll_minigame_reward_for_region(region_id: int) -> void:
 	pending_minigame_reward = {"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))}
 	# Reset the persistent timer so the new minigame gets a fresh 30s
 	minigame_time_remaining = -1.0
-	print("[Cards] Pre-rolled reward: %s frame %d" % [pending_minigame_reward.get("path", ""), pending_minigame_reward.get("frame", 0)])
+	if DEBUG_LOGS: print("[Cards] Pre-rolled reward: %s frame %d" % [pending_minigame_reward.get("path", ""), pending_minigame_reward.get("frame", 0)])
 
 ## Pre-roll a bonus reward card for the region bonus (called when player owns full region).
 func pre_roll_bonus_reward() -> void:
@@ -723,7 +724,7 @@ func pre_roll_bonus_reward_for_region(region_id: int) -> void:
 		return
 	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
 	pending_bonus_reward = {"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))}
-	print("[Cards] Pre-rolled region bonus reward: %s frame %d" % [pending_bonus_reward.get("path", ""), pending_bonus_reward.get("frame", 0)])
+	if DEBUG_LOGS: print("[Cards] Pre-rolled region bonus reward: %s frame %d" % [pending_bonus_reward.get("path", ""), pending_bonus_reward.get("frame", 0)])
 
 func _get_card_pool_for_region(region_id: int) -> Array:
 	if region_id < 0:
@@ -746,12 +747,12 @@ func add_card_from_pending_reward() -> void:
 		add_card_from_minigame_win()
 	else:
 		player_card_collection.append(pending_minigame_reward.duplicate())
-		print("[Cards] Awarded pending reward card. Collection size: ", player_card_collection.size())
+		if DEBUG_LOGS: print("[Cards] Awarded pending reward card. Collection size: ", player_card_collection.size())
 		pending_minigame_reward.clear()
 
 	if region_bonus_active and not pending_bonus_reward.is_empty():
 		player_card_collection.append(pending_bonus_reward.duplicate())
-		print("[Cards] Awarded region bonus card! Collection size: ", player_card_collection.size())
+		if DEBUG_LOGS: print("[Cards] Awarded region bonus card! Collection size: ", player_card_collection.size())
 		pending_bonus_reward.clear()
 	region_bonus_active = false
 	_notify_card_count_changed()
@@ -814,7 +815,7 @@ func _ready() -> void:
 		menu_stream.loop_offset = MENU_MUSIC_LOOP_OFFSET
 		menu_music.stream = menu_stream
 		menu_music.play()
-		print("Menu music started from App autoload")
+		if DEBUG_LOGS: print("Menu music started from App autoload")
 
 	# Create and start main music immediately on game launch
 	main_music = AudioStreamPlayer.new()
@@ -831,7 +832,7 @@ func _ready() -> void:
 	if stream:
 		stream.loop = true
 		main_music.stream = stream
-		print("Main music loaded in App autoload")
+		if DEBUG_LOGS: print("Main music loaded in App autoload")
 	
 	# Create battle music player
 	battle_music = AudioStreamPlayer.new()
@@ -848,7 +849,7 @@ func _ready() -> void:
 	if battle_stream:
 		battle_stream.loop = true
 		battle_music.stream = battle_stream
-		print("Battle music loaded in App autoload")
+		if DEBUG_LOGS: print("Battle music loaded in App autoload")
 
 	# Win / lose stingers (one-shot, no loop)
 	win_music = AudioStreamPlayer.new()
@@ -859,7 +860,7 @@ func _ready() -> void:
 	if win_stream:
 		win_stream.loop = false
 		win_music.stream = win_stream
-		print("Win music loaded in App autoload")
+		if DEBUG_LOGS: print("Win music loaded in App autoload")
 
 	lose_music = AudioStreamPlayer.new()
 	lose_music.name = "LoseMusic"
@@ -869,7 +870,7 @@ func _ready() -> void:
 	if lose_stream:
 		lose_stream.loop = false
 		lose_music.stream = lose_stream
-		print("Lose music loaded in App autoload")
+		if DEBUG_LOGS: print("Lose music loaded in App autoload")
 
 	# UI SFX (button blips, etc.)
 	ui_sfx = AudioStreamPlayer.new()
@@ -1128,7 +1129,7 @@ func _setup_audio_buses() -> void:
 		var new_bus_idx = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(new_bus_idx, "Music")
 		AudioServer.set_bus_send(new_bus_idx, "Master")
-		print("Created Music audio bus")
+		if DEBUG_LOGS: print("Created Music audio bus")
 	
 	# Check if SFX bus exists, if not create it
 	var sfx_bus_idx = AudioServer.get_bus_index("SFX")
@@ -1137,7 +1138,7 @@ func _setup_audio_buses() -> void:
 		var new_bus_idx = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(new_bus_idx, "SFX")
 		AudioServer.set_bus_send(new_bus_idx, "Master")
-		print("Created SFX audio bus")
+		if DEBUG_LOGS: print("Created SFX audio bus")
 	
 	# Check if UI bus exists, if not create it
 	var ui_bus_idx = AudioServer.get_bus_index("UI")
@@ -1146,13 +1147,13 @@ func _setup_audio_buses() -> void:
 		var new_bus_idx = AudioServer.bus_count - 1
 		AudioServer.set_bus_name(new_bus_idx, "UI")
 		AudioServer.set_bus_send(new_bus_idx, "Master")
-		print("Created UI audio bus")
+		if DEBUG_LOGS: print("Created UI audio bus")
 
 ## Called by Net via RPC start_territory_battle
 func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: int) -> void:
 	pending_territory_battle_attacker_id = attacker_id
 	pending_territory_battle_defender_id = defender_id
-	print("[App] Entering Territory Battle: ", territory_id)
+	if DEBUG_LOGS: print("[App] Entering Territory Battle: ", territory_id)
 	
 	if not BattleStateManager:
 		return
@@ -1184,7 +1185,7 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 	is_battle_spectator = not is_attacker and not is_defender
 
 	if is_attacker:
-		print("[App] I am the ATTACKER. Loading attacking slots.")
+		if DEBUG_LOGS: print("[App] I am the ATTACKER. Loading attacking slots.")
 		var atts: Dictionary = BattleStateManager._get_state(tid_str).get("attacking_slots", {})
 		for idx in atts:
 			var c: Dictionary = atts[idx]
@@ -1192,7 +1193,7 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 		go("res://scenes/card_battle.tscn")
 			
 	elif is_defender:
-		print("[App] I am the DEFENDER. Loading defending slots.")
+		if DEBUG_LOGS: print("[App] I am the DEFENDER. Loading defending slots.")
 		var defs: Dictionary = BattleStateManager.get_defending_slots(tid_str)
 		for idx in defs:
 			var c: Dictionary = defs[idx]
@@ -1200,7 +1201,7 @@ func enter_territory_battle(territory_id: int, attacker_id: int, defender_id: in
 		go("res://scenes/card_battle.tscn")
 			
 	else:
-		print("[App] I am a SPECTATOR. Entering battle scene as spectator.")
+		if DEBUG_LOGS: print("[App] I am a SPECTATOR. Entering battle scene as spectator.")
 		go("res://scenes/card_battle.tscn")
 
 

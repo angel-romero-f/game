@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## BattleManager
 ## Orchestrates: opponent backs on entry, start-battle gating, flip animation,
@@ -101,7 +102,7 @@ func _ready() -> void:
 	_is_spectator = App.is_battle_spectator
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else -1
 	var role := "SERVER" if multiplayer.is_server() else "CLIENT"
-	print("[BattleManager] _ready() START. peer=%d role=%s is_multiplayer=%s is_spectator=%s" % [my_id, role, str(_is_multiplayer), str(_is_spectator)])
+	if DEBUG_LOGS: print("[BattleManager] _ready() START. peer=%d role=%s is_multiplayer=%s is_spectator=%s" % [my_id, role, str(_is_multiplayer), str(_is_spectator)])
 	_cache_nodes()
 
 	if _card_scene_ui:
@@ -136,7 +137,7 @@ func _ready() -> void:
 		await get_tree().process_frame
 		await get_tree().process_frame
 
-		print("[BattleManager] _ready() restoring cards. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
+		if DEBUG_LOGS: print("[BattleManager] _ready() restoring cards. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
 		# Restore cards after CardManager is ready
 		_restore_and_sync_placed_cards()
 
@@ -146,7 +147,7 @@ func _ready() -> void:
 		# Short delay so BattleSync.battle_placed_cards is synced before we draw opponent backs (avoids wrong count with 3+ players)
 		if _is_multiplayer:
 			await get_tree().create_tween().tween_interval(0.2).finished
-		print("[BattleManager] _ready() placing opponent backs. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
+		if DEBUG_LOGS: print("[BattleManager] _ready() placing opponent backs. battle_placed_cards keys: %s" % str(BattleSync.battle_placed_cards.keys()))
 		_place_opponent_backs()
 		_connect_player_slot_signals()
 		call_deferred("_setup_lane_arrows")
@@ -160,13 +161,13 @@ func _ready() -> void:
 		_update_timer_visibility()
 		if _timer_label:
 			_timer_label.text = "Countdown to Coordinate Your Combat: %d" % ceil(battle_timer)
-		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER, timer started")
+		if DEBUG_LOGS: print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER, timer started")
 		_bot_def_align_cd = 0.0
 		# Respace hand cards after everything is set up
 		if _card_manager:
 			_card_manager.call_deferred("respace_hand_cards")
 	else:
-		print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER (SPECTATOR mode)")
+		if DEBUG_LOGS: print("[BattleManager] _ready() DONE. state=WAITING_FOR_PLAYER (SPECTATOR mode)")
 		# Single-player bot-vs-bot spectator battles: auto-resolve after 10 seconds.
 		if not _is_multiplayer:
 			call_deferred("_start_singleplayer_spectator_battle_timer")
@@ -246,7 +247,7 @@ func _restore_and_sync_placed_cards() -> void:
 	var is_territory_battle: bool = (tid != "")
 
 	if is_territory_battle:
-		print("[BattleManager] Territory Battle detected for ID: ", tid)
+		if DEBUG_LOGS: print("[BattleManager] Territory Battle detected for ID: ", tid)
 		var defending_slots: Dictionary = BattleStateManager.get_defending_slots(tid)
 		var attacking_slots: Dictionary = BattleStateManager.get_attacking_slots(tid)
 		# Determine role: defender = territory owner, attacker = otherwise
@@ -262,13 +263,13 @@ func _restore_and_sync_placed_cards() -> void:
 		if is_local_defender:
 			player_slots_data = defending_slots
 			opponent_slots_data = attacking_slots
-			print("[BattleManager] Local player is DEFENDER. Player side=defending, opponent side=attacking.")
+			if DEBUG_LOGS: print("[BattleManager] Local player is DEFENDER. Player side=defending, opponent side=attacking.")
 		else:
 			player_slots_data = attacking_slots
 			opponent_slots_data = defending_slots
-			print("[BattleManager] Local player is ATTACKER. Player side=attacking, opponent side=defending.")
-		print("[BattleManager] Player slots (our side) data: ", _debug_slots_summary(player_slots_data))
-		print("[BattleManager] Opponent slots (their side) data: ", _debug_slots_summary(opponent_slots_data))
+			if DEBUG_LOGS: print("[BattleManager] Local player is ATTACKER. Player side=attacking, opponent side=defending.")
+		if DEBUG_LOGS: print("[BattleManager] Player slots (our side) data: ", _debug_slots_summary(player_slots_data))
+		if DEBUG_LOGS: print("[BattleManager] Opponent slots (their side) data: ", _debug_slots_summary(opponent_slots_data))
 
 		# 1. Populate opponent slots (face-down). In multiplayer use only BattleSync (in _place_opponent_backs after a short delay) to avoid wrong count from stale BSM data.
 		if not _is_multiplayer:
@@ -303,7 +304,7 @@ func _restore_and_sync_placed_cards() -> void:
 					var frame: int = int(data.get("frame"))
 					if not path.is_empty():
 						BattleSync.request_place_battle_card(slot_idx, path, frame)
-				print("[BattleManager] Restore complete (territory). Requesting full sync.")
+				if DEBUG_LOGS: print("[BattleManager] Restore complete (territory). Requesting full sync.")
 				BattleSync.request_full_sync()
 		return
 
@@ -318,7 +319,7 @@ func _restore_and_sync_placed_cards() -> void:
 				var frame: int = int(data.get("frame"))
 				if not path.is_empty():
 					BattleSync.request_place_battle_card(slot_idx, path, frame)
-			print("[BattleManager] Restore complete (non-territory). Requesting full sync.")
+			if DEBUG_LOGS: print("[BattleManager] Restore complete (non-territory). Requesting full sync.")
 			BattleSync.request_full_sync()
 
 
@@ -404,10 +405,10 @@ func _on_battle_cards_updated() -> void:
 	## Refresh opponent slots with face-down cards from remote player(s).
 	var state_name: String = ["SETUP", "WAITING_FOR_PLAYER", "WAITING_FOR_ALL_READY", "FLIPPING", "RESOLVED"][clampi(state, 0, 4)]
 	if state == State.WAITING_FOR_PLAYER or state == State.WAITING_FOR_ALL_READY:
-		print("[BattleManager] _on_battle_cards_updated: processing (state=%s)" % state_name)
+		if DEBUG_LOGS: print("[BattleManager] _on_battle_cards_updated: processing (state=%s)" % state_name)
 		_update_opponent_cards_from_net()
 	else:
-		print("[BattleManager] _on_battle_cards_updated: SKIPPED (state=%s)" % state_name)
+		if DEBUG_LOGS: print("[BattleManager] _on_battle_cards_updated: SKIPPED (state=%s)" % state_name)
 
 
 func _on_battle_start_requested() -> void:
@@ -431,14 +432,14 @@ func _on_battle_start_requested() -> void:
 	_resolve_battle()
 	if _card_manager:
 		_card_manager.add_attribute_indicators(_player_slot_nodes, _opponent_slot_nodes, attribute_config, attribute_indicator_font_scale, attribute_indicator_offset)
-	print("[BattleManager] _on_battle_start_requested: starting bump sequence")
+	if DEBUG_LOGS: print("[BattleManager] _on_battle_start_requested: starting bump sequence")
 	await _animate_card_bump_sequence()
-	print("[BattleManager] _on_battle_start_requested: bump sequence complete, showing result")
+	if DEBUG_LOGS: print("[BattleManager] _on_battle_start_requested: bump sequence complete, showing result")
 	_show_result()
 	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
-	print("[BattleManager] _on_battle_start_requested: calling _start_auto_return")
+	if DEBUG_LOGS: print("[BattleManager] _on_battle_start_requested: calling _start_auto_return")
 	_start_auto_return()
 
 
@@ -464,11 +465,11 @@ func _update_opponent_cards_from_net() -> void:
 			other_peer_id = int(pid)
 			break
 	if other_peer_id == -1:
-		print("[BattleManager] _update_opponent_cards_from_net: no opponent found (my_id=%d, keys=%s). Clearing." % [my_id, str(BattleSync.battle_placed_cards.keys())])
+		if DEBUG_LOGS: print("[BattleManager] _update_opponent_cards_from_net: no opponent found (my_id=%d, keys=%s). Clearing." % [my_id, str(BattleSync.battle_placed_cards.keys())])
 		_clear_opponent_slot_cards()
 		return
 	var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
-	print("[BattleManager] _update_opponent_cards_from_net: my_id=%d opponent=%d opponent_slots=%s" % [my_id, other_peer_id, str(other_cards.keys())])
+	if DEBUG_LOGS: print("[BattleManager] _update_opponent_cards_from_net: my_id=%d opponent=%d opponent_slots=%s" % [my_id, other_peer_id, str(other_cards.keys())])
 	_clear_opponent_slot_cards()
 	var back_frames: SpriteFrames = CARD_BACK_FRAMES
 	var back_frame_index: int = CARD_BACK_FRAME_INDEX
@@ -707,14 +708,14 @@ func _trigger_battle_start() -> void:
 	_resolve_battle()
 	if _card_manager:
 		_card_manager.add_attribute_indicators(_player_slot_nodes, _opponent_slot_nodes, attribute_config, attribute_indicator_font_scale, attribute_indicator_offset)
-	print("[BattleManager] _trigger_battle_start: starting bump sequence")
+	if DEBUG_LOGS: print("[BattleManager] _trigger_battle_start: starting bump sequence")
 	await _animate_card_bump_sequence()
-	print("[BattleManager] _trigger_battle_start: bump sequence complete, showing result")
+	if DEBUG_LOGS: print("[BattleManager] _trigger_battle_start: bump sequence complete, showing result")
 	_show_result()
 	_report_battle_resolved()
 	state = State.RESOLVED
 	_apply_battle_resolution_state()
-	print("[BattleManager] _trigger_battle_start: calling _start_auto_return")
+	if DEBUG_LOGS: print("[BattleManager] _trigger_battle_start: calling _start_auto_return")
 	_start_auto_return()
 
 
@@ -723,7 +724,7 @@ func _animate_card_bump_sequence() -> void:
 	## After each bump the round loser's card disappears; on tie the attacker's card disappears (defender keeps).
 	## After all bumps, if the overall battle loser still has visible cards, the winner's remaining cards bump once more and then the loser's remaining cards vanish.
 	## Pairing: player_slots=[PL(0), PM(1), PR(2)], opponent_slots=[OR(0), OM(1), OL(2)]
-	print("[BattleManager] _animate_card_bump_sequence START")
+	if DEBUG_LOGS: print("[BattleManager] _animate_card_bump_sequence START")
 	var bump_pairs: Array = [
 		[0, 2],  # PL + OL
 		[1, 1],  # PM + OM
@@ -733,7 +734,7 @@ func _animate_card_bump_sequence() -> void:
 	var bump_duration := 0.30
 
 	var local_is_defender := _is_local_defender()
-	print("[BattleManager] local_is_defender=%s, _round_results=%s" % [str(local_is_defender), str(_round_results)])
+	if DEBUG_LOGS: print("[BattleManager] local_is_defender=%s, _round_results=%s" % [str(local_is_defender), str(_round_results)])
 
 	for la in _lane_arrow_nodes:
 		if la and la.has_method("reset_neutral"):
@@ -749,14 +750,14 @@ func _animate_card_bump_sequence() -> void:
 
 		var has_pcard: bool = pcard != null and is_instance_valid(pcard)
 		var has_ocard: bool = ocard != null and is_instance_valid(ocard)
-		print("[BattleManager] Bump pair p_idx=%d o_idx=%d has_pcard=%s has_ocard=%s" % [p_idx, o_idx, str(has_pcard), str(has_ocard)])
+		if DEBUG_LOGS: print("[BattleManager] Bump pair p_idx=%d o_idx=%d has_pcard=%s has_ocard=%s" % [p_idx, o_idx, str(has_pcard), str(has_ocard)])
 
 		if not has_pcard and not has_ocard:
 			if p_idx < _lane_arrow_nodes.size():
 				var la_skip: Node = _lane_arrow_nodes[p_idx]
 				if la_skip:
 					la_skip.visible = false
-			print("[BattleManager] Skipping bump pair %d — no cards" % p_idx)
+			if DEBUG_LOGS: print("[BattleManager] Skipping bump pair %d — no cards" % p_idx)
 			continue
 
 		# Record starting positions before bump
@@ -775,7 +776,7 @@ func _animate_card_bump_sequence() -> void:
 			tween.tween_property(ocard, "global_position", o_start + Vector2(0, bump_distance), bump_duration)
 
 		await tween.finished
-		print("[BattleManager] Bump out finished for pair p_idx=%d" % p_idx)
+		if DEBUG_LOGS: print("[BattleManager] Bump out finished for pair p_idx=%d" % p_idx)
 
 		# Return to starting positions
 		var return_tween: Tween = create_tween()
@@ -795,12 +796,12 @@ func _animate_card_bump_sequence() -> void:
 			await return_tween.finished
 		else:
 			return_tween.kill()
-			print("[BattleManager] Return tween had no targets for pair p_idx=%d, killed" % p_idx)
-		print("[BattleManager] Bump return finished for pair p_idx=%d" % p_idx)
+			if DEBUG_LOGS: print("[BattleManager] Return tween had no targets for pair p_idx=%d, killed" % p_idx)
+		if DEBUG_LOGS: print("[BattleManager] Bump return finished for pair p_idx=%d" % p_idx)
 
 		# Determine round result for this player slot index
 		var round_result: String = _round_results[p_idx] if p_idx < _round_results.size() else "tie"
-		print("[BattleManager] Round result for p_idx=%d: %s" % [p_idx, round_result])
+		if DEBUG_LOGS: print("[BattleManager] Round result for p_idx=%d: %s" % [p_idx, round_result])
 
 		if round_result == "win":
 			if has_ocard and is_instance_valid(ocard):
@@ -842,13 +843,13 @@ func _animate_card_bump_sequence() -> void:
 						lane_col = App.get_race_color(wr)
 				la_res.apply_lane_result(round_result, lane_col)
 
-		print("[BattleManager] Fade complete for pair p_idx=%d" % p_idx)
+		if DEBUG_LOGS: print("[BattleManager] Fade complete for pair p_idx=%d" % p_idx)
 		# Brief pause between pairs
 		await get_tree().create_tween().tween_interval(0.25).finished
 
 	# After all per-round bumps: check if the overall loser still has visible cards
 	var overall_result := _get_battle_result()
-	print("[BattleManager] All bumps done. overall_result=%s" % overall_result)
+	if DEBUG_LOGS: print("[BattleManager] All bumps done. overall_result=%s" % overall_result)
 	if overall_result == "lose":
 		await _final_winner_bump_and_clear("opponent")
 	elif overall_result == "win":
@@ -858,7 +859,7 @@ func _animate_card_bump_sequence() -> void:
 			await _final_winner_bump_and_clear("player")
 		else:
 			await _final_winner_bump_and_clear("opponent")
-	print("[BattleManager] _animate_card_bump_sequence DONE")
+	if DEBUG_LOGS: print("[BattleManager] _animate_card_bump_sequence DONE")
 
 
 func _is_local_defender() -> bool:
@@ -954,7 +955,7 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 	## After per-round results, if the overall loser still has visible cards:
 	## 1. Winner's remaining visible cards all bump at once (player up / opponent down).
 	## 2. Then the loser's remaining visible cards vanish.
-	print("[BattleManager] _final_winner_bump_and_clear START winner_side=%s" % winner_side)
+	if DEBUG_LOGS: print("[BattleManager] _final_winner_bump_and_clear START winner_side=%s" % winner_side)
 	var bump_distance := 10.0
 	var bump_duration := 0.30
 
@@ -982,10 +983,10 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 			if card and is_instance_valid(card) and card.visible:
 				loser_cards.append(card)
 
-	print("[BattleManager] winner_cards=%d loser_cards=%d" % [winner_cards.size(), loser_cards.size()])
+	if DEBUG_LOGS: print("[BattleManager] winner_cards=%d loser_cards=%d" % [winner_cards.size(), loser_cards.size()])
 
 	if loser_cards.is_empty():
-		print("[BattleManager] _final_winner_bump_and_clear: no loser cards, returning early")
+		if DEBUG_LOGS: print("[BattleManager] _final_winner_bump_and_clear: no loser cards, returning early")
 		return
 
 	# Winner cards bump out then return
@@ -1003,7 +1004,7 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 			if is_instance_valid(card):
 				bump_tween.tween_property(card, "global_position", card.global_position + Vector2(0, bump_dir), bump_duration)
 		await bump_tween.finished
-		print("[BattleManager] _final_winner_bump_and_clear: winner bump done")
+		if DEBUG_LOGS: print("[BattleManager] _final_winner_bump_and_clear: winner bump done")
 
 		var return_tween: Tween = create_tween()
 		return_tween.set_ease(Tween.EASE_IN_OUT)
@@ -1018,10 +1019,10 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 			await return_tween.finished
 		else:
 			return_tween.kill()
-		print("[BattleManager] _final_winner_bump_and_clear: winner return done")
+		if DEBUG_LOGS: print("[BattleManager] _final_winner_bump_and_clear: winner return done")
 
 	# Loser's remaining cards grey out
-	print("[BattleManager] _final_winner_bump_and_clear: greying %d loser cards" % loser_cards.size())
+	if DEBUG_LOGS: print("[BattleManager] _final_winner_bump_and_clear: greying %d loser cards" % loser_cards.size())
 	var grey := Color(0.35, 0.35, 0.35, 1.0)
 	var grey_tween: Tween = create_tween()
 	grey_tween.set_parallel(true)
@@ -1035,7 +1036,7 @@ func _final_winner_bump_and_clear(winner_side: String) -> void:
 	else:
 		grey_tween.kill()
 	await get_tree().create_tween().tween_interval(0.15).finished
-	print("[BattleManager] _final_winner_bump_and_clear DONE")
+	if DEBUG_LOGS: print("[BattleManager] _final_winner_bump_and_clear DONE")
 
 
 func _place_opponent_backs() -> void:
@@ -1101,10 +1102,10 @@ func _flip_opponent_cards_from_pool() -> void:
 			if int(pid) != my_id:
 				other_peer_id = int(pid)
 				break
-		print("[BattleManager] _flip_opponent_cards: my_id=%d other_peer=%d all_keys=%s" % [my_id, other_peer_id, str(BattleSync.battle_placed_cards.keys())])
+		if DEBUG_LOGS: print("[BattleManager] _flip_opponent_cards: my_id=%d other_peer=%d all_keys=%s" % [my_id, other_peer_id, str(BattleSync.battle_placed_cards.keys())])
 		if other_peer_id != -1:
 			var other_cards: Dictionary = BattleSync.battle_placed_cards.get(other_peer_id, {})
-			print("[BattleManager] _flip_opponent_cards: opponent slot keys=%s" % str(other_cards.keys()))
+			if DEBUG_LOGS: print("[BattleManager] _flip_opponent_cards: opponent slot keys=%s" % str(other_cards.keys()))
 			for slot_idx in range(_opponent_slot_nodes.size()):
 				var slot = _opponent_slot_nodes[slot_idx]
 				if not slot or not other_cards.has(slot_idx):
@@ -1116,7 +1117,7 @@ func _flip_opponent_cards_from_pool() -> void:
 					var frames: SpriteFrames = load(path) as SpriteFrames
 					if frames:
 						chosen[slot] = {"frames": frames, "frame_index": fidx}
-		print("[BattleManager] _flip_opponent_cards: %d cards chosen for flip" % chosen.size())
+		if DEBUG_LOGS: print("[BattleManager] _flip_opponent_cards: %d cards chosen for flip" % chosen.size())
 
 	# Single-player territory battle override:
 	# If cards were already placed by _restore_and_sync_placed_cards (stored in _opponent_cards_by_slot)
@@ -1184,7 +1185,7 @@ func _resolve_battle() -> void:
 	if state != State.FLIPPING and state != State.WAITING_FOR_ALL_READY:
 		if _result_label:
 			_result_label.text = "Tie (0)"
-		print("[BattleManager] _resolve_battle: early return (state=%s), set result to Tie (0)" % state)
+		if DEBUG_LOGS: print("[BattleManager] _resolve_battle: early return (state=%s), set result to Tie (0)" % state)
 		return
 	if state == State.WAITING_FOR_ALL_READY:
 		state = State.FLIPPING
@@ -1195,7 +1196,7 @@ func _resolve_battle() -> void:
 		push_warning("BattleManager: attribute_config not set; battle will tie.")
 		if _result_label:
 			_result_label.text = "Tie (0)"
-		print("[BattleManager] _resolve_battle: early return (no attribute_config), set result to Tie (0)")
+		if DEBUG_LOGS: print("[BattleManager] _resolve_battle: early return (no attribute_config), set result to Tie (0)")
 		return
 
 	var player_wins := 0
@@ -1315,26 +1316,26 @@ func _resolve_battle() -> void:
 
 	if _result_label:
 		_result_label.text = result_text
-		print("[BattleManager] _resolve_battle: result_text set to \"%s\"" % result_text)
+		if DEBUG_LOGS: print("[BattleManager] _resolve_battle: result_text set to \"%s\"" % result_text)
 	else:
-		print("[BattleManager] _resolve_battle: _result_label is null, result_text would be \"%s\"" % result_text)
+		if DEBUG_LOGS: print("[BattleManager] _resolve_battle: _result_label is null, result_text would be \"%s\"" % result_text)
 
 
 func _show_result() -> void:
-	print("[BattleManager] _show_result() called. _result_label valid=%s _continue_label valid=%s" % [_result_label != null, _continue_label != null])
+	if DEBUG_LOGS: print("[BattleManager] _show_result() called. _result_label valid=%s _continue_label valid=%s" % [_result_label != null, _continue_label != null])
 	if _result_label:
 		if _result_label.text.is_empty():
 			_result_label.text = "Tie (0)"
-			print("[BattleManager] _show_result: result text was empty, set fallback \"Tie (0)\"")
+			if DEBUG_LOGS: print("[BattleManager] _show_result: result text was empty, set fallback \"Tie (0)\"")
 		_result_label.add_theme_font_size_override("font_size", 48)
 		# Color the result text to match the winner's race
 		var winner_color := _determine_winner_color()
 		_result_label.add_theme_color_override("font_color", winner_color)
 		_result_label.visible = true
 		if _result_label.text:
-			print("[BattleManager] _show_result: ResultLabel.visible=true, text=\"%s\"" % _result_label.text)
+			if DEBUG_LOGS: print("[BattleManager] _show_result: ResultLabel.visible=true, text=\"%s\"" % _result_label.text)
 		else:
-			print("[BattleManager] _show_result: ResultLabel.visible=true but text is empty")
+			if DEBUG_LOGS: print("[BattleManager] _show_result: ResultLabel.visible=true but text is empty")
 	# Hide continue label — auto-return handles the transition
 	if _continue_label:
 		_continue_label.visible = false
@@ -1365,7 +1366,7 @@ func _determine_winner_color() -> Color:
 func _apply_result_visibility() -> void:
 	if _result_label and not _result_label.visible:
 		_result_label.visible = true
-		print("[BattleManager] _apply_result_visibility: re-applied ResultLabel.visible=true")
+		if DEBUG_LOGS: print("[BattleManager] _apply_result_visibility: re-applied ResultLabel.visible=true")
 
 
 func _get_battle_result() -> String:
@@ -1384,7 +1385,7 @@ func _apply_battle_resolution_state() -> void:
 	## Called once per client when state becomes RESOLVED; Leave only handles transition/cleanup.
 	if state != State.RESOLVED:
 		return
-	print("[BattleManager] Battle RESOLVED — applying outcome and territory state (right after flip).")
+	if DEBUG_LOGS: print("[BattleManager] Battle RESOLVED — applying outcome and territory state (right after flip).")
 	var result := _get_battle_result()
 	var player_wins := result == "win"
 	var tid_str: String = BattleStateManager.current_territory_id if BattleStateManager else ""
@@ -1418,7 +1419,7 @@ func _apply_battle_resolution_state() -> void:
 			attacker_won = not is_defender
 		elif result == "lose":
 			attacker_won = is_defender
-		print("[BattleManager] Resolution context tid=%s my_id=%d is_defender=%s result=%s attacker_won=%s" % [
+		if DEBUG_LOGS: print("[BattleManager] Resolution context tid=%s my_id=%d is_defender=%s result=%s attacker_won=%s" % [
 			tid_str, my_id, str(is_defender), result, str(attacker_won)
 		])
 
@@ -1453,7 +1454,7 @@ func _apply_battle_resolution_state() -> void:
 					var claim_data: Dictionary = (claims_dict as Dictionary)[k]
 					var oid: Variant = claim_data.get("owner_player_id", null)
 					owners_list.append("T%s->owner %s" % [k, oid])
-			print("[BattleManager] Attacker wins: territory %s claimed by attacker (owner) %s. Current owners of all territories: %s" % [tid_str, attacker_id, ", ".join(owners_list)])
+			if DEBUG_LOGS: print("[BattleManager] Attacker wins: territory %s claimed by attacker (owner) %s. Current owners of all territories: %s" % [tid_str, attacker_id, ", ".join(owners_list)])
 		else:
 			if tcs and tcs.has_method("get_owner_id"):
 				var owner_id = tcs.call("get_owner_id", int(tid_str))
@@ -1513,14 +1514,14 @@ func _spectator_on_battle_start() -> void:
 
 	state = State.RESOLVED
 	_start_auto_return()
-	print("[BattleManager] Spectator resolved: %s (id=%d) won territory %s" % [winner_name, _spectator_winner_id, tid_str])
+	if DEBUG_LOGS: print("[BattleManager] Spectator resolved: %s (id=%d) won territory %s" % [winner_name, _spectator_winner_id, tid_str])
 
 
 func _start_singleplayer_spectator_battle_timer() -> void:
 	## In single-player bot-vs-bot battles, run an automatic 5-second battle window.
 	if not _is_spectator or _is_multiplayer:
 		return
-	print("[BattleManager] Single-player spectator battle timer started (5.0s).")
+	if DEBUG_LOGS: print("[BattleManager] Single-player spectator battle timer started (5.0s).")
 	await get_tree().create_tween().tween_interval(5.0).finished
 	if state == State.RESOLVED:
 		return
@@ -1531,7 +1532,7 @@ func _apply_bot_vs_bot_territory_state(tid_str: String, winner_role: String, att
 	## Host-only: apply territory ownership and card changes for a bot-vs-bot battle.
 	if tid_str.is_empty() or tid_str.begins_with("battle_"):
 		return
-	print("[BattleManager] Applying bot-vs-bot territory state for territory %s (winner=%s)" % [tid_str, winner_role])
+	if DEBUG_LOGS: print("[BattleManager] Applying bot-vs-bot territory state for territory %s (winner=%s)" % [tid_str, winner_role])
 
 	var attacker_won := (winner_role == "attacker")
 	var tcs: Node = get_node_or_null("/root/TerritoryClaimState")
@@ -1547,7 +1548,7 @@ func _apply_bot_vs_bot_territory_state(tid_str: String, winner_role: String, att
 			TerritorySync.request_conquest_territory(int(tid_str), attacker_id, cards)
 		elif tcs and tcs.has_method("set_claim"):
 			TerritoryClaimManager.apply_conquest_claim(int(tid_str), attacker_id, cards)
-		print("[BattleManager] Bot attacker %d conquered territory %s" % [attacker_id, tid_str])
+		if DEBUG_LOGS: print("[BattleManager] Bot attacker %d conquered territory %s" % [attacker_id, tid_str])
 	else:
 		if tcs and tcs.has_method("get_owner_id"):
 			var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str) if BattleStateManager else {}
@@ -1560,7 +1561,7 @@ func _apply_bot_vs_bot_territory_state(tid_str: String, winner_role: String, att
 				TerritorySync.request_conquest_territory(int(tid_str), defender_id, cards)
 			else:
 				TerritoryClaimManager.apply_conquest_claim(int(tid_str), defender_id, cards)
-			print("[BattleManager] Bot defender %d held territory %s" % [defender_id, tid_str])
+			if DEBUG_LOGS: print("[BattleManager] Bot defender %d held territory %s" % [defender_id, tid_str])
 
 	if BattleStateManager:
 		BattleStateManager.clear_attacking_slots(tid_str)
@@ -1706,12 +1707,12 @@ func _clear_player_slots() -> void:
 func _start_auto_return() -> void:
 	_auto_return_active = true
 	_auto_return_timer = AUTO_RETURN_DELAY
-	print("[BattleManager] Auto-return started. Returning to map in %.1f seconds." % AUTO_RETURN_DELAY)
+	if DEBUG_LOGS: print("[BattleManager] Auto-return started. Returning to map in %.1f seconds." % AUTO_RETURN_DELAY)
 
 
 func _auto_leave_battle() -> void:
 	## Automatically called after the auto-return timer expires. Mirrors _on_leave_pressed logic for RESOLVED state.
-	print("[BattleManager] Auto-return timer expired. Leaving battle.")
+	if DEBUG_LOGS: print("[BattleManager] Auto-return timer expired. Leaving battle.")
 	if _is_spectator:
 		App.is_battle_spectator = false
 		BattleSync.clear_battle_state()
@@ -1734,7 +1735,7 @@ func _on_leave_pressed() -> void:
 	# Cancel auto-return if player manually leaves
 	_auto_return_active = false
 	var state_name: String = ["SETUP", "WAITING_FOR_PLAYER", "WAITING_FOR_ALL_READY", "FLIPPING", "RESOLVED"][clampi(state, 0, 4)]
-	print("[BattleManager] Leave pressed. Current battle state: %s. is_spectator=%s" % [state_name, str(_is_spectator)])
+	if DEBUG_LOGS: print("[BattleManager] Leave pressed. Current battle state: %s. is_spectator=%s" % [state_name, str(_is_spectator)])
 
 	if _is_spectator:
 		App.is_battle_spectator = false

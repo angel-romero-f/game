@@ -1,4 +1,5 @@
 extends Control
+const DEBUG_LOGS := false
 
 ## GameIntro — Thin orchestrator: resolves scene nodes, wires 8 UI components, routes cross-component signals.
 
@@ -578,7 +579,7 @@ func _on_minigame_button_pressed(callback: Callable) -> void:
 func _on_selection_timeout() -> void:
 	stop_selection_timer()
 	# Forfeit this minigame chance — player took too long
-	print("[GameIntro] Selection timed out — forfeiting this minigame chance")
+	if DEBUG_LOGS: print("[GameIntro] Selection timed out — forfeiting this minigame chance")
 	App.minigame_time_remaining = -1.0
 	App.pending_minigame_reward.clear()
 	App.pending_bonus_reward.clear()

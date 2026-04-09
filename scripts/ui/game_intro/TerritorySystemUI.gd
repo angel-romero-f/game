@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## TerritorySystemUI — Territory initialization, interaction gating, and claim/attack routing.
 ## Programmatic component: created with .new(), receives node refs via initialize().
@@ -237,7 +238,7 @@ func _on_territory_selected(territory_id: int) -> void:
 		claim_ui.open_claim_panel(territory_id, map_sub_phase, App.current_game_phase)
 
 func _on_card_placed(territory_id: int, player_id: int) -> void:
-	print("[TerritorySystemUI] Card placed on territory %d by player %d" % [territory_id, player_id])
+	if DEBUG_LOGS: print("[TerritorySystemUI] Card placed on territory %d by player %d" % [territory_id, player_id])
 
 func _on_claim_submitted(territory_id: int, cards: Array) -> void:
 	var local_id: Variant = _get_local_player_id()

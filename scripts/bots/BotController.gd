@@ -1,4 +1,5 @@
 extends Node
+const DEBUG_LOGS := false
 
 ## BotController (glue logic)
 ## Coordinates bot collect, command, and battle behaviors.
@@ -111,13 +112,13 @@ func _initialize_bot_hands_if_needed() -> void:
 		if not App.bot_card_collections.has(bot_id):
 			App.bot_card_collections[bot_id] = []
 		if not App.bot_card_collections[bot_id].is_empty():
-			print("[BotController] Bot %d already has %d cards; skipping opening deal." % [bot_id, App.bot_card_collections[bot_id].size()])
+			if DEBUG_LOGS: print("[BotController] Bot %d already has %d cards; skipping opening deal." % [bot_id, App.bot_card_collections[bot_id].size()])
 			continue
 		for _i in range(4):
 			var card := _random_card_for_bot_race(bot_id)
 			if not card.is_empty():
 				App.bot_card_collections[bot_id].append(card)
-		print("[BotController] Opening hand: bot %d dealt %d cards." % [bot_id, App.bot_card_collections[bot_id].size()])
+		if DEBUG_LOGS: print("[BotController] Opening hand: bot %d dealt %d cards." % [bot_id, App.bot_card_collections[bot_id].size()])
 	var mp_h := _get_mp()
 	if App.is_multiplayer and mp_h and mp_h.has_multiplayer_peer() and mp_h.is_server():
 		PhaseSync.host_sync_bot_card_counts()
@@ -195,7 +196,7 @@ func _maybe_run_bot_command_turn() -> void:
 			if pending_battles_now.size() > 0:
 				App.pending_territory_battle_ids = pending_battles_now.duplicate()
 				App.territory_battle_resume_mode = "command"
-				print("[BotController] Bot turn ended with battles pending: ", App.pending_territory_battle_ids)
+				if DEBUG_LOGS: print("[BotController] Bot turn ended with battles pending: ", App.pending_territory_battle_ids)
 				App.on_battle_completed()
 				return
 		if _is_current_turn_bot() and App.current_game_phase == App.GamePhase.CONTEST_COMMAND:
@@ -254,7 +255,7 @@ func _maybe_run_multiplayer_bot_command_turn() -> void:
 				App.pending_territory_battle_ids = pending_battles_now.duplicate()
 				App.territory_battle_resume_mode = "mp_command"
 				App.is_territory_battle_attacker = true
-				print("[BotController] MP bot turn ended with battles pending: ", App.pending_territory_battle_ids)
+				if DEBUG_LOGS: print("[BotController] MP bot turn ended with battles pending: ", App.pending_territory_battle_ids)
 				App.on_battle_completed()
 				return
 		# No battles — advance the turn now.
@@ -284,7 +285,7 @@ func _advance_to_next_turn_or_phase() -> void:
 			App.pending_territory_battle_ids = pending_battles.duplicate()
 			App.is_territory_battle_attacker = true
 			App.territory_battle_resume_mode = "collect"
-			print("[BotController] Starting territory battle sequence: ", App.pending_territory_battle_ids)
+			if DEBUG_LOGS: print("[BotController] Starting territory battle sequence: ", App.pending_territory_battle_ids)
 			App.on_battle_completed()
 		else:
 			App.enter_collect_phase()

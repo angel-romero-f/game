@@ -1,4 +1,5 @@
 extends RefCounted
+const DEBUG_LOGS := false
 
 ## BotCommandBehavior
 ## Handles bot behavior during CONTEST_COMMAND.
@@ -29,7 +30,7 @@ func prepare_turn(bot_player_id: int, difficulty: int = 0) -> void:
 		if _is_valid_card_data(c):
 			_active_hand.append(c)
 	if _active_hand.is_empty():
-		print("[BotCommand] Bot %d has no cards; skipping turn." % bot_player_id)
+		if DEBUG_LOGS: print("[BotCommand] Bot %d has no cards; skipping turn." % bot_player_id)
 		App.bot_card_collections[bot_player_id] = _active_hand
 
 
@@ -482,7 +483,7 @@ func _place_cards_on_territory(bot_player_id: int, territory_id: int, cards: Arr
 			tcs.set_claim(territory_id, bot_player_id, claim_cards)
 		BattleStateManager.set_defending_slots(str(territory_id), defs)
 		BattleStateManager.clear_attacking_slots(str(territory_id))
-		print("[BotCommand] Bot %d claimed territory %d with %d cards." % [bot_player_id, territory_id, defs.size()])
+		if DEBUG_LOGS: print("[BotCommand] Bot %d claimed territory %d with %d cards." % [bot_player_id, territory_id, defs.size()])
 		return false
 	else:
 		var atks: Dictionary = {}
@@ -490,7 +491,7 @@ func _place_cards_on_territory(bot_player_id: int, territory_id: int, cards: Arr
 			atks[i] = valid_cards[i]
 		BattleStateManager.set_attacking_slots(str(territory_id), atks)
 		App.territory_pending_attackers[territory_id] = bot_player_id
-		print("[BotCommand] Bot %d attacked territory %d with %d cards." % [bot_player_id, territory_id, atks.size()])
+		if DEBUG_LOGS: print("[BotCommand] Bot %d attacked territory %d with %d cards." % [bot_player_id, territory_id, atks.size()])
 		return true
 
 

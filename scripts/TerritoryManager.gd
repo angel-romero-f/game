@@ -1,6 +1,7 @@
 
 class_name TerritoryManager
 extends Node
+const DEBUG_LOGS := false
 
 ## TerritoryManager
 ## Manages all territories on the map.
@@ -93,7 +94,7 @@ func initialize_from_editor_nodes(parent_node: Node) -> void:
 		node.mouse_filter = Control.MOUSE_FILTER_IGNORE
 
 	territories_initialized.emit()
-	print("[TerritoryManager] Created %d indicators from TerritoryNode positions" % territories.size())
+	if DEBUG_LOGS: print("[TerritoryManager] Created %d indicators from TerritoryNode positions" % territories.size())
 
 
 ## Initialize from config data (fallback when no TerritoryNodes in scene)
@@ -140,7 +141,7 @@ func initialize_territories(territory_configs: Array[Dictionary], parent_node: N
 		indicator.defending_cards_preview_requested.connect(_on_defending_preview_requested)
 
 	territories_initialized.emit()
-	print("[TerritoryManager] Initialized %d territories from config" % territories.size())
+	if DEBUG_LOGS: print("[TerritoryManager] Initialized %d territories from config" % territories.size())
 
 
 func get_territory_node(territory_id: int) -> TerritoryIndicator:

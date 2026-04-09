@@ -2,6 +2,8 @@
 class_name TerritoryNode
 extends Control
 
+const DEBUG_LOGS := false
+
 ## TerritoryNode
 ## Represents a territory region on the map using Control + Polygon2D.
 ## Links a Territory data object to a visual/interactive polygon area.
@@ -89,7 +91,7 @@ func _ready() -> void:
 		var region_id := region_id_override if region_id_override != -1 else 1
 		territory_data = Territory.new(territory_id_override, region_id, null, [])
 		territory_name = "Territory %d" % territory_id_override
-		print("[TerritoryNode] Auto-created Territory data for ID %d" % territory_id_override)
+		if DEBUG_LOGS: print("[TerritoryNode] Auto-created Territory data for ID %d" % territory_id_override)
 	
 	# Connect mouse events
 	mouse_entered.connect(_on_mouse_entered)
@@ -123,7 +125,7 @@ func _ready() -> void:
 	
 	# Debug print
 	if not _polygon_points_backing.is_empty():
-		print("[TerritoryNode] '%s' ready with %d polygon points, size: %s, position: %s" % [name, _polygon_points_backing.size(), size, position])
+		if DEBUG_LOGS: print("[TerritoryNode] '%s' ready with %d polygon points, size: %s, position: %s" % [name, _polygon_points_backing.size(), size, position])
 
 
 func _update_size_from_polygon() -> void:

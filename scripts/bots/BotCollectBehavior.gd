@@ -1,4 +1,5 @@
 extends RefCounted
+const DEBUG_LOGS := false
 
 ## BotCollectBehavior
 ## Handles bot card gain during resource/collect phases.
@@ -30,7 +31,7 @@ func run_collect_for_bot(bot_player_id: int) -> void:
 		var should_consume := diff >= 4 or gain >= 2
 		if should_consume and bonus_region_id not in App.region_bonus_used_this_phase:
 			App.region_bonus_used_this_phase.append(bonus_region_id)
-	print("[BotCollect] Bot %d gained %d cards (region_bonus=%s, diff=%d)." % [bot_player_id, gain, str(has_region_bonus), diff])
+	if DEBUG_LOGS: print("[BotCollect] Bot %d gained %d cards (region_bonus=%s, diff=%d)." % [bot_player_id, gain, str(has_region_bonus), diff])
 
 
 func _first_eligible_region_bonus_region(bot_player_id: int) -> int:
