@@ -1424,11 +1424,20 @@ func _apply_battle_resolution_state() -> void:
 
 		if attacker_won:
 			var attacker_slots: Dictionary = BattleStateManager.get_attacking_slots(tid_str)
+			# Multiplayer fallback: if local attacking slots are empty on this peer,
+			# use synced battle cards so conquest does not claim with empty defenders.
+			if attacker_slots.is_empty() and _is_multiplayer and BattleSync:
+				var synced_att: Dictionary = BattleSync.battle_placed_cards.get(attacker_id, {})
+				if not synced_att.is_empty():
+					attacker_slots = synced_att.duplicate(true)
 			var cards: Array = [null, null, null]
 			for idx in attacker_slots:
 				var c: Dictionary = attacker_slots[idx]
 				if int(idx) < 3 and c.get("path", "") != "":
 					cards[int(idx)] = {"path": c.get("path", ""), "frame": int(c.get("frame"))}
+			if cards[0] == null and cards[1] == null and cards[2] == null:
+				push_warning("[BattleManager] attacker_won but attacker card payload is empty for territory %s; skipping conquest apply to avoid empty-claim desync." % tid_str)
+				return
 			if App.is_multiplayer and App.get_tree().get_multiplayer().has_multiplayer_peer():
 				TerritorySync.request_conquest_territory(int(tid_str), attacker_id, cards)
 			else:

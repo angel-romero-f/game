@@ -8,7 +8,7 @@
 [ext_resource type="Script" uid="uid://bumkisumq4jxt" path="res://scripts/battle/AttributeConfig.gd" id="9_attr_cfg_script"]
 [ext_resource type="FontFile" uid="uid://cbwnpfuof7ck0" path="res://fonts/m5x7.ttf" id="10_iwbf0"]
 [ext_resource type="Script" uid="uid://dym2tpv1rpgby" path="res://scripts/ui/CardSceneUI.gd" id="11_card_scene_ui"]
-[ext_resource type="Script" path="res://scripts/battle/LaneArrowIndicator.gd" id="12_lane_arrow"]
+[ext_resource type="Script" uid="uid://de8i7t11otiq1" path="res://scripts/battle/LaneArrowIndicator.gd" id="12_lane_arrow"]
 
 [sub_resource type="Resource" id="Resource_attr_cfg"]
 script = ExtResource("9_attr_cfg_script")
@@ -78,7 +78,6 @@ script = ExtResource("2_cardmanager")
 [node name="BattleManager" type="Node" parent="."]
 script = ExtResource("2_battle_manager")
 attribute_config = SubResource("Resource_attr_cfg")
-show_debug_add_card_button = true
 attribute_indicator_font_scale = 0.15
 attribute_indicator_offset = Vector2(-40, -45)
 
