@@ -52,6 +52,10 @@ func is_bot_id(id: int) -> bool:
 		return true
 	## VS-AI mode uses bot player ids 100+ (see App.setup_single_player_game). They are not in _bot_ids.
 	if App and not App.is_multiplayer and id >= 100:
+		## Host/join flow sets up ENet before App.is_multiplayer becomes true; human peer ids may be >= 100.
+		## Do not apply the single-player bot id convention while multiplayer is connected.
+		if multiplayer.has_multiplayer_peer():
+			return false
 		return true
 	return false
 

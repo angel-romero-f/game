@@ -143,10 +143,11 @@ func _refresh_bot_difficulty_controls() -> void:
 		c.queue_free()
 	_difficulty_sliders.clear()
 
+	## Use registered lobby bot ids only — not is_bot_id(), which treats id>=100 as bots
+	## while App.is_multiplayer is still false in this scene (SP VS-AI rule must not apply here).
 	var bot_ids: Array[int] = []
-	for pid in PlayerDataSync.player_names.keys():
-		if PlayerDataSync.is_bot_id(int(pid)):
-			bot_ids.append(int(pid))
+	for bid in PlayerDataSync.get_bot_ids_array():
+		bot_ids.append(int(bid))
 	bot_ids.sort()
 
 	for bid in bot_ids:
@@ -221,13 +222,12 @@ func _refresh_players_list() -> void:
 			n += " (Host)"
 		players_list.add_item(n)
 
-	var bot_ids: Array[int] = []
-	for pid in PlayerDataSync.player_names.keys():
-		if PlayerDataSync.is_bot_id(int(pid)):
-			bot_ids.append(int(pid))
-	bot_ids.sort()
+	var bot_ids_list: Array[int] = []
+	for bid in PlayerDataSync.get_bot_ids_array():
+		bot_ids_list.append(int(bid))
+	bot_ids_list.sort()
 
-	for bid in bot_ids:
+	for bid in bot_ids_list:
 		var bn: String = String(PlayerDataSync.player_names.get(bid, "Bot"))
 		var br: String = String(PlayerDataSync.player_races.get(bid, ""))
 		if br.is_empty():
