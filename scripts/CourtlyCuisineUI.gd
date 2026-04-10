@@ -245,7 +245,7 @@ func show_win():
 	if _lives_label:
 		_lives_label.visible = false
 	if _big_title_label:
-		_big_title_label.text = "A Royal Feast!"
+		_big_title_label.text = "S'more Success! Sweet Victory!"
 		_big_title_label.add_theme_color_override("font_color", Color(0.2, 1.0, 0.2))
 		_big_title_label.visible = true
 		_big_title_label.offset_top = -260

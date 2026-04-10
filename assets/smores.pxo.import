@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://crhf630gde3i2"
+path="res://.godot/imported/smores.pxo-c5c017c137eab18dbd76ee67bd499b11.res"
+
+[deps]
+
+source_file="res://assets/smores.pxo"
+dest_files=["res://.godot/imported/smores.pxo-c5c017c137eab18dbd76ee67bd499b11.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
