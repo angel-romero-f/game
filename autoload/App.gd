@@ -109,6 +109,7 @@ func enter_contest_command_phase() -> void:
 	phase_transition_text = "Contest"
 	show_phase_transition = true
 	if DEBUG_LOGS: print("[HOST Phase] Entering CONTEST_COMMAND")
+	sync_gameplay_music()
 	game_phase_changed.emit(current_game_phase)
 
 func enter_contest_claim_phase() -> void:
@@ -120,6 +121,7 @@ func enter_contest_claim_phase() -> void:
 	phase_transition_text = "Collect"
 	show_phase_transition = true
 	if DEBUG_LOGS: print("[HOST Phase] Entering CONTEST_CLAIM")
+	sync_gameplay_music()
 	game_phase_changed.emit(current_game_phase)
 
 func enter_collect_phase() -> void:
@@ -131,6 +133,7 @@ func enter_collect_phase() -> void:
 	phase_transition_text = "Collect"
 	show_phase_transition = true
 	if DEBUG_LOGS: print("[HOST Phase] Entering COLLECT")
+	sync_gameplay_music()
 	game_phase_changed.emit(current_game_phase)
 
 func enter_battle_phase() -> void:
@@ -786,15 +789,15 @@ func get_lives() -> int:
 
 var main_music: AudioStreamPlayer
 var menu_music: AudioStreamPlayer
+var command_music: AudioStreamPlayer
+var collect_music: AudioStreamPlayer
+var contest_music: AudioStreamPlayer
 var battle_music: AudioStreamPlayer
 var win_music: AudioStreamPlayer
 var lose_music: AudioStreamPlayer
 var ui_sfx: AudioStreamPlayer
 var blip_select_stream: AudioStream
-
-# Tracks whether the menu music has ever been stopped (so returning to menus
-# mid-session doesn't restart it from the very beginning again).
-var _menu_music_stopped: bool = false
+var _last_scene_path_for_music: String = ""
 
 const MENU_MUSIC_LOOP_OFFSET: float = 1.39
 
@@ -802,20 +805,48 @@ func _ready() -> void:
 	# Ensure audio buses exist
 	_setup_audio_buses()
 
-	# Menu music: plays from game launch through the intro/setup, then stops
-	# once the actual game begins. Loops back to MENU_MUSIC_LOOP_OFFSET to
-	# skip the one-shot pickup measure on every repeat.
+	# Menu music (title/play/settings/etc).
 	menu_music = AudioStreamPlayer.new()
 	menu_music.name = "MenuMusic"
 	menu_music.bus = "Music"
 	add_child(menu_music)
-	var menu_stream: AudioStreamMP3 = load("res://music/menu_music.mp3")
+	var menu_stream := _load_mp3_stream(["res://assets/menu_music.mp3", "res://music/menu_music.mp3"])
 	if menu_stream:
 		menu_stream.loop = true
 		menu_stream.loop_offset = MENU_MUSIC_LOOP_OFFSET
 		menu_music.stream = menu_stream
 		menu_music.play()
 		if DEBUG_LOGS: print("Menu music started from App autoload")
+
+	# Command phase music.
+	command_music = AudioStreamPlayer.new()
+	command_music.name = "CommandMusic"
+	command_music.bus = "Music"
+	add_child(command_music)
+	var command_stream := _load_mp3_stream(["res://assets/command_music.mp3", "res://music/command_music.mp3"])
+	if command_stream:
+		command_stream.loop = true
+		command_music.stream = command_stream
+
+	# Collect phase music.
+	collect_music = AudioStreamPlayer.new()
+	collect_music.name = "CollectMusic"
+	collect_music.bus = "Music"
+	add_child(collect_music)
+	var collect_stream := _load_mp3_stream(["res://assets/collect_music.mp3", "res://music/collect_music.mp3"])
+	if collect_stream:
+		collect_stream.loop = true
+		collect_music.stream = collect_stream
+
+	# Contest claim phase music (command phase remains on main music).
+	contest_music = AudioStreamPlayer.new()
+	contest_music.name = "ContestMusic"
+	contest_music.bus = "Music"
+	add_child(contest_music)
+	var contest_stream := _load_mp3_stream(["res://assets/contest_music.mp3", "res://music/contest_music.mp3"])
+	if contest_stream:
+		contest_stream.loop = true
+		contest_music.stream = contest_stream
 
 	# Create and start main music immediately on game launch
 	main_music = AudioStreamPlayer.new()
@@ -885,6 +916,7 @@ func _ready() -> void:
 	if not get_tree().node_added.is_connected(_on_node_added):
 		get_tree().node_added.connect(_on_node_added)
 	call_deferred("_hook_buttons_on_current_scene")
+	call_deferred("_sync_music_for_current_scene")
 
 	# Win condition: show victory when a player owns 5/6 regions
 	if WinConditionManager and not WinConditionManager.player_won.is_connected(_on_player_won):
@@ -893,6 +925,14 @@ func _ready() -> void:
 func go(path: String) -> void:
 	get_tree().change_scene_to_file(path)
 	call_deferred("_hook_buttons_on_current_scene")
+	call_deferred("_sync_music_for_current_scene")
+
+func _process(_delta: float) -> void:
+	var scene := get_tree().current_scene
+	var scene_path := String(scene.scene_file_path) if scene else ""
+	if scene_path != _last_scene_path_for_music:
+		_last_scene_path_for_music = scene_path
+		_sync_music_for_current_scene()
 
 @warning_ignore("shadowed_variable_base_class")
 func set_player_name(name: String) -> void:
@@ -1036,12 +1076,11 @@ func get_region_color(region_id: int) -> Color:
 	return Color(0.8, 0.8, 0.8, 1.0)
 
 func stop_menu_music() -> void:
-	_menu_music_stopped = true
 	if menu_music and menu_music.playing:
 		menu_music.stop()
 
 func play_menu_music() -> void:
-	if menu_music and not menu_music.playing and not _menu_music_stopped:
+	if menu_music and not menu_music.playing:
 		menu_music.play()
 
 func stop_main_music() -> void:
@@ -1049,8 +1088,44 @@ func stop_main_music() -> void:
 		main_music.stop()
 
 func play_main_music() -> void:
+	stop_command_music()
+	stop_collect_music()
+	stop_contest_music()
 	if main_music and not main_music.playing:
 		main_music.play()
+
+func stop_command_music() -> void:
+	if command_music and command_music.playing:
+		command_music.stop()
+
+func play_command_music() -> void:
+	stop_main_music()
+	stop_collect_music()
+	stop_contest_music()
+	if command_music and not command_music.playing:
+		command_music.play()
+
+func stop_collect_music() -> void:
+	if collect_music and collect_music.playing:
+		collect_music.stop()
+
+func play_collect_music() -> void:
+	stop_main_music()
+	stop_command_music()
+	stop_contest_music()
+	if collect_music and not collect_music.playing:
+		collect_music.play()
+
+func stop_contest_music() -> void:
+	if contest_music and contest_music.playing:
+		contest_music.stop()
+
+func play_contest_music() -> void:
+	stop_main_music()
+	stop_command_music()
+	stop_collect_music()
+	if contest_music and not contest_music.playing:
+		contest_music.play()
 
 func stop_battle_music() -> void:
 	if battle_music and battle_music.playing:
@@ -1062,15 +1137,28 @@ func play_battle_music() -> void:
 
 func switch_to_battle_music() -> void:
 	stop_main_music()
-	play_battle_music()
+	stop_command_music()
+	stop_collect_music()
+	stop_contest_music()
+	# Card battle scene should use contest music; keep battle track only as fallback.
+	if contest_music and contest_music.stream:
+		play_contest_music()
+	else:
+		play_battle_music()
 
 func switch_to_main_music() -> void:
 	stop_battle_music()
-	play_main_music()
+	stop_command_music()
+	stop_collect_music()
+	stop_contest_music()
+	sync_gameplay_music()
 
 func stop_all_music() -> void:
 	stop_menu_music()
 	stop_main_music()
+	stop_command_music()
+	stop_collect_music()
+	stop_contest_music()
 	stop_battle_music()
 	if win_music and win_music.playing:
 		win_music.stop()
@@ -1086,6 +1174,52 @@ func play_lose_music() -> void:
 	stop_all_music()
 	if lose_music and lose_music.stream:
 		lose_music.play()
+
+func sync_gameplay_music() -> void:
+	# Command/claim use command track; collect uses collect track.
+	match current_game_phase:
+		GamePhase.COLLECT:
+			play_collect_music()
+		_:
+			if command_music and command_music.stream:
+				play_command_music()
+			else:
+				play_main_music()
+
+func _load_mp3_stream(paths: Array[String]) -> AudioStreamMP3:
+	for path in paths:
+		var stream: AudioStreamMP3 = load(path)
+		if stream:
+			return stream
+		if FileAccess.file_exists(path):
+			stream = AudioStreamMP3.new()
+			stream.data = FileAccess.get_file_as_bytes(path)
+			return stream
+	return null
+
+func _sync_music_for_current_scene() -> void:
+	var scene := get_tree().current_scene
+	if scene == null:
+		return
+	var scene_path := String(scene.scene_file_path)
+	if _is_menu_scene(scene_path):
+		stop_main_music()
+		stop_command_music()
+		stop_collect_music()
+		stop_contest_music()
+		stop_battle_music()
+		play_menu_music()
+		return
+	stop_menu_music()
+	if scene_path == "res://scenes/ui/game_intro.tscn":
+		sync_gameplay_music()
+
+func _is_menu_scene(scene_path: String) -> bool:
+	if scene_path.is_empty():
+		return false
+	if not scene_path.begins_with("res://scenes/ui/"):
+		return false
+	return scene_path != "res://scenes/ui/game_intro.tscn"
 
 func play_blip_select() -> void:
 	if not ui_sfx or not ui_sfx.stream:
