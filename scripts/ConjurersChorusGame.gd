@@ -12,6 +12,9 @@ extends Node2D
 var game_over: bool = false
 var player_won: bool = false
 var _has_returned: bool = false
+const SIMON_SAYS_MUSIC_PATH := "res://music/simon says.mp3"
+const PERSISTENT_CHORUS_PLAYER_NAME := "PersistentConjurersChorusMusic"
+var _chorus_music_player: AudioStreamPlayer = null
 
 # ── 20-SECOND TIMER (same infrastructure as other minigames) ──
 const MINIGAME_TIME_LIMIT: float = 20.0
@@ -86,6 +89,8 @@ var _pixel_font: Font = null
 # ══════════════════════════════════════════════════════════════
 
 func _ready() -> void:
+	_setup_chorus_music()
+
 	_pixel_font = load("res://fonts/m5x7.ttf") as Font
 
 	if App.minigame_time_remaining <= 0.0:
@@ -104,6 +109,42 @@ func _ready() -> void:
 	_generate_sequence()
 	_start_round()
 	print("[Minigame:ConjurersChorus] Timer started (%.1fs)" % _minigame_timer)
+
+func _setup_chorus_music() -> void:
+	# Simon Says music is exclusive to Conjurer's Chorus.
+	App.stop_main_music()
+
+	var root := get_tree().root
+	var existing := root.get_node_or_null(PERSISTENT_CHORUS_PLAYER_NAME)
+	if existing and existing is AudioStreamPlayer:
+		_chorus_music_player = existing as AudioStreamPlayer
+		if not _chorus_music_player.playing:
+			_chorus_music_player.play()
+		return
+
+	var stream := load(SIMON_SAYS_MUSIC_PATH)
+	if not stream is AudioStream:
+		push_warning("[Minigame:ConjurersChorus] Missing or invalid music at %s" % SIMON_SAYS_MUSIC_PATH)
+		return
+
+	_chorus_music_player = AudioStreamPlayer.new()
+	_chorus_music_player.name = PERSISTENT_CHORUS_PLAYER_NAME
+	_chorus_music_player.bus = "Music"
+	_chorus_music_player.stream = stream
+	root.add_child(_chorus_music_player)
+
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+
+	_chorus_music_player.play()
+
+func _stop_chorus_music() -> void:
+	if _chorus_music_player and is_instance_valid(_chorus_music_player):
+		_chorus_music_player.stop()
+		_chorus_music_player.queue_free()
+	_chorus_music_player = null
 
 
 func _process(delta: float) -> void:
@@ -510,6 +551,7 @@ func handle_continue() -> void:
 
 
 func _return_to_map() -> void:
+	_stop_chorus_music()
 	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")
 

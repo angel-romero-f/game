@@ -1,0 +1,19 @@
+[remap]
+
+importer="mp3"
+type="AudioStreamMP3"
+uid="uid://dpqac84vrrloj"
+path="res://.godot/imported/simon says.mp3-173cec3b5027956bf68d2e7fd38193cc.mp3str"
+
+[deps]
+
+source_file="res://music/simon says.mp3"
+dest_files=["res://.godot/imported/simon says.mp3-173cec3b5027956bf68d2e7fd38193cc.mp3str"]
+
+[params]
+
+loop=false
+loop_offset=0
+bpm=0
+beat_count=0
+bar_beats=4

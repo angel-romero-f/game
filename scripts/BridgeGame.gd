@@ -5,6 +5,9 @@ const DEBUG_LOGS := false
 var game_over: bool = false
 var player_won: bool = false
 var _has_returned: bool = false
+const BRIDGE_MUSIC_PATH := "res://music/bridge.mp3"
+const PERSISTENT_BRIDGE_PLAYER_NAME := "PersistentBridgeMusic"
+var _bridge_music_player: AudioStreamPlayer = null
 
 # ---------- 10-SECOND TIMER ----------
 const MINIGAME_TIME_LIMIT: float = 10.0
@@ -19,6 +22,8 @@ const BRIDGE_RIGHT: float = 280.0
 const WIN_X: float = 260.0
 
 func _ready():
+	_setup_bridge_music()
+
 	# Configure player bounds
 	var player = get_tree().get_first_node_in_group("player")
 	if player and player.has_method("set_bridge_bounds"):
@@ -48,6 +53,42 @@ func _ready():
 		App.minigame_time_remaining = _minigame_timer
 	_timer_active = true
 	if DEBUG_LOGS: print("[Minigame:Bridge] Timer started (%.1fs)" % _minigame_timer)
+
+func _setup_bridge_music() -> void:
+	# Bridge music is exclusive to this minigame.
+	App.stop_main_music()
+
+	var root := get_tree().root
+	var existing := root.get_node_or_null(PERSISTENT_BRIDGE_PLAYER_NAME)
+	if existing and existing is AudioStreamPlayer:
+		_bridge_music_player = existing as AudioStreamPlayer
+		if not _bridge_music_player.playing:
+			_bridge_music_player.play()
+		return
+
+	var stream := load(BRIDGE_MUSIC_PATH)
+	if not stream is AudioStream:
+		push_warning("[Minigame:Bridge] Missing or invalid music at %s" % BRIDGE_MUSIC_PATH)
+		return
+
+	_bridge_music_player = AudioStreamPlayer.new()
+	_bridge_music_player.name = PERSISTENT_BRIDGE_PLAYER_NAME
+	_bridge_music_player.bus = "Music"
+	_bridge_music_player.stream = stream
+	root.add_child(_bridge_music_player)
+
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+
+	_bridge_music_player.play()
+
+func _stop_bridge_music() -> void:
+	if _bridge_music_player and is_instance_valid(_bridge_music_player):
+		_bridge_music_player.stop()
+		_bridge_music_player.queue_free()
+	_bridge_music_player = null
 
 func _process(delta: float) -> void:
 	# Countdown timer — keeps running even during death screen
@@ -114,5 +155,6 @@ func handle_continue():
 		get_tree().reload_current_scene()
 
 func _return_to_map():
+	_stop_bridge_music()
 	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")

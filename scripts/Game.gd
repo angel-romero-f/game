@@ -3,6 +3,9 @@ extends Node2D
 var game_over: bool = false
 var player_won: bool = false
 var _has_returned: bool = false
+const RIVER_MUSIC_PATH := "res://music/river.mp3"
+const PERSISTENT_RIVER_PLAYER_NAME := "PersistentRiverMusic"
+var _river_music_player: AudioStreamPlayer = null
 
 # ---------- 20-SECOND TIMER ----------
 const MINIGAME_TIME_LIMIT: float = 20.0
@@ -16,6 +19,8 @@ var waterfall_timer: float = 0.0
 const WATERFALL_FRAME_DURATION: float = 0.15  # Time per frame in seconds
 
 func _ready():
+	_setup_river_music()
+
 	# Setup waterfall background to only alternate between frames 0 and 1
 	if background:
 		background.stop()  # Stop the autoplay animation
@@ -41,6 +46,43 @@ func _ready():
 		App.minigame_time_remaining = _minigame_timer
 	_timer_active = true
 	print("[Minigame:River] Timer started (%.1fs)" % _minigame_timer)
+
+func _setup_river_music() -> void:
+	# River music is exclusive to this minigame.
+	App.stop_main_music()
+
+	var root := get_tree().root
+	var existing := root.get_node_or_null(PERSISTENT_RIVER_PLAYER_NAME)
+	if existing and existing is AudioStreamPlayer:
+		_river_music_player = existing as AudioStreamPlayer
+		if not _river_music_player.playing:
+			_river_music_player.play()
+		return
+
+	var stream := load(RIVER_MUSIC_PATH)
+	if not stream is AudioStream:
+		push_warning("[Minigame:River] Missing or invalid music at %s" % RIVER_MUSIC_PATH)
+		return
+
+	_river_music_player = AudioStreamPlayer.new()
+	_river_music_player.name = PERSISTENT_RIVER_PLAYER_NAME
+	_river_music_player.bus = "Music"
+	_river_music_player.stream = stream
+	root.add_child(_river_music_player)
+
+	# Ensure looping for supported stream types.
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+
+	_river_music_player.play()
+
+func _stop_river_music() -> void:
+	if _river_music_player and is_instance_valid(_river_music_player):
+		_river_music_player.stop()
+		_river_music_player.queue_free()
+	_river_music_player = null
 
 func _process(delta: float) -> void:
 	# Manually animate waterfall background between frames 0 and 1 only
@@ -118,5 +160,6 @@ func handle_continue():
 		get_tree().reload_current_scene()
 
 func _return_to_map():
+	_stop_river_music()
 	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")

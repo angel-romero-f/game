@@ -180,10 +180,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 [node name="TerritoryNode9" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 492.0
-offset_top = 165.0
-offset_right = 616.2909
-offset_bottom = 262.83215
+offset_left = 489.0
+offset_top = 169.0
+offset_right = 613.2909
+offset_bottom = 266.83215
 rotation = -3.1415927
 script = ExtResource("3_vp4a4")
 polygon_points = PackedVector2Array(0, 0, 124.290955, 0, 124.290955, 97.83215, 0, 97.83215, 0, 0)
@@ -221,9 +221,9 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode14" type="Control" parent="TerritoriesContainer"]
 anchors_preset = 0
-offset_left = 664.0
+offset_left = 668.0
 offset_top = 165.0
-offset_right = 788.2909
+offset_right = 792.2909
 offset_bottom = 262.83215
 rotation = -3.1415927
 script = ExtResource("3_vp4a4")

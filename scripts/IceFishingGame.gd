@@ -3,6 +3,9 @@ extends Node2D
 var game_over: bool = false
 var player_won: bool = false
 var _has_returned: bool = false
+const ICE_FISHING_MUSIC_PATH := "res://music/ice fishing.mp3"
+const PERSISTENT_ICE_FISHING_PLAYER_NAME := "PersistentIceFishingMusic"
+var _ice_fishing_music_player: AudioStreamPlayer = null
 
 # ---------- 30-SECOND TIMER ----------
 const MINIGAME_TIME_LIMIT: float = 30.0
@@ -10,6 +13,8 @@ var _minigame_timer: float = MINIGAME_TIME_LIMIT
 var _timer_active: bool = false
 
 func _ready():
+	_setup_ice_fishing_music()
+
 	# Only reset lives on first load (not on retry reloads)
 	if App.minigame_time_remaining <= 0.0:
 		App.reset_lives()
@@ -30,6 +35,42 @@ func _ready():
 		App.minigame_time_remaining = _minigame_timer
 	_timer_active = true
 	print("[Minigame:IceFishing] Timer started (%.1fs)" % _minigame_timer)
+
+func _setup_ice_fishing_music() -> void:
+	# Ice fishing music is exclusive to this minigame.
+	App.stop_main_music()
+
+	var root := get_tree().root
+	var existing := root.get_node_or_null(PERSISTENT_ICE_FISHING_PLAYER_NAME)
+	if existing and existing is AudioStreamPlayer:
+		_ice_fishing_music_player = existing as AudioStreamPlayer
+		if not _ice_fishing_music_player.playing:
+			_ice_fishing_music_player.play()
+		return
+
+	var stream := load(ICE_FISHING_MUSIC_PATH)
+	if not stream is AudioStream:
+		push_warning("[Minigame:IceFishing] Missing or invalid music at %s" % ICE_FISHING_MUSIC_PATH)
+		return
+
+	_ice_fishing_music_player = AudioStreamPlayer.new()
+	_ice_fishing_music_player.name = PERSISTENT_ICE_FISHING_PLAYER_NAME
+	_ice_fishing_music_player.bus = "Music"
+	_ice_fishing_music_player.stream = stream
+	root.add_child(_ice_fishing_music_player)
+
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+
+	_ice_fishing_music_player.play()
+
+func _stop_ice_fishing_music() -> void:
+	if _ice_fishing_music_player and is_instance_valid(_ice_fishing_music_player):
+		_ice_fishing_music_player.stop()
+		_ice_fishing_music_player.queue_free()
+	_ice_fishing_music_player = null
 
 func _process(delta: float) -> void:
 	# Countdown timer — keeps running even during death screen
@@ -96,5 +137,6 @@ func handle_continue():
 		get_tree().reload_current_scene()
 
 func _return_to_map():
+	_stop_ice_fishing_music()
 	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")
