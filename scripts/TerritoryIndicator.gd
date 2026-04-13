@@ -12,7 +12,7 @@ signal card_placed(territory_id: int, player_id: int)
 signal defending_cards_preview_requested(territory_id: int)
 
 const INDICATOR_TEXTURE_PATH := "res://assets/territory_indicator.pxo"
-const INDICATOR_SIZE := Vector2(128, 128)
+const INDICATOR_SIZE := Vector2(112, 112)
 
 const RACE_FRAME_BASE: Dictionary = {
 	"elf": 1,
