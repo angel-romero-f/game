@@ -1,23 +1,19 @@
 extends Node2D
 
-## Cadence — 3-lane chart-driven rhythm minigame.
+## Cadence — 3-lane rhythm minigame with procedurally randomized lanes.
 ##
-## Notes scroll downward toward a hit line.  Press J/K/L (or A/S/D) to hit
-## tap notes; for hold notes, press all required lanes and sustain until the
-## bar passes through.  Win by hitting >= 75 % of chart events.
+## Every quarter note at 215 BPM, a tap note appears in a random lane.
+## The rhythm grid is fixed (same song every run) but lane assignments are
+## randomized each time the minigame starts, so button patterns differ.
+## Win by hitting >= 75 % of notes.
 ##
 ## ─── Timing model ───
-##   seconds_per_beat  = 60.0 / bpm
-##   hit_time          = beat × seconds_per_beat + song_offset
-##   end_time          = (beat + duration_beats) × seconds_per_beat + song_offset
-##   Notes with duration_beats >= HOLD_THRESHOLD are treated as hold notes.
-##
-## ─── Note types ───
-##   Tap   — short duration (<1.5 beats), one or more lanes.  Press to hit.
-##   Hold  — long duration (>=1.5 beats), one or more lanes.  Press within the
-##           hit window, then keep all lanes held until end_time.
-##   Chord — any note with multiple lanes (tap or hold).  All lanes must be
-##           pressed (and held, for holds) simultaneously.
+##   quarter_note = 60.0 / bpm  (≈0.279 s at 215 BPM)
+##   hit_time     = note_index × quarter_note + song_offset
+##   _song_clock starts at -intro_duration, reaches 0 when music begins.
+##   Notes spawn and scroll using this single unified clock — the 4-second
+##   countdown doubles as the visual lead-in so beat-0 notes scroll from
+##   the top and arrive at the hit line the instant the music starts.
 
 var game_over: bool = false
 var player_won: bool = false
@@ -25,152 +21,25 @@ var _has_returned: bool = false
 
 
 # ══════════════════════════════════════════════════════════════
-#  CHART DATA
-# ══════════════════════════════════════════════════════════════
-
-## Duration (in beats) at or above which a note becomes a hold.
-const HOLD_THRESHOLD: float = 1.5
-
-## Beat chart for cadence_1.mp3 — 110 BPM, 3/4 time, 16 measures.
-## Lanes: 0 = J/A, 1 = K/S, 2 = L/D.
-const CADENCE_CHART: Array = [
-	# ── PART 1 ──────────────────────────────────────────────
-
-	# Measure 1: K J L K L K (eighth notes)
-	{"beat": 0.0,  "lanes": [1], "duration_beats": 0.5},
-	{"beat": 0.5,  "lanes": [0], "duration_beats": 0.5},
-	{"beat": 1.0,  "lanes": [2], "duration_beats": 0.5},
-	{"beat": 1.5,  "lanes": [1], "duration_beats": 0.5},
-	{"beat": 2.0,  "lanes": [2], "duration_beats": 0.5},
-	{"beat": 2.5,  "lanes": [1], "duration_beats": 0.5},
-
-	# Measure 2: JKL held (dotted half = 3 beats)
-	{"beat": 3.0,  "lanes": [0, 1, 2], "duration_beats": 3.0},
-
-	# Measure 3: L K J K L K (eighth notes)
-	{"beat": 6.0,  "lanes": [2], "duration_beats": 0.5},
-	{"beat": 6.5,  "lanes": [1], "duration_beats": 0.5},
-	{"beat": 7.0,  "lanes": [0], "duration_beats": 0.5},
-	{"beat": 7.5,  "lanes": [1], "duration_beats": 0.5},
-	{"beat": 8.0,  "lanes": [2], "duration_beats": 0.5},
-	{"beat": 8.5,  "lanes": [1], "duration_beats": 0.5},
-
-	# Measure 4: JKL held (half = 2 beats), then 1 beat rest
-	{"beat": 9.0,  "lanes": [0, 1, 2], "duration_beats": 2.0},
-
-	# Measure 5: L K L K L K (eighth notes)
-	{"beat": 12.0, "lanes": [2], "duration_beats": 0.5},
-	{"beat": 12.5, "lanes": [1], "duration_beats": 0.5},
-	{"beat": 13.0, "lanes": [2], "duration_beats": 0.5},
-	{"beat": 13.5, "lanes": [1], "duration_beats": 0.5},
-	{"beat": 14.0, "lanes": [2], "duration_beats": 0.5},
-	{"beat": 14.5, "lanes": [1], "duration_beats": 0.5},
-
-	# Measure 6: JKL held (dotted half = 3 beats)
-	{"beat": 15.0, "lanes": [0, 1, 2], "duration_beats": 3.0},
-
-	# Measure 7: K J K J K J (eighth notes)
-	{"beat": 18.0, "lanes": [1], "duration_beats": 0.5},
-	{"beat": 18.5, "lanes": [0], "duration_beats": 0.5},
-	{"beat": 19.0, "lanes": [1], "duration_beats": 0.5},
-	{"beat": 19.5, "lanes": [0], "duration_beats": 0.5},
-	{"beat": 20.0, "lanes": [1], "duration_beats": 0.5},
-	{"beat": 20.5, "lanes": [0], "duration_beats": 0.5},
-
-	# Measure 8: JKL held (half = 2 beats), then 1 beat rest
-	{"beat": 21.0, "lanes": [0, 1, 2], "duration_beats": 2.0},
-
-	# ── PART 2 ──────────────────────────────────────────────
-
-	# Measure 1: J K K L K J J K L (triplet eighths)
-	{"beat": 24.0,               "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 24.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 24.0 + 2.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 25.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 25.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 25.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 26.0,               "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 26.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 26.0 + 2.0 / 3.0,  "lanes": [2], "duration_beats": 1.0 / 3.0},
-
-	# Measure 2: L K J L K J L K J (triplet eighths)
-	{"beat": 27.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 27.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 27.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 28.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 28.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 28.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 29.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 29.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 29.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-
-	# Measure 3: J K K L K J L K J (triplet eighths)
-	{"beat": 30.0,               "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 30.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 30.0 + 2.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 31.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 31.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 31.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 32.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 32.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 32.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-
-	# Measure 4: JKL held (half = 2 beats), then 1 beat rest
-	{"beat": 33.0, "lanes": [0, 1, 2], "duration_beats": 2.0},
-
-	# Measure 5: J K K L K J J K L (triplet eighths)
-	{"beat": 36.0,               "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 36.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 36.0 + 2.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 37.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 37.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 37.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 38.0,               "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 38.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 38.0 + 2.0 / 3.0,  "lanes": [2], "duration_beats": 1.0 / 3.0},
-
-	# Measure 6: L K J L K J L K J (triplet eighths)
-	{"beat": 39.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 39.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 39.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 40.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 40.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 40.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 41.0,               "lanes": [2], "duration_beats": 1.0 / 3.0},
-	{"beat": 41.0 + 1.0 / 3.0,  "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 41.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-
-	# Measure 7: K J J K J J K J J (triplet eighths)
-	{"beat": 42.0,               "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 42.0 + 1.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 42.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 43.0,               "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 43.0 + 1.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 43.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 44.0,               "lanes": [1], "duration_beats": 1.0 / 3.0},
-	{"beat": 44.0 + 1.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-	{"beat": 44.0 + 2.0 / 3.0,  "lanes": [0], "duration_beats": 1.0 / 3.0},
-
-	# Measure 8: JKL held (half = 2 beats), then 1 beat rest
-	{"beat": 45.0, "lanes": [0, 1, 2], "duration_beats": 2.0},
-]
-
-
-# ══════════════════════════════════════════════════════════════
 #  TUNING (exported for editor tweaking)
 # ══════════════════════════════════════════════════════════════
 
-@export var bpm: float = 110.0
+@export var bpm: float = 215.0
 
-## Fine-tuning offset (seconds) to align the chart with the audio file.
-## Positive = notes appear later vs the music (use if notes feel early).
-## Negative = notes appear earlier vs the music (use if notes feel late).
-## Keep near 0.0 for this chart; the lead-in is handled automatically.
+## Total length of the song audio in seconds.
+@export var song_duration: float = 27.0
+
+## Fine-tuning offset — shifts the entire chart vs the audio.
+## Positive = notes arrive later; negative = notes arrive earlier.
 @export var song_offset: float = 0.0
+
+## Seconds before the end of the song to stop placing notes.
+## Prevents notes from landing right at the audio tail.
+@export var end_padding: float = 0.0
 
 @export var note_scroll_speed: float = 400.0
 
-## Half-window (seconds) around perfect hit time for tap/hold start.
+## Half-window (seconds) around perfect hit time.
 @export var hit_window_secs: float = 0.15
 
 ## Minimum accuracy (0–1) required to win.
@@ -186,13 +55,8 @@ const CADENCE_CHART: Array = [
 #  TIMING (derived at runtime)
 # ══════════════════════════════════════════════════════════════
 
-var _seconds_per_beat: float
-var _song_duration: float   # seconds of actual gameplay (clock 0 → _song_duration)
-
-## Unified song clock.  Starts at -intro_duration when the scene loads and
-## counts upward continuously.  Clock = 0 is the moment the music begins and
-## beat 0 of the chart hits the hit line.  Notes use this clock for all
-## spawn, position, hit, and miss calculations — no separate intro counter.
+## Unified song clock.  Starts at -intro_duration, reaches 0 when the music
+## begins.  Notes spawn and position themselves using this single value.
 var _song_clock: float = 0.0
 
 var _scroll_distance: float
@@ -208,7 +72,6 @@ const LANE_GAP: float = 8.0
 const LANE_TOP_Y: float = -280.0
 const HIT_LINE_Y: float = 200.0
 const NOTE_SIZE: float = 36.0
-const HOLD_BODY_WIDTH: float = 50.0
 
 var _total_lane_width: float
 var _lane_area_left: float
@@ -235,18 +98,11 @@ var _misses: int = 0
 #  NOTES
 # ══════════════════════════════════════════════════════════════
 
-## Runtime notes built from CADENCE_CHART.  Each entry adds:
-##   hit_time, end_time, is_hold, state (&"pending"/&"active"/&"holding"/
-##   &"hit"/&"missed"), node (Node2D visual root, or null).
+## Runtime note list.  Each entry:
+##   { "lane": int, "hit_time": float,
+##     "node": Node2D or null, "state": &"pending" / &"active" / &"hit" / &"missed" }
 var _notes: Array = []
 var _next_spawn_index: int = 0
-
-
-# ══════════════════════════════════════════════════════════════
-#  INPUT
-# ══════════════════════════════════════════════════════════════
-
-var _lanes_held: Array = [false, false, false]
 
 
 # ══════════════════════════════════════════════════════════════
@@ -260,8 +116,6 @@ var _key_labels: Array = []
 var _intro_label: Label = null
 var _countdown_label: Label = null
 var _pixel_font: Font = null
-var _firesong_frames: SpriteFrames = null
-var _sword_sprite: Sprite2D = null
 
 
 # ══════════════════════════════════════════════════════════════
@@ -270,8 +124,8 @@ var _sword_sprite: Sprite2D = null
 
 const LANE_COLORS: Array = [
 	Color(0.65, 0.16, 0.16),   # lane 0 — red
-	Color(0.9, 0.52, 0.12),    # lane 1 — orange
-	Color(0.9, 0.85, 0.25),    # lane 2 — yellow
+	Color(0.16, 0.32, 0.65),   # lane 1 — blue
+	Color(0.14, 0.52, 0.22),   # lane 2 — green
 ]
 const NOTE_COLORS: Array = [
 	Color(1.0, 0.4, 0.4),      # lane 0
@@ -281,21 +135,6 @@ const NOTE_COLORS: Array = [
 const LANE_BG_COLOR := Color(0.06, 0.05, 0.1, 0.9)
 const HIT_LINE_COLOR := Color(0.92, 0.82, 0.5, 0.8)
 const FLASH_COLOR := Color(1.0, 0.95, 0.7, 0.35)
-const HOLD_BODY_ALPHA: float = 0.4
-const HOLD_ACTIVE_TINT := Color(1.3, 1.15, 0.7, 1.0)
-
-## How frequently to place a sustain spark (in beats) for hold notes.
-## Smaller value = sparks packed closer together (more crackling).
-@export var firesong_scale: float = 8.0
-@export var flame_sprite_size: float = 48.0
-@export var spark_sprite_size: float = 48.0
-@export var shield_sprite_size: float = 90.0
-@export var shield_below_line_px: float = 65.0
-@export var shield_scale: float = 0.7
-@export var sword_extra_width_px: float = 10.0
-@export var sustain_spark_step_beats: float = 0.18
-@export var spark_start_gap_px: float = 10.0
-@export var lane_extra_bottom_px: float = 70.0
 
 
 # ══════════════════════════════════════════════════════════════
@@ -304,7 +143,6 @@ const HOLD_ACTIVE_TINT := Color(1.3, 1.15, 0.7, 1.0)
 
 ## Hook: for tighter sync, replace delta accumulation with:
 ##   _song_clock = _music_player.get_playback_position() + song_offset
-## This eliminates drift between game time and the audio stream.
 var _music_player: AudioStreamPlayer = null
 
 
@@ -314,7 +152,6 @@ var _music_player: AudioStreamPlayer = null
 
 func _ready() -> void:
 	_pixel_font = load("res://fonts/m5x7.ttf") as Font
-	_firesong_frames = load("res://scenes/firesong (1).pxo") as SpriteFrames
 
 	App.stop_main_music()
 
@@ -325,25 +162,20 @@ func _ready() -> void:
 	App.reset_lives()
 	App.minigame_time_remaining = -1.0
 
-	_seconds_per_beat = 60.0 / bpm
 	_total_lane_width = lane_count * LANE_WIDTH + (lane_count - 1) * LANE_GAP
 	_lane_area_left = -_total_lane_width / 2.0
 	_scroll_distance = HIT_LINE_Y - LANE_TOP_Y
 	_travel_time = _scroll_distance / note_scroll_speed
 
-	_prepare_notes()
+	_generate_chart()
 	_build_visuals()
 	_build_intro_overlay()
 
-	# Seed the clock at -intro_duration so it reaches 0 exactly when the
-	# countdown finishes and the music starts.  Notes use this same clock, so
-	# beat-0 notes begin scrolling from the top during the countdown and arrive
-	# at the hit line the moment the song begins.
 	_song_clock = -intro_duration
 
 	_phase = Phase.INTRO
-	print("[Minigame:Cadence] Starting (BPM %.0f, %d notes, %.1fs chart, ~%.1fs total)" % [
-		bpm, _total_notes, _song_duration, intro_duration + _song_duration])
+	print("[Minigame:Cadence] Starting (BPM %.0f, %d notes, %.1fs song, ~%.1fs total)" % [
+		bpm, _total_notes, song_duration, intro_duration + song_duration])
 
 
 func _process(delta: float) -> void:
@@ -362,13 +194,11 @@ func _process(delta: float) -> void:
 # ══════════════════════════════════════════════════════════════
 
 func _process_intro() -> void:
-	# Notes scroll during the countdown — the 4-second intro is the lead-in.
-	# beat-0 notes spawn at clock = -_travel_time (≈2.8 s into the intro) and
-	# arrive at the hit line exactly when the clock reaches 0 and music starts.
+	# Notes spawn and scroll during the countdown so beat-0 notes arrive at
+	# the hit line exactly when the clock reaches 0 and the music starts.
 	_spawn_pending_notes()
 	_update_note_positions()
 
-	# _song_clock is negative during intro; -_song_clock = seconds until start
 	var countdown := -_song_clock
 	if _countdown_label:
 		if countdown > 3.0:
@@ -392,9 +222,6 @@ func _start_song() -> void:
 	if _countdown_label:
 		_countdown_label.visible = false
 
-	# Clock is now 0 — start music so beat 0 of the audio aligns with the hit line.
-	# Hook: replace delta accumulation below with _music_player.get_playback_position()
-	# for drift-free sync once the chart is polished.
 	if _music_player and _music_player.stream:
 		_music_player.play()
 
@@ -402,7 +229,7 @@ func _start_song() -> void:
 	if ui and ui.has_method("on_song_started"):
 		ui.on_song_started()
 	if ui and ui.has_method("update_timer_display"):
-		ui.update_timer_display(_song_duration)
+		ui.update_timer_display(song_duration)
 	if ui and ui.has_method("update_accuracy_display"):
 		ui.update_accuracy_display(_hits, _total_notes)
 
@@ -415,16 +242,15 @@ func _process_playing() -> void:
 	_spawn_pending_notes()
 	_update_note_positions()
 	_check_missed_notes()
-	_check_active_holds()
 
 	var ui := get_node_or_null("UI")
 	if ui and ui.has_method("update_timer_display"):
-		ui.update_timer_display(maxf(0.0, _song_duration - _song_clock))
+		ui.update_timer_display(maxf(0.0, song_duration - _song_clock))
 	if ui and ui.has_method("update_accuracy_display"):
 		ui.update_accuracy_display(_hits, _total_notes)
 
-	var all_done := _song_clock >= _song_duration and _all_notes_resolved()
-	var hard_cap := _song_clock >= _song_duration + 2.0
+	var all_done := _song_clock >= song_duration and _all_notes_resolved()
+	var hard_cap := _song_clock >= song_duration + 2.0
 	if all_done or hard_cap:
 		_end_song()
 
@@ -435,76 +261,41 @@ func _spawn_pending_notes() -> void:
 		var spawn_time: float = note["hit_time"] - _travel_time
 		if _song_clock < spawn_time:
 			break
-		if note["is_hold"]:
-			_spawn_hold_visual(note)
-		else:
-			_spawn_tap_visual(note)
+		_spawn_note_visual(note)
 		note["state"] = &"active"
 		_next_spawn_index += 1
 
 
-func _spawn_tap_visual(note: Dictionary) -> void:
-	var root := Node2D.new()
-	root.position = Vector2(0, LANE_TOP_Y)
-	root.z_index = 5
+func _spawn_note_visual(note: Dictionary) -> void:
+	var lane: int = note["lane"]
+	var cx: float = _lane_center_x(lane)
+	var half := NOTE_SIZE / 2.0
+	var inset := NOTE_SIZE * 0.25
 
-	for lane in note["lanes"]:
-		var cx: float = _lane_center_x(lane)
-		var flame := _make_firesong_sprite(_firesong_flame_frame_for_lane(lane), flame_sprite_size)
-		flame.position = Vector2(cx, 0)
-		root.add_child(flame)
+	var node := Node2D.new()
+	node.position = Vector2(cx, LANE_TOP_Y)
+	node.z_index = 5
 
-	add_child(root)
-	note["node"] = root
+	var rect := ColorRect.new()
+	rect.color = NOTE_COLORS[lane]
+	rect.size = Vector2(NOTE_SIZE, NOTE_SIZE)
+	rect.position = Vector2(-half, -half)
+	node.add_child(rect)
 
+	var inner := ColorRect.new()
+	inner.color = Color(1.0, 1.0, 1.0, 0.25)
+	inner.size = Vector2(NOTE_SIZE - inset * 2, NOTE_SIZE - inset * 2)
+	inner.position = Vector2(-half + inset, -half + inset)
+	node.add_child(inner)
 
-func _spawn_hold_visual(note: Dictionary) -> void:
-	var root := Node2D.new()
-	root.position = Vector2(0, LANE_TOP_Y)
-	root.z_index = 5
-	var bar_height: float = note["duration_beats"] * _seconds_per_beat * note_scroll_speed
-
-	for lane in note["lanes"]:
-		var cx: float = _lane_center_x(lane)
-		# Flame head (the note start)
-		var flame := _make_firesong_sprite(_firesong_flame_frame_for_lane(lane), flame_sprite_size)
-		flame.position = Vector2(cx, 0)
-		root.add_child(flame)
-
-		# Sparks (sustain) — extend upward closely behind the flame to look like a
-		# crackling fire. "Consecutive-ness" is how many small beat-steps fit.
-		var step_beats := clampf(sustain_spark_step_beats, 0.02, 0.25)
-		var step_px := step_beats * _seconds_per_beat * note_scroll_speed
-		var sparks_count := int(floor(note["duration_beats"] / step_beats))
-		for i in range(1, sparks_count + 1):
-			# First spark starts right after the flame, then continues at step spacing.
-			var y := -(spark_start_gap_px + float(i - 1) * step_px)
-			if -y > bar_height:
-				break
-			var spark := _make_firesong_sprite(_firesong_spark_frame_for_lane(lane), spark_sprite_size)
-			spark.position = Vector2(cx, y)
-			root.add_child(spark)
-
-	# Horizontal connector for chords (visual cue that all lanes are linked)
-	var lanes_arr: Array = note["lanes"]
-	if lanes_arr.size() > 1:
-		var half := NOTE_SIZE / 2.0
-		var left_cx: float = _lane_center_x(lanes_arr.min())
-		var right_cx: float = _lane_center_x(lanes_arr.max())
-		var conn := ColorRect.new()
-		conn.color = HIT_LINE_COLOR
-		conn.size = Vector2(right_cx - left_cx + NOTE_SIZE, 4)
-		conn.position = Vector2(left_cx - half, -2)
-		root.add_child(conn)
-
-	add_child(root)
-	note["node"] = root
+	add_child(node)
+	note["node"] = node
 
 
 func _update_note_positions() -> void:
 	for note in _notes:
 		var s = note["state"]
-		if (s == &"active" or s == &"holding") and note.has("node") and is_instance_valid(note["node"]):
+		if (s == &"active") and note.has("node") and is_instance_valid(note["node"]):
 			var time_until_hit: float = note["hit_time"] - _song_clock
 			note["node"].position.y = HIT_LINE_Y - time_until_hit * note_scroll_speed
 
@@ -519,20 +310,10 @@ func _check_missed_notes() -> void:
 			_fade_note(note)
 
 
-func _check_active_holds() -> void:
-	for note in _notes:
-		if note["state"] != &"holding":
-			continue
-		if _song_clock >= note["end_time"]:
-			note["state"] = &"hit"
-			_hits += 1
-			_pop_note(note)
-
-
 func _all_notes_resolved() -> bool:
 	for note in _notes:
 		var s = note["state"]
-		if s == &"pending" or s == &"active" or s == &"holding":
+		if s == &"pending" or s == &"active":
 			return false
 	return true
 
@@ -546,10 +327,9 @@ func _end_song() -> void:
 	if _music_player:
 		_music_player.stop()
 
-	# Force-resolve any stragglers (safety net for the hard-cap path)
 	for note in _notes:
 		var s = note["state"]
-		if s == &"pending" or s == &"active" or s == &"holding":
+		if s == &"pending" or s == &"active":
 			note["state"] = &"missed"
 			_misses += 1
 
@@ -584,7 +364,7 @@ func _input(event: InputEvent) -> void:
 	if game_over or _phase != Phase.PLAYING:
 		return
 
-	if not (event is InputEventKey) or event.echo:
+	if not (event is InputEventKey) or event.echo or not event.pressed:
 		return
 
 	var lane := -1
@@ -593,82 +373,30 @@ func _input(event: InputEvent) -> void:
 		KEY_S, KEY_K: lane = 1
 		KEY_D, KEY_L: lane = 2
 
-	if lane < 0:
-		return
-
-	if event.pressed:
+	if lane >= 0:
 		_handle_lane_press(lane)
-	else:
-		_handle_lane_release(lane)
 
 
 func _handle_lane_press(lane: int) -> void:
 	_flash_lane(lane)
-	_lanes_held[lane] = true
 
-	# Find the best active note that includes this lane AND has all its
-	# required lanes currently held (important for chords).
 	var best_note: Dictionary = {}
 	var best_diff: float = INF
 
 	for note in _notes:
 		if note["state"] != &"active":
 			continue
-		var lanes: Array = note["lanes"]
-		if not lanes.has(lane):
-			continue
-		var all_held := true
-		for l in lanes:
-			if not _lanes_held[l]:
-				all_held = false
-				break
-		if not all_held:
+		if note["lane"] != lane:
 			continue
 		var diff: float = absf(_song_clock - note["hit_time"])
 		if diff <= hit_window_secs and diff < best_diff:
 			best_note = note
 			best_diff = diff
 
-	if best_note.is_empty():
-		return
-
-	if best_note["is_hold"]:
-		best_note["state"] = &"holding"
-		if best_note.has("node") and is_instance_valid(best_note["node"]):
-			best_note["node"].modulate = HOLD_ACTIVE_TINT
-	else:
+	if not best_note.is_empty():
 		best_note["state"] = &"hit"
 		_hits += 1
 		_pop_note(best_note)
-
-
-func _handle_lane_release(lane: int) -> void:
-	# Check whether an alternate key for this lane is still held (J vs A, etc.)
-	var alt_held := false
-	match lane:
-		0: alt_held = Input.is_key_pressed(KEY_A) or Input.is_key_pressed(KEY_J)
-		1: alt_held = Input.is_key_pressed(KEY_S) or Input.is_key_pressed(KEY_K)
-		2: alt_held = Input.is_key_pressed(KEY_D) or Input.is_key_pressed(KEY_L)
-	if alt_held:
-		return
-
-	_lanes_held[lane] = false
-
-	for note in _notes:
-		if note["state"] != &"holding":
-			continue
-		var lanes: Array = note["lanes"]
-		if not lanes.has(lane):
-			continue
-		# Grace: if within 50 ms of the hold's end, count as a hit
-		if _song_clock >= note["end_time"] - 0.05:
-			note["state"] = &"hit"
-			_hits += 1
-			_pop_note(note)
-		else:
-			note["state"] = &"missed"
-			_misses += 1
-			_fade_note(note)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -709,7 +437,6 @@ func _fade_note(note: Dictionary) -> void:
 # ══════════════════════════════════════════════════════════════
 
 func _build_visuals() -> void:
-	# Full-screen dark background
 	var bg := ColorRect.new()
 	bg.color = Color(0.04, 0.03, 0.08)
 	bg.size = Vector2(1200, 700)
@@ -717,18 +444,16 @@ func _build_visuals() -> void:
 	bg.z_index = -10
 	add_child(bg)
 
-	# Border around the lane area
 	var border := ColorRect.new()
 	border.color = Color(0.35, 0.28, 0.18, 0.45)
-	border.size = Vector2(_total_lane_width + 14, _scroll_distance + 70 + lane_extra_bottom_px)
+	border.size = Vector2(_total_lane_width + 14, _scroll_distance + 70)
 	border.position = Vector2(_lane_area_left - 7, LANE_TOP_Y - 12)
 	border.z_index = -2
 	add_child(border)
 
-	# Per-lane backgrounds, tints, and flash overlays
 	for i in range(lane_count):
 		var lane_x: float = _lane_area_left + i * (LANE_WIDTH + LANE_GAP)
-		var lane_h: float = _scroll_distance + 46 + lane_extra_bottom_px
+		var lane_h: float = _scroll_distance + 46
 
 		var lane_bg := ColorRect.new()
 		lane_bg.color = LANE_BG_COLOR
@@ -755,7 +480,6 @@ func _build_visuals() -> void:
 		add_child(flash)
 		_lane_flash_rects.append(flash)
 
-	# Hit-window zone highlight
 	var zone_height: float = hit_window_secs * note_scroll_speed * 2.0
 	var hit_zone := ColorRect.new()
 	hit_zone.color = Color(0.92, 0.82, 0.45, 0.07)
@@ -764,31 +488,13 @@ func _build_visuals() -> void:
 	hit_zone.z_index = 1
 	add_child(hit_zone)
 
-	# Hit line
-	# Sword accuracy line (from firesong pxo frame 6). Keep a faint line behind it.
 	_hit_line_rect = ColorRect.new()
 	_hit_line_rect.color = HIT_LINE_COLOR
-	_hit_line_rect.size = Vector2(_total_lane_width + 14, 3)
-	_hit_line_rect.position = Vector2(_lane_area_left - 7, HIT_LINE_Y - 1.5)
-	_hit_line_rect.z_index = 3
+	_hit_line_rect.size = Vector2(_total_lane_width + 14, 4)
+	_hit_line_rect.position = Vector2(_lane_area_left - 7, HIT_LINE_Y - 2)
+	_hit_line_rect.z_index = 4
 	add_child(_hit_line_rect)
 
-	_sword_sprite = _make_firesong_sprite(6)
-	var sword_cx := _lane_area_left + _total_lane_width / 2.0 + 8.0
-	_sword_sprite.position = Vector2(sword_cx, HIT_LINE_Y)
-	_sword_sprite.z_index = 6
-	_scale_sprite_to_width(_sword_sprite, _total_lane_width + sword_extra_width_px)
-	_sword_sprite.rotation_degrees = -135.0
-	add_child(_sword_sprite)
-
-	# Static shields at the hit line. Notes travel into these markers.
-	for lane in range(lane_count):
-		var shield := _make_firesong_shield_sprite(_firesong_shield_frame_for_lane(lane))
-		shield.position = Vector2(_lane_center_x(lane), HIT_LINE_Y + shield_below_line_px)
-		shield.z_index = 8
-		add_child(shield)
-
-	# Key labels below the hit line
 	var key_sets := [["A", "S", "D"], ["J", "K", "L"]]
 	for i in range(lane_count):
 		var cx: float = _lane_center_x(i)
@@ -796,19 +502,17 @@ func _build_visuals() -> void:
 		lbl.text = "%s / %s" % [key_sets[0][i], key_sets[1][i]]
 		if _pixel_font:
 			lbl.add_theme_font_override("font", _pixel_font)
-		lbl.add_theme_font_size_override("font_size", 20)
+		lbl.add_theme_font_size_override("font_size", 24)
 		lbl.add_theme_color_override("font_color", LANE_COLORS[i].lerp(Color.WHITE, 0.55))
 		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 		lbl.add_theme_constant_override("outline_size", 3)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.size = Vector2(LANE_WIDTH, 30)
-		var keys_y := HIT_LINE_Y + shield_below_line_px + 40.0
-		lbl.position = Vector2(cx - LANE_WIDTH / 2.0, keys_y)
+		lbl.position = Vector2(cx - LANE_WIDTH / 2.0, HIT_LINE_Y + 14)
 		lbl.z_index = 4
 		add_child(lbl)
 		_key_labels.append(lbl)
 
-	# Title
 	var title_lbl := Label.new()
 	title_lbl.text = "~ Cadence ~"
 	if _pixel_font:
@@ -857,43 +561,31 @@ func _build_intro_overlay() -> void:
 
 
 # ══════════════════════════════════════════════════════════════
-#  CHART PREPARATION
+#  CHART GENERATION
 # ══════════════════════════════════════════════════════════════
 
-func _prepare_notes() -> void:
+## Builds the note list procedurally.  A note is placed on every quarter
+## beat from song_offset up to (song_duration - end_padding).  The rhythm
+## grid is fixed; only the lane assignment (0, 1, or 2) is randomized
+## each run, giving the same song feel with different button patterns.
+func _generate_chart() -> void:
 	_notes.clear()
 	_next_spawn_index = 0
 	_hits = 0
 	_misses = 0
 
-	var last_end_beat: float = 0.0
+	var quarter: float = 60.0 / bpm
+	var t: float = song_offset
 
-	for entry in CADENCE_CHART:
-		var beat: float = float(entry["beat"])
-		var lanes: Array = entry["lanes"]
-		var dur: float = float(entry["duration_beats"])
-		var hit_t: float = beat * _seconds_per_beat + song_offset
-		var end_t: float = (beat + dur) * _seconds_per_beat + song_offset
-
+	while t <= song_duration - end_padding:
 		_notes.append({
-			"lanes": lanes,
-			"beat": beat,
-			"duration_beats": dur,
-			"hit_time": hit_t,
-			"end_time": end_t,
-			"is_hold": dur >= HOLD_THRESHOLD,
+			"lane": randi_range(0, 2),
+			"hit_time": t,
 			"state": &"pending",
 		})
+		t += quarter
 
-		var end_beat: float = beat + dur
-		if end_beat > last_end_beat:
-			last_end_beat = end_beat
-
-	_notes.sort_custom(func(a, b): return a["hit_time"] < b["hit_time"])
 	_total_notes = _notes.size()
-
-	# Song ends 1 beat after the last event resolves (the final rest beat)
-	_song_duration = (last_end_beat + 1.0) * _seconds_per_beat + song_offset
 
 
 # ══════════════════════════════════════════════════════════════
@@ -902,81 +594,6 @@ func _prepare_notes() -> void:
 
 func _lane_center_x(lane: int) -> float:
 	return _lane_area_left + lane * (LANE_WIDTH + LANE_GAP) + LANE_WIDTH / 2.0
-
-
-# ══════════════════════════════════════════════════════════════
-#  FIRESONG SPRITE HELPERS (pxo frames)
-# ══════════════════════════════════════════════════════════════
-
-func _make_firesong_sprite(frame_index: int, size_px: float = -1.0) -> Sprite2D:
-	var s := Sprite2D.new()
-	s.centered = true
-	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	if _firesong_frames and _firesong_frames.has_animation("default"):
-		var max_idx := _firesong_frames.get_frame_count("default") - 1
-		var idx := clampi(frame_index, 0, max_idx)
-		s.texture = _firesong_frames.get_frame_texture("default", idx)
-		if s.texture:
-			var base_size := size_px if size_px > 0.0 else NOTE_SIZE
-			var target_size := base_size * maxf(0.01, firesong_scale)
-			_scale_sprite_to_size(s, target_size)
-	return s
-
-
-func _scale_sprite_to_size(sprite: Sprite2D, size_px: float) -> void:
-	if not sprite or not sprite.texture:
-		return
-	var tex_size := sprite.texture.get_size()
-	if tex_size.x <= 0 or tex_size.y <= 0:
-		return
-	var scale_xy := size_px / maxf(tex_size.x, tex_size.y)
-	sprite.scale = Vector2(scale_xy, scale_xy)
-
-
-func _scale_sprite_to_width(sprite: Sprite2D, width_px: float) -> void:
-	if not sprite or not sprite.texture:
-		return
-	var tex_size := sprite.texture.get_size()
-	if tex_size.x <= 0:
-		return
-	var scale_xy := width_px / tex_size.x
-	sprite.scale = Vector2(scale_xy, scale_xy)
-
-
-func _make_firesong_shield_sprite(frame_index: int) -> Sprite2D:
-	# Shields use raw texture with a small global scale adjust.
-	var s := Sprite2D.new()
-	s.centered = true
-	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
-	if _firesong_frames and _firesong_frames.has_animation("default"):
-		var max_idx := _firesong_frames.get_frame_count("default") - 1
-		var idx := clampi(frame_index, 0, max_idx)
-		s.texture = _firesong_frames.get_frame_texture("default", idx)
-		if shield_scale != 1.0:
-			s.scale = Vector2.ONE * shield_scale
-	return s
-
-
-func _firesong_color_index_for_lane(lane: int) -> int:
-	# Lane 0 -> red, lane 1 -> orange, lane 2 -> yellow (as described).
-	return clampi(lane, 0, 2)
-
-
-func _firesong_flame_frame_for_lane(lane: int) -> int:
-	var c := _firesong_color_index_for_lane(lane)
-	return [0, 1, 2][c]
-
-
-func _firesong_spark_frame_for_lane(lane: int) -> int:
-	var c := _firesong_color_index_for_lane(lane)
-	return [3, 4, 5][c]
-
-
-func _firesong_shield_frame_for_lane(lane: int) -> int:
-	var c := _firesong_color_index_for_lane(lane)
-	# Frames: red shield (7), yellow shield (8), orange shield (9) — but we map by lane:
-	# lane0(red)->7, lane1(orange)->9, lane2(yellow)->8
-	return [7, 9, 8][c]
 
 
 # ══════════════════════════════════════════════════════════════
