@@ -7,6 +7,9 @@ extends Node2D
 var game_over: bool = false
 var player_won: bool = false
 var _has_returned: bool = false
+const COURTLY_MUSIC_PATH := "res://music/s'mores.mp3"
+const PERSISTENT_COURTLY_PLAYER_NAME := "PersistentCourtlyCuisineMusic"
+var _courtly_music_player: AudioStreamPlayer = null
 
 # ── Timer (10-second countdown) ──
 const MINIGAME_TIME_LIMIT: float = 10.0
@@ -72,6 +75,8 @@ var _base_height: float = 30.0
 
 
 func _ready():
+	_setup_courtly_music()
+
 	_pixel_font = load("res://fonts/m5x7.ttf") as Font
 	_smores_frames = load(SMORES_FRAMES_PATH) as SpriteFrames
 	_apply_smores_scaling()
@@ -95,6 +100,42 @@ func _ready():
 	_build_visuals()
 	_spawn_moving()
 	print("[Minigame:CourtlyCuisine] Timer started (%.1fs)" % _minigame_timer)
+
+func _setup_courtly_music() -> void:
+	# S'mores music is exclusive to Courtly Cuisine.
+	App.stop_gameplay_music()
+
+	var root := get_tree().root
+	var existing := root.get_node_or_null(PERSISTENT_COURTLY_PLAYER_NAME)
+	if existing and existing is AudioStreamPlayer:
+		_courtly_music_player = existing as AudioStreamPlayer
+		if not _courtly_music_player.playing:
+			_courtly_music_player.play()
+		return
+
+	var stream := load(COURTLY_MUSIC_PATH)
+	if not stream is AudioStream:
+		push_warning("[Minigame:CourtlyCuisine] Missing or invalid music at %s" % COURTLY_MUSIC_PATH)
+		return
+
+	_courtly_music_player = AudioStreamPlayer.new()
+	_courtly_music_player.name = PERSISTENT_COURTLY_PLAYER_NAME
+	_courtly_music_player.bus = "Music"
+	_courtly_music_player.stream = stream
+	root.add_child(_courtly_music_player)
+
+	if stream is AudioStreamMP3:
+		(stream as AudioStreamMP3).loop = true
+	elif stream is AudioStreamOggVorbis:
+		(stream as AudioStreamOggVorbis).loop = true
+
+	_courtly_music_player.play()
+
+func _stop_courtly_music() -> void:
+	if _courtly_music_player and is_instance_valid(_courtly_music_player):
+		_courtly_music_player.stop()
+		_courtly_music_player.queue_free()
+	_courtly_music_player = null
 
 
 # ── Visual construction ──────────────────────────────────────
@@ -444,5 +485,5 @@ func handle_continue():
 
 
 func _return_to_map():
-	App.play_main_music()
+	_stop_courtly_music()
 	App.go("res://scenes/ui/game_intro.tscn")

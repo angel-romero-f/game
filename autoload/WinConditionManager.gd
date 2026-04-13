@@ -134,7 +134,6 @@ func _on_main_menu_pressed() -> void:
 	if _victory_overlay:
 		_victory_overlay.visible = false
 	App.stop_all_music()
-	App._menu_music_stopped = false
 	App.play_menu_music()
 	App.go("res://scenes/ui/MainMenu.tscn")
 

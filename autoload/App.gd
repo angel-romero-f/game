@@ -1087,6 +1087,13 @@ func stop_main_music() -> void:
 	if main_music and main_music.playing:
 		main_music.stop()
 
+func stop_gameplay_music() -> void:
+	stop_main_music()
+	stop_command_music()
+	stop_collect_music()
+	stop_contest_music()
+	stop_battle_music()
+
 func play_main_music() -> void:
 	stop_command_music()
 	stop_collect_music()
@@ -1176,15 +1183,11 @@ func play_lose_music() -> void:
 		lose_music.play()
 
 func sync_gameplay_music() -> void:
-	# Command/claim use command track; collect uses collect track.
-	match current_game_phase:
-		GamePhase.COLLECT:
-			play_collect_music()
-		_:
-			if command_music and command_music.stream:
-				play_command_music()
-			else:
-				play_main_music()
+	# Map should use collect music only.
+	if collect_music and collect_music.stream:
+		play_collect_music()
+	else:
+		play_main_music()
 
 func _load_mp3_stream(paths: Array[String]) -> AudioStreamMP3:
 	for path in paths:
@@ -1203,16 +1206,16 @@ func _sync_music_for_current_scene() -> void:
 		return
 	var scene_path := String(scene.scene_file_path)
 	if _is_menu_scene(scene_path):
-		stop_main_music()
-		stop_command_music()
-		stop_collect_music()
-		stop_contest_music()
-		stop_battle_music()
+		stop_gameplay_music()
 		play_menu_music()
 		return
 	stop_menu_music()
 	if scene_path == "res://scenes/ui/game_intro.tscn":
 		sync_gameplay_music()
+		return
+	if _is_minigame_scene(scene_path):
+		# Minigames manage their own dedicated tracks.
+		stop_gameplay_music()
 
 func _is_menu_scene(scene_path: String) -> bool:
 	if scene_path.is_empty():
@@ -1220,6 +1223,16 @@ func _is_menu_scene(scene_path: String) -> bool:
 	if not scene_path.begins_with("res://scenes/ui/"):
 		return false
 	return scene_path != "res://scenes/ui/game_intro.tscn"
+
+func _is_minigame_scene(scene_path: String) -> bool:
+	return scene_path in [
+		"res://scenes/Game.tscn",
+		"res://scenes/BridgeGame.tscn",
+		"res://scenes/IceFishingGame.tscn",
+		"res://scenes/ConjurersChorusGame.tscn",
+		"res://scenes/CourtlyCuisineGame.tscn",
+		"res://scenes/CadenceGame.tscn",
+	]
 
 func play_blip_select() -> void:
 	if not ui_sfx or not ui_sfx.stream:

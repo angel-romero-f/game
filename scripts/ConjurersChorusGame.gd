@@ -112,7 +112,7 @@ func _ready() -> void:
 
 func _setup_chorus_music() -> void:
 	# Simon Says music is exclusive to Conjurer's Chorus.
-	App.stop_main_music()
+	App.stop_gameplay_music()
 
 	var root := get_tree().root
 	var existing := root.get_node_or_null(PERSISTENT_CHORUS_PLAYER_NAME)
@@ -552,7 +552,6 @@ func handle_continue() -> void:
 
 func _return_to_map() -> void:
 	_stop_chorus_music()
-	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")
 
 

@@ -190,7 +190,7 @@ func show_game_over(is_final: bool):
 	game_over_panel.visible = true
 
 	if is_final:
-		App.stop_main_music()
+		App.stop_gameplay_music()
 		if lose_music:
 			lose_music.play()
 		if _big_title_label:
@@ -247,7 +247,7 @@ func _auto_return_after_timeout(delay: float = 1.8) -> void:
 
 
 func _on_lose_music_finished() -> void:
-	App.play_main_music()
+	pass
 
 
 # ── Win card display popup ──

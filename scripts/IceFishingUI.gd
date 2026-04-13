@@ -230,7 +230,7 @@ func show_game_over(is_final: bool):
 	game_over_panel.visible = true
 	
 	if is_final:
-		App.stop_main_music()
+		App.stop_gameplay_music()
 		if lose_music:
 			lose_music.play()
 		if _big_title_label:
@@ -247,7 +247,7 @@ func show_game_over(is_final: bool):
 			game_over_label.text = "The fish got away!\n%d chance%s remaining\nPress R to try again" % [lives_left, "s" if lives_left != 1 else ""]
 
 func _on_lose_music_finished() -> void:
-	App.play_main_music()
+	pass
 
 func show_win():
 	win_panel.visible = true

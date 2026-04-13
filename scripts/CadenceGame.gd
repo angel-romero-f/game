@@ -153,7 +153,7 @@ var _music_player: AudioStreamPlayer = null
 func _ready() -> void:
 	_pixel_font = load("res://fonts/m5x7.ttf") as Font
 
-	App.stop_main_music()
+	App.stop_gameplay_music()
 
 	_music_player = get_node_or_null("CadenceMusic") as AudioStreamPlayer
 	if _music_player:
@@ -621,5 +621,4 @@ func handle_continue() -> void:
 
 
 func _return_to_map() -> void:
-	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")

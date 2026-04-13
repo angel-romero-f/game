@@ -38,7 +38,7 @@ func _ready():
 
 func _setup_ice_fishing_music() -> void:
 	# Ice fishing music is exclusive to this minigame.
-	App.stop_main_music()
+	App.stop_gameplay_music()
 
 	var root := get_tree().root
 	var existing := root.get_node_or_null(PERSISTENT_ICE_FISHING_PLAYER_NAME)
@@ -138,5 +138,4 @@ func handle_continue():
 
 func _return_to_map():
 	_stop_ice_fishing_music()
-	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")

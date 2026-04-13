@@ -1,10 +1,10 @@
-[gd_scene format=3 uid="uid://bkx7t44254rvl"]
+[gd_scene load_steps=4 format=3 uid="uid://bkx7t44254rvl"]
 
 [ext_resource type="Script" uid="uid://p126h6qaeb6l" path="res://scripts/ui/TitleScreen.gd" id="1"]
 [ext_resource type="Texture2D" uid="uid://0hby3feg8k8g" path="res://pictures/title_bg_2.png" id="2_xnmwc"]
 [ext_resource type="Texture2D" uid="uid://b4xoqbix22fhw" path="res://pictures/Clover&Clobber Title.1.png" id="3_xnmwc"]
 
-[node name="TitleScreen" type="Control" unique_id=308486685]
+[node name="TitleScreen" type="Control"]
 layout_mode = 3
 anchors_preset = 15
 anchor_right = 1.0
@@ -13,7 +13,7 @@ grow_horizontal = 2
 grow_vertical = 2
 script = ExtResource("1")
 
-[node name="Background" type="TextureRect" parent="." unique_id=1478914243]
+[node name="Background" type="TextureRect" parent="."]
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -23,8 +23,7 @@ grow_vertical = 2
 texture = ExtResource("2_xnmwc")
 expand_mode = 2
 
-[node name="TitlePic" type="TextureRect" parent="." unique_id=801093072]
-visible = false
+[node name="TitlePic" type="TextureRect" parent="."]
 layout_mode = 0
 offset_left = 317.0
 offset_top = 75.0
@@ -32,7 +31,7 @@ offset_right = 817.0
 offset_bottom = 575.0
 texture = ExtResource("3_xnmwc")
 
-[node name="Timer" type="Timer" parent="." unique_id=1620936794]
+[node name="Timer" type="Timer" parent="."]
 wait_time = 2.0
 one_shot = true
 autostart = true

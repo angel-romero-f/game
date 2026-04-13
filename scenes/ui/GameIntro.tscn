@@ -74,9 +74,9 @@ mouse_filter = 2
 [node name="TerritoryNode" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 541.0
+offset_left = 538.0
 offset_top = 338.0
-offset_right = 675.0
+offset_right = 672.0
 offset_bottom = 435.0
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 134, 0, 134, 97, 0, 97)
@@ -87,10 +87,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 [node name="TerritoryNode2" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 142.0
-offset_top = 144.0
-offset_right = 240.0
-offset_bottom = 228.0
+offset_left = 226.0
+offset_top = 173.0
+offset_right = 324.0
+offset_bottom = 257.0
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 98, 0, 98, 84, 0, 84)
 territory_id_override = 2
@@ -99,10 +99,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode3" type="Control" parent="TerritoriesContainer"]
 anchors_preset = 0
-offset_left = 413.0
-offset_top = 567.00006
-offset_right = 610.28613
-offset_bottom = 771.9051
+offset_left = 433.0
+offset_top = 536.00006
+offset_right = 630.28613
+offset_bottom = 740.9051
 rotation = -0.79761547
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 197.28616, 0, 197.28616, 204.90503, 0, 0)
@@ -112,10 +112,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode4" type="Control" parent="TerritoriesContainer"]
 anchors_preset = 0
-offset_left = 258.0
-offset_top = 107.0
-offset_right = 375.0
-offset_bottom = 185.0
+offset_left = 306.0
+offset_top = 123.0
+offset_right = 423.0
+offset_bottom = 201.0
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 117, 0, 117, 78, 0, 78)
 territory_id_override = 4
@@ -124,10 +124,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode5" type="Control" parent="TerritoriesContainer"]
 anchors_preset = 0
-offset_left = 158.99998
-offset_top = 331.0
-offset_right = 355.95944
-offset_bottom = 451.38037
+offset_left = 221.99998
+offset_top = 332.0
+offset_right = 418.95944
+offset_bottom = 452.38037
 rotation = -0.5864306
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 196.95947, 0, 196.95947, 120.38037, 0, 0)
@@ -137,10 +137,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode6" type="Control" parent="TerritoriesContainer"]
 anchors_preset = 0
-offset_left = 113.0
-offset_top = 473.0
-offset_right = 244.0
-offset_bottom = 571.0
+offset_left = 179.0
+offset_top = 446.0
+offset_right = 310.0
+offset_bottom = 544.0
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 131, 0, 131, 98, 0, 98)
 territory_id_override = 6
@@ -150,10 +150,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 [node name="TerritoryNode7" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 855.0
-offset_top = 165.0
-offset_right = 931.61206
-offset_bottom = 237.1012
+offset_left = 829.0
+offset_top = 192.0
+offset_right = 905.61206
+offset_bottom = 264.1012
 rotation = -3.1415927
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 76.61206, 0, 76.61206, 72.1012, 0, 72.1012)
@@ -164,10 +164,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 [node name="TerritoryNode8" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 819.0
-offset_top = 560.0
-offset_right = 959.2272
-offset_bottom = 663.50616
+offset_left = 801.0
+offset_top = 529.0
+offset_right = 941.2272
+offset_bottom = 632.50616
 rotation = -3.1415927
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 140.22717, 0, 140.22717, 103.506165, 0, 103.506165, 0, 0)
@@ -178,10 +178,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 [node name="TerritoryNode9" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 489.0
-offset_top = 169.0
-offset_right = 613.2909
-offset_bottom = 266.83215
+offset_left = 520.0
+offset_top = 196.0
+offset_right = 644.2909
+offset_bottom = 293.83215
 rotation = -3.1415927
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 124.290955, 0, 124.290955, 97.83215, 0, 97.83215, 0, 0)
@@ -192,10 +192,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 [node name="TerritoryNode10" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 766.0
-offset_top = 416.99997
-offset_right = 888.4414
-offset_bottom = 566.69794
+offset_left = 736.0
+offset_top = 397.00003
+offset_right = 858.4414
+offset_bottom = 546.698
 rotation = -0.79761547
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 122.441345, 0, 122.441345, 149.69797, 0, 0)
@@ -206,10 +206,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 [node name="TerritoryNode11" type="Control" parent="TerritoriesContainer"]
 layout_mode = 1
 anchors_preset = 0
-offset_left = 922.0
-offset_top = 291.0
-offset_right = 1032.4614
-offset_bottom = 383.15897
+offset_left = 890.0
+offset_top = 299.0
+offset_right = 1000.4614
+offset_bottom = 391.15897
 rotation = -3.1415927
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 110.461426, 0, 110.461426, 92.158966, 0, 92.158966)
@@ -219,10 +219,10 @@ metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="TerritoryNode12" type="Control" parent="TerritoriesContainer"]
 anchors_preset = 0
-offset_left = 668.0
-offset_top = 165.0
-offset_right = 792.2909
-offset_bottom = 262.83215
+offset_left = 671.0
+offset_top = 194.0
+offset_right = 795.2909
+offset_bottom = 291.83215
 rotation = -3.1415927
 script = ExtResource("4_35fog")
 polygon_points = PackedVector2Array(0, 0, 124.290955, 0, 124.290955, 97.83215, 0, 97.83215, 0, 0)
@@ -231,7 +231,6 @@ region_id_override = 3
 metadata/_custom_type_script = "uid://nry7roh0gj2b"
 
 [node name="ShowcaseContainer" type="CenterContainer" parent="."]
-visible = false
 layout_mode = 1
 anchors_preset = 15
 anchor_right = 1.0
@@ -998,7 +997,6 @@ theme_override_constants/separation = 15
 alignment = 1
 
 [node name="ClaimTerritoryPanel" type="PanelContainer" parent="."]
-visible = false
 layout_mode = 1
 anchors_preset = 8
 anchor_left = 0.5

@@ -49,7 +49,7 @@ func _ready():
 
 func _setup_river_music() -> void:
 	# River music is exclusive to this minigame.
-	App.stop_main_music()
+	App.stop_gameplay_music()
 
 	var root := get_tree().root
 	var existing := root.get_node_or_null(PERSISTENT_RIVER_PLAYER_NAME)
@@ -161,5 +161,4 @@ func handle_continue():
 
 func _return_to_map():
 	_stop_river_music()
-	App.play_main_music()
 	App.go("res://scenes/ui/game_intro.tscn")
