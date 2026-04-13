@@ -357,7 +357,7 @@ func _ready() -> void:
 
 	if App.turn_order.size() > 0:
 		App.stop_menu_music()
-		App.play_main_music()
+		App.sync_gameplay_music()
 		intro_ui.skip_intro()
 		intro_complete = true
 		territory_ui.intro_complete = true
@@ -405,7 +405,7 @@ func _ready() -> void:
 
 	# For multiplayer non-host clients who arrive here via RPC (no button press on their end).
 	App.stop_menu_music()
-	App.play_main_music()
+	App.sync_gameplay_music()
 	intro_ui.start_intro()
 
 

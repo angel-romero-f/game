@@ -135,6 +135,7 @@ func sync_app_game_phase() -> void:
 		_:
 			App.current_game_phase = App.GamePhase.CONTEST_COMMAND
 			App.phase_transition_text = "Contest"
+	App.sync_gameplay_music()
 
 ## Transition to RESOURCE_COLLECTION sub-phase (reset minigame count)
 func enter_resource_collection() -> void:
