@@ -129,6 +129,8 @@ func _ready() -> void:
 			_card_scene_ui.setup_spectator_ui(_timer_label, _timer_sub_label, _continue_label, _leave_button, _debug_add_card_button, _result_label, _player_slot_nodes, _opponent_slot_nodes, get_parent() if get_parent() else get_tree().current_scene)
 			if not _card_scene_ui.leave_pressed.is_connected(_on_leave_pressed):
 				_card_scene_ui.leave_pressed.connect(_on_leave_pressed)
+		# Run card-back setup after the scene has had a chance to receive battle state.
+		call_deferred("_setup_spectator_card_backs")
 	else:
 		_setup_ui()
 
@@ -514,6 +516,60 @@ func _clear_opponent_slot_cards() -> void:
 				slot.unsnap_card()
 			existing.queue_free()
 		_opponent_cards_by_slot.erase(slot)
+
+
+func _setup_spectator_card_backs() -> void:
+	## Spectators see the defender's battle layout with all cards face-down and non-interactive.
+	_clear_player_slots()
+	_clear_opponent_slot_cards()
+
+	var tid: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+	var defender_slots: Dictionary = {}
+	var attacker_slots: Dictionary = {}
+
+	if _is_multiplayer and BattleSync:
+		var defender_id := BattleSync.territory_battle_defender_id
+		var attacker_id := BattleSync.territory_battle_attacker_id
+		defender_slots = BattleSync.battle_placed_cards.get(defender_id, {}).duplicate(true)
+		attacker_slots = BattleSync.battle_placed_cards.get(attacker_id, {}).duplicate(true)
+
+	if BattleStateManager and not tid.is_empty():
+		if defender_slots.is_empty():
+			defender_slots = BattleStateManager.get_defending_slots(tid)
+		if attacker_slots.is_empty():
+			attacker_slots = BattleStateManager.get_attacking_slots(tid)
+
+	for slot_idx in range(_player_slot_nodes.size()):
+		var slot: Node = _player_slot_nodes[slot_idx]
+		if not slot:
+			continue
+		if defender_slots.has(slot_idx) or defender_slots.has(str(slot_idx)):
+			_spawn_card_back_in_slot(slot, false)
+
+	for slot_idx in range(_opponent_slot_nodes.size()):
+		var slot: Node = _opponent_slot_nodes[slot_idx]
+		if not slot:
+			continue
+		if attacker_slots.has(slot_idx) or attacker_slots.has(str(slot_idx)):
+			_spawn_card_back_in_slot(slot, true)
+
+
+func _spawn_card_back_in_slot(slot: Node, is_opponent_slot: bool) -> void:
+	if not slot:
+		return
+	var card := CARD_SCENE.instantiate()
+	if not card:
+		return
+	get_tree().current_scene.add_child(card)
+	var area := card.get_node_or_null("Card_Collision") as Area2D
+	if area:
+		area.input_pickable = false
+	card.card_sprite_frames = CARD_BACK_FRAMES
+	card.frame_index = CARD_BACK_FRAME_INDEX
+	if slot.has_method("force_snap_card"):
+		slot.force_snap_card(card)
+	if is_opponent_slot:
+		_opponent_cards_by_slot[slot] = card
 
 
 func _setup_ui() -> void:
