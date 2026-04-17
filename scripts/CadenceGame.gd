@@ -116,6 +116,8 @@ var _key_labels: Array = []
 var _intro_label: Label = null
 var _countdown_label: Label = null
 var _pixel_font: Font = null
+var _firesong_frames: SpriteFrames = null
+var _sword_sprite: Sprite2D = null
 
 
 # ══════════════════════════════════════════════════════════════
@@ -136,6 +138,13 @@ const LANE_BG_COLOR := Color(0.06, 0.05, 0.1, 0.9)
 const HIT_LINE_COLOR := Color(0.92, 0.82, 0.5, 0.8)
 const FLASH_COLOR := Color(1.0, 0.95, 0.7, 0.35)
 
+@export var firesong_scale: float = 8.0
+@export var flame_sprite_size: float = 48.0
+@export var shield_below_line_px: float = 65.0
+@export var shield_scale: float = 0.7
+@export var sword_extra_width_px: float = 10.0
+@export var lane_extra_bottom_px: float = 70.0
+
 
 # ══════════════════════════════════════════════════════════════
 #  AUDIO
@@ -152,6 +161,9 @@ var _music_player: AudioStreamPlayer = null
 
 func _ready() -> void:
 	_pixel_font = load("res://fonts/m5x7.ttf") as Font
+	_firesong_frames = load("res://scenes/firesong (1).pxo") as SpriteFrames
+	if not _firesong_frames:
+		_firesong_frames = load("res://.godot/imported/firesong (1).pxo-78eca3835f41eed2d59171768ec68209.res") as SpriteFrames
 
 	App.stop_gameplay_music()
 
@@ -269,24 +281,14 @@ func _spawn_pending_notes() -> void:
 func _spawn_note_visual(note: Dictionary) -> void:
 	var lane: int = note["lane"]
 	var cx: float = _lane_center_x(lane)
-	var half := NOTE_SIZE / 2.0
-	var inset := NOTE_SIZE * 0.25
 
 	var node := Node2D.new()
 	node.position = Vector2(cx, LANE_TOP_Y)
 	node.z_index = 5
 
-	var rect := ColorRect.new()
-	rect.color = NOTE_COLORS[lane]
-	rect.size = Vector2(NOTE_SIZE, NOTE_SIZE)
-	rect.position = Vector2(-half, -half)
-	node.add_child(rect)
-
-	var inner := ColorRect.new()
-	inner.color = Color(1.0, 1.0, 1.0, 0.25)
-	inner.size = Vector2(NOTE_SIZE - inset * 2, NOTE_SIZE - inset * 2)
-	inner.position = Vector2(-half + inset, -half + inset)
-	node.add_child(inner)
+	var flame := _make_firesong_sprite(_firesong_flame_frame_for_lane(lane), flame_sprite_size)
+	flame.position = Vector2.ZERO
+	node.add_child(flame)
 
 	add_child(node)
 	note["node"] = node
@@ -446,14 +448,14 @@ func _build_visuals() -> void:
 
 	var border := ColorRect.new()
 	border.color = Color(0.35, 0.28, 0.18, 0.45)
-	border.size = Vector2(_total_lane_width + 14, _scroll_distance + 70)
+	border.size = Vector2(_total_lane_width + 14, _scroll_distance + 70 + lane_extra_bottom_px)
 	border.position = Vector2(_lane_area_left - 7, LANE_TOP_Y - 12)
 	border.z_index = -2
 	add_child(border)
 
 	for i in range(lane_count):
 		var lane_x: float = _lane_area_left + i * (LANE_WIDTH + LANE_GAP)
-		var lane_h: float = _scroll_distance + 46
+		var lane_h: float = _scroll_distance + 46 + lane_extra_bottom_px
 
 		var lane_bg := ColorRect.new()
 		lane_bg.color = LANE_BG_COLOR
@@ -490,10 +492,24 @@ func _build_visuals() -> void:
 
 	_hit_line_rect = ColorRect.new()
 	_hit_line_rect.color = HIT_LINE_COLOR
-	_hit_line_rect.size = Vector2(_total_lane_width + 14, 4)
-	_hit_line_rect.position = Vector2(_lane_area_left - 7, HIT_LINE_Y - 2)
-	_hit_line_rect.z_index = 4
+	_hit_line_rect.size = Vector2(_total_lane_width + 14, 3)
+	_hit_line_rect.position = Vector2(_lane_area_left - 7, HIT_LINE_Y - 1.5)
+	_hit_line_rect.z_index = 3
 	add_child(_hit_line_rect)
+
+	_sword_sprite = _make_firesong_sprite(6)
+	var sword_cx := _lane_area_left + _total_lane_width / 2.0 + 8.0
+	_sword_sprite.position = Vector2(sword_cx, HIT_LINE_Y)
+	_sword_sprite.z_index = 6
+	_scale_sprite_to_width(_sword_sprite, _total_lane_width + sword_extra_width_px)
+	_sword_sprite.rotation_degrees = -135.0
+	add_child(_sword_sprite)
+
+	for lane in range(lane_count):
+		var shield := _make_firesong_shield_sprite(_firesong_shield_frame_for_lane(lane))
+		shield.position = Vector2(_lane_center_x(lane), HIT_LINE_Y + shield_below_line_px)
+		shield.z_index = 8
+		add_child(shield)
 
 	var key_sets := [["A", "S", "D"], ["J", "K", "L"]]
 	for i in range(lane_count):
@@ -502,13 +518,14 @@ func _build_visuals() -> void:
 		lbl.text = "%s / %s" % [key_sets[0][i], key_sets[1][i]]
 		if _pixel_font:
 			lbl.add_theme_font_override("font", _pixel_font)
-		lbl.add_theme_font_size_override("font_size", 24)
+		lbl.add_theme_font_size_override("font_size", 20)
 		lbl.add_theme_color_override("font_color", LANE_COLORS[i].lerp(Color.WHITE, 0.55))
 		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0))
 		lbl.add_theme_constant_override("outline_size", 3)
 		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		lbl.size = Vector2(LANE_WIDTH, 30)
-		lbl.position = Vector2(cx - LANE_WIDTH / 2.0, HIT_LINE_Y + 14)
+		var keys_y := HIT_LINE_Y + shield_below_line_px + 40.0
+		lbl.position = Vector2(cx - LANE_WIDTH / 2.0, keys_y)
 		lbl.z_index = 4
 		add_child(lbl)
 		_key_labels.append(lbl)
@@ -594,6 +611,68 @@ func _generate_chart() -> void:
 
 func _lane_center_x(lane: int) -> float:
 	return _lane_area_left + lane * (LANE_WIDTH + LANE_GAP) + LANE_WIDTH / 2.0
+
+
+func _make_firesong_sprite(frame_index: int, size_px: float = -1.0) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.centered = true
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	if _firesong_frames and _firesong_frames.has_animation("default"):
+		var max_idx := _firesong_frames.get_frame_count("default") - 1
+		var idx := clampi(frame_index, 0, max_idx)
+		s.texture = _firesong_frames.get_frame_texture("default", idx)
+		if s.texture:
+			var base_size := size_px if size_px > 0.0 else NOTE_SIZE
+			var target_size := base_size * maxf(0.01, firesong_scale)
+			_scale_sprite_to_size(s, target_size)
+	return s
+
+
+func _scale_sprite_to_size(sprite: Sprite2D, size_px: float) -> void:
+	if not sprite or not sprite.texture:
+		return
+	var tex_size := sprite.texture.get_size()
+	if tex_size.x <= 0 or tex_size.y <= 0:
+		return
+	var scale_xy := size_px / maxf(tex_size.x, tex_size.y)
+	sprite.scale = Vector2(scale_xy, scale_xy)
+
+
+func _scale_sprite_to_width(sprite: Sprite2D, width_px: float) -> void:
+	if not sprite or not sprite.texture:
+		return
+	var tex_size := sprite.texture.get_size()
+	if tex_size.x <= 0:
+		return
+	var scale_xy := width_px / tex_size.x
+	sprite.scale = Vector2(scale_xy, scale_xy)
+
+
+func _make_firesong_shield_sprite(frame_index: int) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.centered = true
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	if _firesong_frames and _firesong_frames.has_animation("default"):
+		var max_idx := _firesong_frames.get_frame_count("default") - 1
+		var idx := clampi(frame_index, 0, max_idx)
+		s.texture = _firesong_frames.get_frame_texture("default", idx)
+		if shield_scale != 1.0:
+			s.scale = Vector2.ONE * shield_scale
+	return s
+
+
+func _firesong_color_index_for_lane(lane: int) -> int:
+	return clampi(lane, 0, 2)
+
+
+func _firesong_flame_frame_for_lane(lane: int) -> int:
+	var c := _firesong_color_index_for_lane(lane)
+	return [0, 1, 2][c]
+
+
+func _firesong_shield_frame_for_lane(lane: int) -> int:
+	var c := _firesong_color_index_for_lane(lane)
+	return [7, 9, 8][c]
 
 
 # ══════════════════════════════════════════════════════════════
