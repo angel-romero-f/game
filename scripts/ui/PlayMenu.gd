@@ -6,6 +6,8 @@ var join_button: Button
 var back_button: Button
 
 func _ready() -> void:
+	App.reset_session_state_for_menu_return()
+
 	title_label = get_node_or_null("Card/Margin/VBoxContainer/TitleLabel")
 	host_button = get_node_or_null("Card/Margin/VBoxContainer/HostButton")
 	join_button = get_node_or_null("Card/Margin/VBoxContainer/JoinButton")

@@ -1,7 +1,7 @@
 class_name TerritoryIndicator
 extends Control
 
-const DEBUG_LOGS := false
+const DEBUG_LOGS := true
 
 ## TerritoryIndicator — Clickable sprite-based territory on the map.
 ## Created programmatically by TerritoryManager at the center of each TerritoryNode.

@@ -129,6 +129,8 @@ func _ready() -> void:
 			_card_scene_ui.setup_spectator_ui(_timer_label, _timer_sub_label, _continue_label, _leave_button, _debug_add_card_button, _result_label, _player_slot_nodes, _opponent_slot_nodes, get_parent() if get_parent() else get_tree().current_scene)
 			if not _card_scene_ui.leave_pressed.is_connected(_on_leave_pressed):
 				_card_scene_ui.leave_pressed.connect(_on_leave_pressed)
+		# Run card-back setup after the scene has had a chance to receive battle state.
+		call_deferred("_setup_spectator_card_backs")
 	else:
 		_setup_ui()
 
@@ -516,6 +518,60 @@ func _clear_opponent_slot_cards() -> void:
 		_opponent_cards_by_slot.erase(slot)
 
 
+func _setup_spectator_card_backs() -> void:
+	## Spectators see the defender's battle layout with all cards face-down and non-interactive.
+	_clear_player_slots()
+	_clear_opponent_slot_cards()
+
+	var tid: String = BattleStateManager.current_territory_id if BattleStateManager else ""
+	var defender_slots: Dictionary = {}
+	var attacker_slots: Dictionary = {}
+
+	if _is_multiplayer and BattleSync:
+		var defender_id := BattleSync.territory_battle_defender_id
+		var attacker_id := BattleSync.territory_battle_attacker_id
+		defender_slots = BattleSync.battle_placed_cards.get(defender_id, {}).duplicate(true)
+		attacker_slots = BattleSync.battle_placed_cards.get(attacker_id, {}).duplicate(true)
+
+	if BattleStateManager and not tid.is_empty():
+		if defender_slots.is_empty():
+			defender_slots = BattleStateManager.get_defending_slots(tid)
+		if attacker_slots.is_empty():
+			attacker_slots = BattleStateManager.get_attacking_slots(tid)
+
+	for slot_idx in range(_player_slot_nodes.size()):
+		var slot: Node = _player_slot_nodes[slot_idx]
+		if not slot:
+			continue
+		if defender_slots.has(slot_idx) or defender_slots.has(str(slot_idx)):
+			_spawn_card_back_in_slot(slot, false)
+
+	for slot_idx in range(_opponent_slot_nodes.size()):
+		var slot: Node = _opponent_slot_nodes[slot_idx]
+		if not slot:
+			continue
+		if attacker_slots.has(slot_idx) or attacker_slots.has(str(slot_idx)):
+			_spawn_card_back_in_slot(slot, true)
+
+
+func _spawn_card_back_in_slot(slot: Node, is_opponent_slot: bool) -> void:
+	if not slot:
+		return
+	var card := CARD_SCENE.instantiate()
+	if not card:
+		return
+	get_tree().current_scene.add_child(card)
+	var area := card.get_node_or_null("Card_Collision") as Area2D
+	if area:
+		area.input_pickable = false
+	card.card_sprite_frames = CARD_BACK_FRAMES
+	card.frame_index = CARD_BACK_FRAME_INDEX
+	if slot.has_method("force_snap_card"):
+		slot.force_snap_card(card)
+	if is_opponent_slot:
+		_opponent_cards_by_slot[slot] = card
+
+
 func _setup_ui() -> void:
 	if _timer_label:
 		_timer_label.visible = false
@@ -859,6 +915,7 @@ func _animate_card_bump_sequence() -> void:
 			await _final_winner_bump_and_clear("player")
 		else:
 			await _final_winner_bump_and_clear("opponent")
+	await _show_destroyed_card_markers()
 	if DEBUG_LOGS: print("[BattleManager] _animate_card_bump_sequence DONE")
 
 
@@ -949,6 +1006,120 @@ func _grey_out_card(card: Node) -> void:
 	var grey_tween: Tween = create_tween()
 	grey_tween.tween_property(card, "modulate", grey, 0.3)
 	await grey_tween.finished
+
+
+func _show_destroyed_card_markers() -> void:
+	## Add a red X over cards that are actually destroyed by battle rules.
+	var destroyed_cards := _collect_destroyed_cards_for_visuals()
+	for card in destroyed_cards:
+		_add_destroyed_marker(card)
+	# Small hold so players can read the marker before result text/return.
+	if not destroyed_cards.is_empty():
+		await get_tree().create_tween().tween_interval(0.2).finished
+
+
+func _collect_destroyed_cards_for_visuals() -> Array:
+	var destroyed: Array = []
+	var overall_result := _get_battle_result() # local perspective
+	var local_is_defender := _is_local_defender()
+	var attacker_won := false
+	if local_is_defender:
+		attacker_won = (overall_result == "lose")
+	else:
+		attacker_won = (overall_result == "win")
+
+	# Track attacker side destruction by lane (losing/tied lanes) or all cards.
+	var attacker_destroy_all := not attacker_won
+	var defender_destroy_all := attacker_won
+
+	for p_idx in range(mini(_player_slot_nodes.size(), 3)):
+		var round_result: String = _round_results[p_idx] if p_idx < _round_results.size() else "tie"
+		var o_idx := 2 - p_idx
+		var pslot: Node = _player_slot_nodes[p_idx]
+		var oslot: Node = _opponent_slot_nodes[o_idx] if o_idx >= 0 and o_idx < _opponent_slot_nodes.size() else null
+		var pcard: Node = pslot.snapped_card if pslot and pslot.get("snapped_card") else null
+		var ocard: Node = _opponent_cards_by_slot.get(oslot, null) if oslot else null
+
+		var player_is_attacker := not local_is_defender
+		var attacker_card: Node = pcard if player_is_attacker else ocard
+		var defender_card: Node = ocard if player_is_attacker else pcard
+
+		if attacker_destroy_all:
+			if attacker_card and is_instance_valid(attacker_card) and attacker_card.visible:
+				if not destroyed.has(attacker_card):
+					destroyed.append(attacker_card)
+		else:
+			# Attacker won: attacker only loses cards from losing lanes; ties also destroy attacker card.
+			var attacker_lost_lane := false
+			if player_is_attacker:
+				attacker_lost_lane = (round_result == "lose" or round_result == "tie")
+			else:
+				attacker_lost_lane = (round_result == "win" or round_result == "tie")
+			if attacker_lost_lane and attacker_card and is_instance_valid(attacker_card) and attacker_card.visible:
+				if not destroyed.has(attacker_card):
+					destroyed.append(attacker_card)
+
+		if defender_destroy_all:
+			if defender_card and is_instance_valid(defender_card) and defender_card.visible:
+				if not destroyed.has(defender_card):
+					destroyed.append(defender_card)
+		else:
+			# Defender won: defender only loses cards from losing lanes.
+			var defender_lost_lane := false
+			if player_is_attacker:
+				defender_lost_lane = (round_result == "win")
+			else:
+				defender_lost_lane = (round_result == "lose")
+			if defender_lost_lane and defender_card and is_instance_valid(defender_card) and defender_card.visible:
+				if not destroyed.has(defender_card):
+					destroyed.append(defender_card)
+
+	return destroyed
+
+
+func _add_destroyed_marker(card: Node) -> void:
+	if not card or not is_instance_valid(card):
+		return
+	if card.get_node_or_null("DestroyedMarker"):
+		return
+
+	var marker := Node2D.new()
+	marker.name = "DestroyedMarker"
+	marker.z_index = 100
+
+	var shadow_a := Line2D.new()
+	shadow_a.width = 10.0
+	shadow_a.default_color = Color(0.15, 0.0, 0.0, 0.85)
+	shadow_a.add_point(Vector2(-32, -46))
+	shadow_a.add_point(Vector2(32, 46))
+	shadow_a.z_index = 0
+	marker.add_child(shadow_a)
+
+	var shadow_b := Line2D.new()
+	shadow_b.width = 10.0
+	shadow_b.default_color = Color(0.15, 0.0, 0.0, 0.85)
+	shadow_b.add_point(Vector2(-32, 46))
+	shadow_b.add_point(Vector2(32, -46))
+	shadow_b.z_index = 0
+	marker.add_child(shadow_b)
+
+	var line_a := Line2D.new()
+	line_a.width = 6.0
+	line_a.default_color = Color(1.0, 0.12, 0.12, 0.95)
+	line_a.add_point(Vector2(-32, -46))
+	line_a.add_point(Vector2(32, 46))
+	line_a.z_index = 1
+	marker.add_child(line_a)
+
+	var line_b := Line2D.new()
+	line_b.width = 6.0
+	line_b.default_color = Color(1.0, 0.12, 0.12, 0.95)
+	line_b.add_point(Vector2(-32, 46))
+	line_b.add_point(Vector2(32, -46))
+	line_b.z_index = 1
+	marker.add_child(line_b)
+
+	card.add_child(marker)
 
 
 func _final_winner_bump_and_clear(winner_side: String) -> void:
@@ -1431,6 +1602,10 @@ func _apply_battle_resolution_state() -> void:
 				var synced_att: Dictionary = BattleSync.battle_placed_cards.get(attacker_id, {})
 				if not synced_att.is_empty():
 					attacker_slots = synced_att.duplicate(true)
+			# Keep only surviving attacker cards for conquest (attacker loses tie lanes too).
+			attacker_slots = _filter_surviving_attacker_slots(attacker_slots, is_defender)
+			if BattleStateManager:
+				BattleStateManager.set_attacking_slots(tid_str, attacker_slots)
 			var cards: Array = [null, null, null]
 			for idx in attacker_slots:
 				var c: Dictionary = attacker_slots[idx]
@@ -1470,6 +1645,25 @@ func _apply_battle_resolution_state() -> void:
 						TerritorySync.request_conquest_territory(int(tid_str), int(owner_id), cards)
 					else:
 						TerritoryClaimManager.apply_conquest_claim(int(tid_str), int(owner_id), cards)
+
+
+func _filter_surviving_attacker_slots(attacker_slots: Dictionary, local_is_defender: bool) -> Dictionary:
+	var survivors: Dictionary = attacker_slots.duplicate(true)
+	for p_idx in range(mini(_round_results.size(), 3)):
+		var rr := String(_round_results[p_idx])
+		var attacker_lost_lane := false
+		var attacker_slot_idx := p_idx
+		if local_is_defender:
+			# Opponent (attacker) occupies mirrored slot indices in local view.
+			attacker_slot_idx = 2 - p_idx
+			attacker_lost_lane = (rr == "win" or rr == "tie")
+		else:
+			# Local side is attacker.
+			attacker_lost_lane = (rr == "lose" or rr == "tie")
+		if attacker_lost_lane:
+			survivors.erase(attacker_slot_idx)
+			survivors.erase(str(attacker_slot_idx))
+	return survivors
 
 
 # ---------- SPECTATOR BATTLE RESOLUTION ----------

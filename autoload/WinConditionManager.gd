@@ -129,13 +129,19 @@ func _show_victory(player_id: int) -> void:
 
 
 func _on_main_menu_pressed() -> void:
-	get_tree().paused = false
-	monitoring = false
-	if _victory_overlay:
-		_victory_overlay.visible = false
+	reset_for_menu_return()
 	App.stop_all_music()
 	App.play_menu_music()
 	App.go("res://scenes/ui/MainMenu.tscn")
+
+
+## Hide win UI + unpause; does not navigate scenes or change music.
+func reset_for_menu_return() -> void:
+	if get_tree():
+		get_tree().paused = false
+	monitoring = false
+	if _victory_overlay:
+		_victory_overlay.visible = false
 
 
 # ---------- UI CONSTRUCTION ----------

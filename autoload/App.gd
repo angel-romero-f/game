@@ -927,6 +927,81 @@ func go(path: String) -> void:
 	call_deferred("_hook_buttons_on_current_scene")
 	call_deferred("_sync_music_for_current_scene")
 
+## Clears match/session singleton state when returning to top-level menus.
+## Preserves profile-ish fields: player_name, selected_race, next_scene, single_player_bot_difficulty.
+func reset_session_state_for_menu_return() -> void:
+	if get_tree():
+		get_tree().paused = false
+
+	# Close any global UI overlays that can survive scene changes.
+	if CardEnlargeOverlay and CardEnlargeOverlay.has_method("close_overlay"):
+		CardEnlargeOverlay.close_overlay()
+
+	# Stop win monitoring / hide victory overlay if we bailed mid-check.
+	if WinConditionManager and WinConditionManager.has_method("reset_for_menu_return"):
+		WinConditionManager.reset_for_menu_return()
+
+	# Always drop multiplayer transport if still connected (host menu back, mid-game quit, etc.).
+	if multiplayer.has_multiplayer_peer():
+		NetworkManager.disconnect_from_game()
+
+	# Hard-clear player lobby/sync dictionaries even if disconnect path missed something.
+	if PlayerDataSync:
+		PlayerDataSync.player_names.clear()
+		PlayerDataSync.player_races.clear()
+		PlayerDataSync.player_rolls.clear()
+		PlayerDataSync.register_bot_ids([])
+
+	# Phase + networked battle coordination tables.
+	if Net and Net.has_method("reset_phase_sync_state"):
+		Net.reset_phase_sync_state()
+
+	# Match/session flags and queues on App.
+	is_multiplayer = false
+	game_players.clear()
+	turn_order.clear()
+	game_victor_id = -1
+	is_battle_spectator = false
+	is_territory_battle_attacker = false
+	single_player_bot_controller = null
+	bot_card_collections.clear()
+	bot_initial_hand_dealt.clear()
+	territory_pending_attackers.clear()
+	territory_battle_resume_mode = ""
+	pending_territory_battle_ids.clear()
+	pending_territory_battle_attacker_id = -1
+	pending_territory_battle_defender_id = -1
+	pending_return_map_sub_phase = -1
+	returning_from_territory_minigame = false
+	returning_from_territory_battles = false
+	territory_manager = null
+
+	reset_lives()
+	reset_phase_state()
+	reset_territories()
+
+	minigame_time_remaining = -1.0
+	pending_minigame_reward.clear()
+	pending_bonus_reward.clear()
+	region_bonus_active = false
+	region_bonus_used_this_phase.clear()
+
+	player_hand.clear()
+	player_card_collection.clear()
+	battle_placed_cards.clear()
+
+	# Persisted territory claims + runtime battle slot state.
+	var tcs_path: String = "/root/" + "Territory" + "Claim" + "State"
+	var tcs: Node = get_node_or_null(tcs_path)
+	if tcs and tcs.has_method("clear_all"):
+		tcs.clear_all()
+
+	if BattleStateManager and BattleStateManager.has_method("clear_all_territories"):
+		BattleStateManager.clear_all_territories()
+
+	if DEBUG_LOGS:
+		print("[App] reset_session_state_for_menu_return(): session cleared")
+
 func _process(_delta: float) -> void:
 	var scene := get_tree().current_scene
 	var scene_path := String(scene.scene_file_path) if scene else ""

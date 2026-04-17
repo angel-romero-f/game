@@ -1,5 +1,5 @@
 extends Node
-const DEBUG_LOGS := false
+const DEBUG_LOGS := true
 
 ## BattleStateManager
 ## Runtime-only manager for per-territory battle state.
@@ -136,9 +136,12 @@ func process_battle_resolution(overall_result: String, local_won: bool, is_defen
 		is_winner = is_defender # defending wins ties
 	
 	if is_winner:
-		# Winner: only lose cards that lost their round
+		# Winner: lose cards that lost their lane.
+		# Tie lanes destroy the attacker card (defender keeps on tie).
 		for i in range(round_results.size()):
-			if round_results[i] == "lose":
+			var rr := String(round_results[i])
+			var destroyed_on_tie := (rr == "tie" and not is_defender)
+			if rr == "lose" or destroyed_on_tie:
 				if local_slots.has(i):
 					lost_slots[i] = local_slots[i]
 	else:
@@ -227,6 +230,12 @@ func clear_all_attacking_slots() -> void:
 	## to prevent stale attacking cards from previous battles triggering phantom battles.
 	for tid in _territories:
 		_territories[tid]["attacking_slots"] = {}
+
+
+## Drop all per-territory runtime battle state (used when returning to menus / leaving a session).
+func clear_all_territories() -> void:
+	_territories.clear()
+	current_territory_id = ""
 
 
 func get_defending_slots(territory_id: String = "") -> Dictionary:

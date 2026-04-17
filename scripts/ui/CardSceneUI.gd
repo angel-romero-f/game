@@ -43,7 +43,8 @@ func apply_race_textures(
 
 
 func apply_spectator_race_textures(player_sprite: Sprite2D, opponent_sprite: Sprite2D) -> void:
-	## Spectator: top sprite = Defender (back facing), bottom sprite = Attacker (front facing).
+	## Spectator uses the defender's vantage point:
+	## bottom/player sprite = Defender (front facing), top/opponent sprite = Attacker (back facing).
 	var attacker_id := App.pending_territory_battle_attacker_id
 	var defender_id := App.pending_territory_battle_defender_id
 	var attacker_race := "Fairy"
@@ -57,8 +58,8 @@ func apply_spectator_race_textures(player_sprite: Sprite2D, opponent_sprite: Spr
 			defender_race = r if r and r != "Unknown" else "Fairy"
 	var player_base_scale: Vector2 = player_sprite.scale if player_sprite else Vector2.ONE
 	var opponent_base_scale: Vector2 = opponent_sprite.scale if opponent_sprite else Vector2.ONE
-	_set_sprite_from_race(player_sprite, attacker_race, 1, DefaultRace.USE_GAME, player_base_scale)
-	_set_sprite_from_race(opponent_sprite, defender_race, 0, DefaultRace.USE_GAME, opponent_base_scale)
+	_set_sprite_from_race(player_sprite, defender_race, 1, DefaultRace.USE_GAME, player_base_scale)
+	_set_sprite_from_race(opponent_sprite, attacker_race, 0, DefaultRace.USE_GAME, opponent_base_scale)
 
 
 func setup_spectator_ui(
@@ -72,7 +73,7 @@ func setup_spectator_ui(
 	opponent_slot_nodes: Array,
 	scene_root: Node
 ) -> void:
-	## Spectator UI: hide timer, hide cards/slots, show battle status text.
+	## Spectator UI: keep the battle layout visible, but hide defender/player-only prompts.
 	if timer_label:
 		timer_label.visible = false
 	if timer_sub_label:
@@ -88,10 +89,10 @@ func setup_spectator_ui(
 
 	for slot in player_slot_nodes:
 		if slot:
-			slot.visible = false
+			slot.visible = true
 	for slot in opponent_slot_nodes:
 		if slot:
-			slot.visible = false
+			slot.visible = true
 
 	if scene_root:
 		var hand_container := scene_root.get_node_or_null("HandCardsLayer/HandCardsContainer") as Node2D
