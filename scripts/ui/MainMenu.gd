@@ -7,6 +7,8 @@ var credits_button: Button
 var status_label: Label
 
 func _ready() -> void:
+	App.reset_session_state_for_menu_return()
+
 	title_label = get_node_or_null("Card/Margin/VBoxContainer/TitleLabel")
 	play_button = get_node_or_null("Card/Margin/VBoxContainer/PlayButton")
 	settings_button = get_node_or_null("Card/Margin/VBoxContainer/SettingsButton")

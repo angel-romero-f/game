@@ -232,6 +232,12 @@ func clear_all_attacking_slots() -> void:
 		_territories[tid]["attacking_slots"] = {}
 
 
+## Drop all per-territory runtime battle state (used when returning to menus / leaving a session).
+func clear_all_territories() -> void:
+	_territories.clear()
+	current_territory_id = ""
+
+
 func get_defending_slots(territory_id: String = "") -> Dictionary:
 	var state := _get_state(territory_id)
 	return state.get("defending_slots", {}).duplicate(true)

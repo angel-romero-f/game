@@ -176,6 +176,10 @@ func request_skip_to_done() -> void: PhaseSync.request_skip_to_done()
 func reset_phase_sync_state() -> void:
 	PhaseController.full_reset()
 	BattleSync.reset_battle_state()
+	## Also clear transient card-battle tables + territory battle routing ids.
+	BattleSync.clear_battle_state()
+	BattleSync.territory_battle_attacker_id = -1
+	BattleSync.territory_battle_defender_id = -1
 
 # ---------- BATTLE METHODS (delegated to BattleSync) ----------
 func clear_battle_state() -> void: BattleSync.clear_battle_state()
