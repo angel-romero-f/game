@@ -135,6 +135,10 @@ func process_battle_resolution(overall_result: String, local_won: bool, is_defen
 	else: # tie
 		is_winner = is_defender # defending wins ties
 	
+	if DEBUG_LOGS: print("[BattleStateManager] process_battle_resolution INPUT: territory=%s overall=%s is_defender=%s is_winner=%s local_slots=%s round_results=%s" % [
+		territory_id, overall_result, str(is_defender), str(is_winner),
+		_slots_debug_string(local_slots), str(round_results)])
+
 	if is_winner:
 		# Winner: lose cards that lost their lane.
 		# Tie lanes destroy the attacker card (defender keeps on tie).
@@ -151,7 +155,10 @@ func process_battle_resolution(overall_result: String, local_won: bool, is_defen
 	# Update local slots by removing lost ones
 	for idx in lost_slots:
 		local_slots.erase(idx)
-	
+
+	if DEBUG_LOGS: print("[BattleStateManager] process_battle_resolution OUTPUT: lost_slots=%s remaining=%s" % [
+		_slots_debug_string(lost_slots), _slots_debug_string(local_slots)])
+
 	# Update territory-specific slot tracking
 	if is_defender:
 		state["defending_slots"] = local_slots.duplicate()
