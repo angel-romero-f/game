@@ -46,6 +46,12 @@ const PLAYER_FLASH_DURATION: float = 0.12
 const PERF_W: float = 110.0
 const PERF_H: float = 150.0
 const PERF_GAP: float = 28.0
+const SIMON_FLAGS_PATH := "res://assets/simonflags.pxo"
+const FLAG_BASE_MODULATE := Color(0.85, 0.85, 0.85, 1.0)
+const FLAG_BRIGHT_MODULATE := Color(1.2, 1.2, 1.2, 1.0)
+const FLAG_SCALE_MULTIPLIER: float = 1.9
+const GLOW_PADDING_X: float = 24.0
+const GLOW_PADDING_Y: float = 34.0
 
 const BASE_COLORS: Array = [
 	Color(0.72, 0.13, 0.13),  # Crimson
@@ -60,10 +66,10 @@ const BRIGHT_COLORS: Array = [
 	Color(1.0, 0.92, 0.45),
 ]
 const GLOW_COLORS: Array = [
-	Color(1.0, 0.3, 0.3, 0.35),
-	Color(0.3, 0.6, 1.0, 0.35),
-	Color(0.3, 1.0, 0.4, 0.35),
-	Color(1.0, 0.85, 0.3, 0.35),
+	Color(1.0, 1.0, 1.0, 0.35),   # White
+	Color(0.3, 0.6, 1.0, 0.35),   # Blue
+	Color(1.0, 0.62, 0.2, 0.35),  # Orange
+	Color(0.3, 1.0, 0.4, 0.35),   # Green
 ]
 
 # ── GAME STATE ──
@@ -76,12 +82,13 @@ var _input_index: int = 0
 
 # ── NODE REFERENCES (built at runtime) ──
 
-## Each entry: { container: Node2D, base_rect: ColorRect, glow_rect: ColorRect,
-##               num_label: Label, origin_y: float }
+## Each entry: { container: Node2D, glow_rect: ColorRect, flag_sprite: Sprite2D, origin_y: float }
 var _performers: Array = []
 var _status_label: Label = null
 var _round_label: Label = null
+var _keymap_label: Label = null
 var _pixel_font: Font = null
+var _simon_flags_frames: SpriteFrames = null
 
 
 # ══════════════════════════════════════════════════════════════
@@ -92,6 +99,7 @@ func _ready() -> void:
 	_setup_chorus_music()
 
 	_pixel_font = load("res://fonts/m5x7.ttf") as Font
+	_simon_flags_frames = load(SIMON_FLAGS_PATH) as SpriteFrames
 
 	if App.minigame_time_remaining <= 0.0:
 		App.reset_lives()
@@ -202,52 +210,42 @@ func _build_performers() -> void:
 		# Glow / spotlight — larger translucent rect behind, hidden by default
 		var glow := ColorRect.new()
 		glow.color = GLOW_COLORS[i]
-		var pad: float = 18.0
-		glow.size = Vector2(PERF_W + pad * 2, PERF_H + pad * 2)
-		glow.position = Vector2(-PERF_W / 2.0 - pad, -PERF_H / 2.0 - pad)
+		glow.size = Vector2(PERF_W + GLOW_PADDING_X * 2, PERF_H + GLOW_PADDING_Y * 2)
+		glow.position = Vector2(-PERF_W / 2.0 - GLOW_PADDING_X, -PERF_H / 2.0 - GLOW_PADDING_Y)
 		glow.z_index = -1
 		glow.visible = false
 		container.add_child(glow)
 
-		# Thin border
-		var border := ColorRect.new()
-		border.color = Color(0.9, 0.85, 0.7, 0.15)
-		border.size = Vector2(PERF_W + 4, PERF_H + 4)
-		border.position = Vector2(-PERF_W / 2.0 - 2, -PERF_H / 2.0 - 2)
-		border.z_index = 0
-		container.add_child(border)
-
-		# Performer block
-		var base := ColorRect.new()
-		base.color = BASE_COLORS[i]
-		base.size = Vector2(PERF_W, PERF_H)
-		base.position = Vector2(-PERF_W / 2.0, -PERF_H / 2.0)
-		base.z_index = 1
-		container.add_child(base)
-
-		# Number label
-		var lbl := Label.new()
-		lbl.text = str(i + 1)
-		if _pixel_font:
-			lbl.add_theme_font_override("font", _pixel_font)
-		lbl.add_theme_font_size_override("font_size", 38)
-		lbl.add_theme_color_override("font_color", Color(1.0, 0.95, 0.8, 0.9))
-		lbl.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.7))
-		lbl.add_theme_constant_override("outline_size", 4)
-		lbl.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-		lbl.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
-		lbl.size = Vector2(PERF_W, PERF_H)
-		lbl.position = Vector2(-PERF_W / 2.0, -PERF_H / 2.0)
-		lbl.z_index = 2
-		container.add_child(lbl)
+		# Simon flag sprite for this performer index (1–4 mapping to frames 0–3).
+		var flag_sprite := _create_flag_sprite(i)
+		flag_sprite.z_index = 1
+		container.add_child(flag_sprite)
 
 		_performers.append({
 			"container": container,
-			"base_rect": base,
 			"glow_rect": glow,
-			"num_label": lbl,
+			"flag_sprite": flag_sprite,
 			"origin_y": origin_y,
 		})
+
+func _create_flag_sprite(frame_index: int) -> Sprite2D:
+	var s := Sprite2D.new()
+	s.centered = true
+	s.texture_filter = CanvasItem.TEXTURE_FILTER_NEAREST
+	s.position = Vector2.ZERO
+	s.modulate = FLAG_BASE_MODULATE
+	if _simon_flags_frames and _simon_flags_frames.has_animation("default"):
+		var frame_count := _simon_flags_frames.get_frame_count("default")
+		if frame_count > 0:
+			var idx := clampi(frame_index, 0, frame_count - 1)
+			var tex := _simon_flags_frames.get_frame_texture("default", idx)
+			if tex:
+				s.texture = tex
+				var ts: Vector2 = tex.get_size()
+				if ts.x > 0.0 and ts.y > 0.0:
+					var scale_xy := minf(PERF_W / ts.x, PERF_H / ts.y) * FLAG_SCALE_MULTIPLIER
+					s.scale = Vector2.ONE * scale_xy
+	return s
 
 
 func _build_labels() -> void:
@@ -276,6 +274,20 @@ func _build_labels() -> void:
 	_round_label.position = Vector2(-100, -135)
 	_round_label.text = ""
 	add_child(_round_label)
+
+	# Input hint so players know flag order maps to number keys.
+	_keymap_label = Label.new()
+	if _pixel_font:
+		_keymap_label.add_theme_font_override("font", _pixel_font)
+	_keymap_label.add_theme_font_size_override("font_size", 18)
+	_keymap_label.add_theme_color_override("font_color", Color(0.85, 0.85, 0.95, 0.95))
+	_keymap_label.add_theme_color_override("font_outline_color", Color(0, 0, 0, 0.9))
+	_keymap_label.add_theme_constant_override("outline_size", 3)
+	_keymap_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_keymap_label.size = Vector2(560, 28)
+	_keymap_label.position = Vector2(-280, 172)
+	_keymap_label.text = "Flags map left-to-right: [1] [2] [3] [4]  (or click flags)"
+	add_child(_keymap_label)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -356,10 +368,10 @@ func _advance_round() -> void:
 func _activate_performer(index: int) -> void:
 	var p: Dictionary = _performers[index]
 	var container: Node2D = p["container"]
-	var base: ColorRect = p["base_rect"]
 	var glow: ColorRect = p["glow_rect"]
+	var flag_sprite: Sprite2D = p["flag_sprite"]
 
-	base.color = BRIGHT_COLORS[index]
+	flag_sprite.modulate = FLAG_BRIGHT_MODULATE
 	glow.visible = true
 
 	var tw := create_tween().set_parallel(true)
@@ -372,10 +384,10 @@ func _activate_performer(index: int) -> void:
 func _deactivate_performer(index: int) -> void:
 	var p: Dictionary = _performers[index]
 	var container: Node2D = p["container"]
-	var base: ColorRect = p["base_rect"]
 	var glow: ColorRect = p["glow_rect"]
+	var flag_sprite: Sprite2D = p["flag_sprite"]
 
-	base.color = BASE_COLORS[index]
+	flag_sprite.modulate = FLAG_BASE_MODULATE
 	glow.visible = false
 
 	var tw := create_tween().set_parallel(true)
@@ -387,10 +399,10 @@ func _flash_performer(index: int) -> void:
 	## Brief non-blocking activation for player-input feedback.
 	var p: Dictionary = _performers[index]
 	var container: Node2D = p["container"]
-	var base: ColorRect = p["base_rect"]
 	var glow: ColorRect = p["glow_rect"]
+	var flag_sprite: Sprite2D = p["flag_sprite"]
 
-	base.color = BRIGHT_COLORS[index]
+	flag_sprite.modulate = FLAG_BRIGHT_MODULATE
 	glow.visible = true
 	container.scale = Vector2(1.08, 1.08)
 	container.position.y = p["origin_y"] - 6.0
@@ -400,7 +412,7 @@ func _flash_performer(index: int) -> void:
 	var tw := create_tween()
 	tw.tween_interval(PLAYER_FLASH_DURATION)
 	tw.tween_callback(func():
-		base.color = BASE_COLORS[index]
+		flag_sprite.modulate = FLAG_BASE_MODULATE
 		glow.visible = false
 		container.scale = Vector2.ONE
 		container.position.y = p["origin_y"]

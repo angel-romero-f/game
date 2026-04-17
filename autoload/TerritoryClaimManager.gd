@@ -11,13 +11,14 @@ signal attack_registered(territory_id: int, attacking_cards: Array)
 
 ## Region ID -> minigame. Each territory's region_id picks which minigame runs.
 const REGION_MINIGAMES: Dictionary = {
-	1: { "name": "Courtly Cuisine", "scene": "res://scenes/CourtlyCuisineGame.tscn" },
-	2: { "name": "Bridge", "scene": "res://scenes/BridgeGame.tscn" },
-	3: { "name": "River crossing", "scene": "res://scenes/Game.tscn" },
-	4: { "name": "Conjurer's Chorus", "scene": "res://scenes/ConjurersChorusGame.tscn" },
-	5: { "name": "Cadence", "scene": "res://scenes/CadenceGame.tscn" },
-	6: { "name": "Ice fishing", "scene": "res://scenes/IceFishingGame.tscn" }
+	1: { "name": "Bridge", "scene": "res://scenes/BridgeGame.tscn"},
+	2: { "name": "Conjurer's Chorus", "scene": "res://scenes/ConjurersChorusGame.tscn" },
+	3: { "name": "Cadence", "scene": "res://scenes/CadenceGame.tscn" },
+	4: { "name": "River crossing", "scene": "res://scenes/Game.tscn" },
+	5: { "name": "Ice fishing", "scene": "res://scenes/IceFishingGame.tscn" },
+	6: { "name": "Courtly Cuisine", "scene": "res://scenes/CourtlyCuisineGame.tscn" }
 }
+
 
 var _territory_claim_state: Node = null
 

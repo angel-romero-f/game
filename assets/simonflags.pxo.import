@@ -1,0 +1,16 @@
+[remap]
+
+importer="sicilica.import.pixelorama"
+type="SpriteFrames"
+uid="uid://covg3m7tiuc0p"
+path="res://.godot/imported/simonflags.pxo-ad085c672c0e0ae1c866eeab650efbba.res"
+
+[deps]
+
+source_file="res://assets/simonflags.pxo"
+dest_files=["res://.godot/imported/simonflags.pxo-ad085c672c0e0ae1c866eeab650efbba.res"]
+
+[params]
+
+include_default_animation=true
+separate_layers=false
