@@ -6,7 +6,7 @@ This repo includes Cursor MCP config at `.cursor/mcp.json`. It expects:
 
 - **Node** on your PATH
 - **godot-mcp** built at `~/godot-mcp/build/index.js` (adjust `args` if yours differs)
-- **`GODOT_PROJECT_PATH`** = this folder (`/Users/noahvilla/CloverandClobber/game`)
+- **`GODOT_PROJECT_PATH`** = (`path/to/godot`)
 
 Enable the Godot MCP server in **Cursor → Settings → MCP**, then use your MCP client’s “run project” / Godot actions to start the game from the editor integration.
 
