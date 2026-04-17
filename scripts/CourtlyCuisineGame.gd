@@ -29,8 +29,8 @@ const PLATE_CONTACT_ADJUST: float = 165.0
 const LAYER_CONTACT_ADJUST: float = 20.0
 
 ## Fraction of ingredient width that must overlap the layer below to succeed.
-## 0.40 = 40% overlap required.  Lower = easier, higher = harder.
-const OVERLAP_THRESHOLD: float = 0.40
+## 0.55 = 55% overlap required. Lower = easier, higher = harder.
+const OVERLAP_THRESHOLD: float = 0.55
 
 ## Horizontal bounds for the moving ingredient's center position.
 ## These get widened automatically once we know ingredient width.
@@ -53,10 +53,10 @@ const PLATE_SCALE: float = 2.0
 
 ## "speed" controls horizontal oscillation in pixels/second.
 const SMORES_RECIPE: Array = [
-	{ "name": "Graham Cracker", "frame": FRAME_GRAHAM, "speed": 190.0 },
-	{ "name": "Chocolate", "frame": FRAME_CHOCOLATE, "speed": 235.0 },
-	{ "name": "Marshmallow", "frame": FRAME_MARSHMALLOW, "speed": 265.0 },
-	{ "name": "Graham Cracker", "frame": FRAME_GRAHAM, "speed": 295.0 },
+	{ "name": "Graham Cracker", "frame": FRAME_GRAHAM, "speed": 390.0 },
+	{ "name": "Chocolate", "frame": FRAME_CHOCOLATE, "speed": 435.0 },
+	{ "name": "Marshmallow", "frame": FRAME_MARSHMALLOW, "speed": 465.0 },
+	{ "name": "Graham Cracker", "frame": FRAME_GRAHAM, "speed": 495.0 },
 ]
 
 # ── Runtime state ────────────────────────────────────────────
