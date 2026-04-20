@@ -143,7 +143,8 @@ func _on_start_pressed() -> void:
 			PlayerDataSync.player_names.duplicate(true),
 			PlayerDataSync.player_races.duplicate(true),
 			PlayerDataSync.get_bot_ids_array(),
-			PlayerDataSync.bot_difficulties.duplicate(true)
+			PlayerDataSync.bot_difficulties.duplicate(true),
+			App.demo_seed
 		)
 
 func _on_back_pressed() -> void:
