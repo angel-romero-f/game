@@ -125,7 +125,7 @@ func _update_turn_banner() -> void:
 	if App.current_game_phase != App.GamePhase.CONTEST_COMMAND:
 		turn_banner_label.visible = false
 		return
-	if not App.is_multiplayer or not multiplayer.has_multiplayer_peer():
+	if not App.is_multiplayer or not _has_peer():
 		turn_banner_label.visible = false
 		return
 	var my_id := multiplayer.get_unique_id()
@@ -278,7 +278,7 @@ func _apply_contest_command_ui() -> void:
 	_hide_battle_selection_ui()
 	skip_to_battle_button.visible = true
 	skip_to_battle_button.text = "Done Placing Cards"
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+	if App.is_multiplayer and _has_peer():
 		var my_id := multiplayer.get_unique_id()
 		if PhaseController.current_turn_peer_id != my_id:
 			skip_to_battle_button.visible = false
@@ -333,7 +333,7 @@ func _apply_claiming_ui() -> void:
 	if ready_for_battle_button:
 		ready_for_battle_button.visible = false
 	minigames_counter_label.visible = false
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+	if App.is_multiplayer and _has_peer():
 		var my_id := multiplayer.get_unique_id()
 		if PhaseController.current_turn_peer_id != my_id:
 			skip_to_battle_button.visible = false
@@ -376,7 +376,7 @@ func _apply_resource_collection_ui() -> void:
 	_update_minigames_counter()
 	if App.is_multiplayer:
 		var should_disable_minigames := false
-		if multiplayer.has_multiplayer_peer():
+		if _has_peer():
 			var my_id := multiplayer.get_unique_id()
 			if PhaseController.player_done_state.get(my_id, false):
 				should_disable_minigames = true
@@ -412,7 +412,7 @@ func _apply_battle_ready_ui() -> void:
 		if battle_ui.is_battle_in_progress():
 			set_overlay_state(OverlayState.WAITING, "Battle in progress... waiting")
 			is_waiting_for_others = true
-		elif multiplayer.has_multiplayer_peer() and multiplayer.get_unique_id() != BattleSync.battle_decider_peer_id:
+		elif _has_peer() and multiplayer.get_unique_id() != BattleSync.battle_decider_peer_id:
 			var decider_name: String = battle_ui.get_decider_name()
 			set_overlay_state(OverlayState.WAITING, "Waiting for %s to choose..." % decider_name)
 		else:
@@ -434,7 +434,7 @@ func _apply_collect_ui() -> void:
 	_hide_battle_selection_ui()
 	minigames_counter_label.visible = false
 	var should_disable_minigames := false
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+	if App.is_multiplayer and _has_peer():
 		var my_id := multiplayer.get_unique_id()
 		if PhaseController.player_done_state.get(my_id, false):
 			should_disable_minigames = true
@@ -502,7 +502,7 @@ func _update_minigames_counter() -> void:
 	if not minigames_counter_label:
 		return
 	var count: int = App.minigames_completed_this_phase
-	if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+	if App.is_multiplayer and _has_peer():
 		var server_count: int = PhaseController.player_minigame_counts.get(multiplayer.get_unique_id(), 0)
 		count = maxi(count, server_count)
 	minigames_counter_label.text = "Minigames: %d/%d" % [count, App.MAX_MINIGAMES_PER_PHASE]
@@ -516,7 +516,7 @@ func on_skip_to_battle_pressed() -> void:
 	match App.current_game_phase:
 		App.GamePhase.CONTEST_COMMAND:
 			skip_to_battle_button.visible = false
-			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+			if App.is_multiplayer and _has_peer():
 				# Check for pending battles (attacks on enemy territories)
 				if BattleStateManager:
 					App.pending_territory_battle_ids = BattleStateManager.get_territory_ids_with_battle()
@@ -540,7 +540,7 @@ func on_skip_to_battle_pressed() -> void:
 			# server drives transitions, so do nothing here.
 			pass
 		App.GamePhase.COLLECT:
-			if App.is_multiplayer and multiplayer.has_multiplayer_peer():
+			if App.is_multiplayer and _has_peer():
 				var prev_phase := App.current_game_phase
 				App.skip_to_done()
 				if App.current_game_phase == prev_phase:
@@ -614,7 +614,7 @@ func _on_net_phase_changed(phase_id: int) -> void:
 func _on_turn_changed(_peer_id: int) -> void:
 	if intro_complete and not is_phase_overlay_animating:
 		apply_phase_ui()
-		if multiplayer.has_multiplayer_peer():
+		if _has_peer():
 			if DEBUG_LOGS: print("[CLIENT PhaseSystemUI] Turn changed → peer %d" % _peer_id)
 
 func _on_done_counts_updated(done: int, total: int) -> void:
@@ -649,7 +649,7 @@ func _on_battle_choices_updated(_snapshot: Dictionary) -> void:
 		_update_battle_selection_ui()
 
 func _on_battle_started(p1_id: int, p2_id: int, _side: String) -> void:
-	if not multiplayer.has_multiplayer_peer():
+	if not _has_peer():
 		return
 	var my_id := multiplayer.get_unique_id()
 	if my_id == p1_id or my_id == p2_id:
@@ -712,6 +712,9 @@ func _update_battle_selection_ui() -> void:
 		battle_ui.update_ui()
 
 # ---------- HELPERS ----------
+
+func _has_peer() -> bool:
+	return multiplayer != null and multiplayer.has_multiplayer_peer()
 
 func _get_player_name_for_peer(peer_id: int) -> String:
 	if PlayerDataSync.player_names.has(peer_id):

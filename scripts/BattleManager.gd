@@ -1776,6 +1776,9 @@ func _apply_battle_resolution_state() -> void:
 				var owner_id = tcs.call("get_owner_id", int(tid_str))
 				is_defender = (int(owner_id) == int(my_id))
 
+		if DEBUG_LOGS: print("[BattleManager] _apply_resolution: my_id=%d pending_defender_id=%d is_defender=%s result=%s _round_results=%s" % [
+			my_id, App.pending_territory_battle_defender_id, str(is_defender), result, str(_round_results)])
+
 		var lost_cards := BattleStateManager.process_battle_resolution(result, player_wins, is_defender, tid_str)
 		if not lost_cards.is_empty():
 			App.remove_placed_cards_from_collection_for_slots(lost_cards)
@@ -1832,6 +1835,15 @@ func _apply_battle_resolution_state() -> void:
 				var owner_id = tcs.call("get_owner_id", int(tid_str))
 				if owner_id != null:
 					var remaining: Dictionary = BattleStateManager.get_defending_slots(tid_str)
+					# Fallback: if defending_slots is unexpectedly empty after defender win, restore from TerritoryClaimState.
+					if remaining.is_empty() and tcs and tcs.has_method("get_cards"):
+						var tcs_cards: Array = tcs.call("get_cards", int(tid_str))
+						for slot_idx in range(mini(3, tcs_cards.size())):
+							if tcs_cards[slot_idx] != null and tcs_cards[slot_idx] is Dictionary:
+								remaining[slot_idx] = tcs_cards[slot_idx]
+						if not remaining.is_empty():
+							push_warning("[BattleManager] Defender won but defending_slots empty; restored from TCS for territory %s" % tid_str)
+					if DEBUG_LOGS: print("[BattleManager] Defender-wins path: remaining defending_slots=%s for territory %s" % [str(remaining), tid_str])
 					var cards: Array = [null, null, null]
 					for idx in remaining:
 						var c: Dictionary = remaining[idx]

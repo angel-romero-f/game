@@ -215,6 +215,12 @@ func _on_territory_selected(territory_id: int) -> void:
 		if claim_ui.has_method("show_defending_preview"):
 			claim_ui.show_defending_preview(territory_id)
 		return
+	# Prevent attacking a territory with 0 defending cards (prevents stuck state).
+	if is_claimed and owner_id != local_id:
+		if BattleStateManager and not BattleStateManager.has_defending_cards(str(territory_id)):
+			if claim_ui.has_method("show_already_claimed_message"):
+				claim_ui.show_already_claimed_message("This territory is undefended and cannot be attacked")
+			return
 	# Block non-turn interactions during Claiming and Card Command.
 	if is_card_command or is_claiming_phase:
 		if App.is_multiplayer and multiplayer.has_multiplayer_peer():

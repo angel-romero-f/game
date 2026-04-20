@@ -1,6 +1,10 @@
 extends Node
 const DEBUG_LOGS := false
 
+## Set to a non-zero value to make all RNG deterministic (for demos/testing).
+## Set to 0 for normal random behavior, or any other number for deterministic demo.
+var demo_seed: int = 42
+
 ## Simple scene navigation helper + small UI state
 var player_name: String = ""
 var next_scene: String = ""
@@ -802,6 +806,10 @@ var _last_scene_path_for_music: String = ""
 const MENU_MUSIC_LOOP_OFFSET: float = 1.39
 
 func _ready() -> void:
+	if demo_seed != 0:
+		seed(demo_seed)
+		print("[Demo] RNG seeded with: ", demo_seed)
+
 	# Ensure audio buses exist
 	_setup_audio_buses()
 
