@@ -92,6 +92,7 @@ var _phase: int = Phase.INTRO
 var _total_notes: int = 0
 var _hits: int = 0
 var _misses: int = 0
+var _wrong_presses: int = 0
 
 
 # ══════════════════════════════════════════════════════════════
@@ -99,8 +100,9 @@ var _misses: int = 0
 # ══════════════════════════════════════════════════════════════
 
 ## Runtime note list.  Each entry:
-##   { "lane": int, "hit_time": float,
-##     "node": Node2D or null, "state": &"pending" / &"active" / &"hit" / &"missed" }
+##   { "required_lanes": Array[int], "hit_time": float, "state": &"pending"/&"active"/&"hit"/&"missed",
+##     "pressed_lanes": Array[int], "nodes": Array[Node2D] }
+## Double notes have required_lanes with 2 elements; pressing both within the hit window scores a hit.
 var _notes: Array = []
 var _next_spawn_index: int = 0
 
@@ -243,7 +245,7 @@ func _start_song() -> void:
 	if ui and ui.has_method("update_timer_display"):
 		ui.update_timer_display(song_duration)
 	if ui and ui.has_method("update_accuracy_display"):
-		ui.update_accuracy_display(_hits, _total_notes)
+		ui.update_accuracy_display(_hits, _total_notes, _wrong_presses)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -259,7 +261,7 @@ func _process_playing() -> void:
 	if ui and ui.has_method("update_timer_display"):
 		ui.update_timer_display(maxf(0.0, song_duration - _song_clock))
 	if ui and ui.has_method("update_accuracy_display"):
-		ui.update_accuracy_display(_hits, _total_notes)
+		ui.update_accuracy_display(_hits, _total_notes, _wrong_presses)
 
 	var all_done := _song_clock >= song_duration and _all_notes_resolved()
 	var hard_cap := _song_clock >= song_duration + 2.0
@@ -279,27 +281,36 @@ func _spawn_pending_notes() -> void:
 
 
 func _spawn_note_visual(note: Dictionary) -> void:
-	var lane: int = note["lane"]
-	var cx: float = _lane_center_x(lane)
+	var is_double: bool = note["required_lanes"].size() > 1
+	note["nodes"] = []
 
-	var node := Node2D.new()
-	node.position = Vector2(cx, LANE_TOP_Y)
-	node.z_index = 5
+	for lane in note["required_lanes"]:
+		var cx: float = _lane_center_x(lane)
+		var node := Node2D.new()
+		node.position = Vector2(cx, LANE_TOP_Y)
+		node.z_index = 5
 
-	var flame := _make_firesong_sprite(_firesong_flame_frame_for_lane(lane), flame_sprite_size)
-	flame.position = Vector2.ZERO
-	node.add_child(flame)
+		var flame := _make_firesong_sprite(_firesong_flame_frame_for_lane(lane), flame_sprite_size)
+		flame.position = Vector2.ZERO
+		node.add_child(flame)
 
-	add_child(node)
-	note["node"] = node
+		if is_double:
+			# Golden tint to visually distinguish double notes
+			node.modulate = Color(1.4, 1.2, 0.4, 1.0)
+
+		add_child(node)
+		note["nodes"].append(node)
 
 
 func _update_note_positions() -> void:
 	for note in _notes:
-		var s = note["state"]
-		if (s == &"active") and note.has("node") and is_instance_valid(note["node"]):
-			var time_until_hit: float = note["hit_time"] - _song_clock
-			note["node"].position.y = HIT_LINE_Y - time_until_hit * note_scroll_speed
+		if note["state"] != &"active":
+			continue
+		var time_until_hit: float = note["hit_time"] - _song_clock
+		var y: float = HIT_LINE_Y - time_until_hit * note_scroll_speed
+		for node in note["nodes"]:
+			if is_instance_valid(node):
+				node.position.y = y
 
 
 func _check_missed_notes() -> void:
@@ -337,12 +348,12 @@ func _end_song() -> void:
 
 	var accuracy: float = 0.0
 	if _total_notes > 0:
-		accuracy = float(_hits) / float(_total_notes)
+		accuracy = maxf(0.0, float(_hits - _wrong_presses)) / float(_total_notes)
 
 	player_won = accuracy >= win_accuracy
 
-	print("[Minigame:Cadence] Song ended — %d/%d hits (%.0f%%). %s" % [
-		_hits, _total_notes, accuracy * 100.0, "WIN" if player_won else "LOSE"])
+	print("[Minigame:Cadence] Song ended — %d/%d hits, %d wrong (eff. %.0f%%). %s" % [
+		_hits, _total_notes, _wrong_presses, accuracy * 100.0, "WIN" if player_won else "LOSE"])
 
 	var ui := get_node_or_null("UI")
 	if player_won:
@@ -388,14 +399,31 @@ func _handle_lane_press(lane: int) -> void:
 	for note in _notes:
 		if note["state"] != &"active":
 			continue
-		if note["lane"] != lane:
+		if lane not in note["required_lanes"]:
 			continue
 		var diff: float = absf(_song_clock - note["hit_time"])
 		if diff <= hit_window_secs and diff < best_diff:
 			best_note = note
 			best_diff = diff
 
-	if not best_note.is_empty():
+	if best_note.is_empty():
+		# No active note in this lane — penalize the wrong press
+		_wrong_presses += 1
+		_flash_wrong(lane)
+		return
+
+	# Register this lane as pressed for the note
+	if lane not in best_note["pressed_lanes"]:
+		best_note["pressed_lanes"].append(lane)
+
+	# Single note, or all required lanes of a double note have been pressed
+	var all_pressed: bool = true
+	for req in best_note["required_lanes"]:
+		if req not in best_note["pressed_lanes"]:
+			all_pressed = false
+			break
+
+	if all_pressed:
 		best_note["state"] = &"hit"
 		_hits += 1
 		_pop_note(best_note)
@@ -414,24 +442,39 @@ func _flash_lane(lane: int) -> void:
 	tw.tween_property(flash, "modulate:a", 0.0, 0.12)
 
 
-func _pop_note(note: Dictionary) -> void:
-	if not note.has("node") or not is_instance_valid(note["node"]):
+func _flash_wrong(lane: int) -> void:
+	if lane < 0 or lane >= _lane_flash_rects.size():
 		return
-	var node: Node2D = note["node"]
-	var tw := create_tween().set_parallel(true)
-	tw.tween_property(node, "scale", Vector2(1.6, 1.6), 0.1)
-	tw.tween_property(node, "modulate:a", 0.0, 0.12)
-	tw.chain().tween_callback(node.queue_free)
+	var flash: ColorRect = _lane_flash_rects[lane]
+	var saved_color := flash.color
+	flash.color = Color(1.0, 0.1, 0.1, 0.7)
+	flash.modulate.a = 1.0
+	var tw := create_tween()
+	tw.tween_property(flash, "modulate:a", 0.0, 0.18)
+	tw.tween_callback(func():
+		if is_instance_valid(flash):
+			flash.color = saved_color
+	)
+
+
+func _pop_note(note: Dictionary) -> void:
+	for node in note.get("nodes", []):
+		if not is_instance_valid(node):
+			continue
+		var tw := create_tween().set_parallel(true)
+		tw.tween_property(node, "scale", Vector2(1.6, 1.6), 0.1)
+		tw.tween_property(node, "modulate:a", 0.0, 0.12)
+		tw.chain().tween_callback(node.queue_free)
 
 
 func _fade_note(note: Dictionary) -> void:
-	if not note.has("node") or not is_instance_valid(note["node"]):
-		return
-	var node: Node2D = note["node"]
-	node.modulate = Color(1, 0.3, 0.3, 0.5)
-	var tw := create_tween()
-	tw.tween_property(node, "modulate:a", 0.0, 0.25)
-	tw.tween_callback(node.queue_free)
+	for node in note.get("nodes", []):
+		if not is_instance_valid(node):
+			continue
+		node.modulate = Color(1, 0.3, 0.3, 0.5)
+		var tw := create_tween()
+		tw.tween_property(node, "modulate:a", 0.0, 0.25)
+		tw.tween_callback(node.queue_free)
 
 
 # ══════════════════════════════════════════════════════════════
@@ -585,22 +628,42 @@ func _build_intro_overlay() -> void:
 ## beat from song_offset up to (song_duration - end_padding).  The rhythm
 ## grid is fixed; only the lane assignment (0, 1, or 2) is randomized
 ## each run, giving the same song feel with different button patterns.
+## Double notes require both lanes to be pressed within the hit window.
 func _generate_chart() -> void:
 	_notes.clear()
 	_next_spawn_index = 0
 	_hits = 0
 	_misses = 0
+	_wrong_presses = 0
+
+	# Double note definitions (0-based index) — J=lane0, K=lane1, L=lane2
+	const DOUBLE_NOTE_LANES: Dictionary = {
+		6:  [0, 1],  # J + K
+		22: [1, 2],  # K + L
+		38: [0, 2],  # J + L
+		55: [0, 1],  # J + K
+	}
 
 	var quarter: float = 60.0 / bpm
 	var t: float = song_offset
+	var note_idx: int = 0
 
 	while t <= song_duration - end_padding:
+		var required_lanes: Array
+		if note_idx in DOUBLE_NOTE_LANES:
+			required_lanes = DOUBLE_NOTE_LANES[note_idx].duplicate()
+		else:
+			required_lanes = [randi_range(0, 2)]
+
 		_notes.append({
-			"lane": randi_range(0, 2),
+			"required_lanes": required_lanes,
 			"hit_time": t,
 			"state": &"pending",
+			"pressed_lanes": [],
+			"nodes": [],
 		})
 		t += quarter
+		note_idx += 1
 
 	_total_notes = _notes.size()
 

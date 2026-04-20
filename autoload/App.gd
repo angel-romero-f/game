@@ -820,6 +820,9 @@ var contest_music: AudioStreamPlayer
 var battle_music: AudioStreamPlayer
 var win_music: AudioStreamPlayer
 var lose_music: AudioStreamPlayer
+var victory_stinger: AudioStreamPlayer
+var defeat_stinger: AudioStreamPlayer
+var _pre_stinger_music: AudioStreamPlayer = null
 var ui_sfx: AudioStreamPlayer
 var blip_select_stream: AudioStream
 var _last_scene_path_for_music: String = ""
@@ -931,6 +934,27 @@ func _ready() -> void:
 		lose_stream.loop = false
 		lose_music.stream = lose_stream
 		if DEBUG_LOGS: print("Lose music loaded in App autoload")
+
+	# Game-end stingers: play once then resume background music.
+	victory_stinger = AudioStreamPlayer.new()
+	victory_stinger.name = "VictoryStinger"
+	victory_stinger.bus = "Music"
+	add_child(victory_stinger)
+	var victory_stream := _load_mp3_stream(["res://music/victory.mp3", "res://music/Victory.mp3"])
+	if victory_stream:
+		victory_stream.loop = false
+		victory_stinger.stream = victory_stream
+		if DEBUG_LOGS: print("Victory stinger loaded in App autoload")
+
+	defeat_stinger = AudioStreamPlayer.new()
+	defeat_stinger.name = "DefeatStinger"
+	defeat_stinger.bus = "Music"
+	add_child(defeat_stinger)
+	var defeat_stream := _load_mp3_stream(["res://music/Defeat.mp3", "res://music/defeat.mp3"])
+	if defeat_stream:
+		defeat_stream.loop = false
+		defeat_stinger.stream = defeat_stream
+		if DEBUG_LOGS: print("Defeat stinger loaded in App autoload")
 
 	# UI SFX (button blips, etc.)
 	ui_sfx = AudioStreamPlayer.new()
@@ -1281,6 +1305,10 @@ func stop_all_music() -> void:
 		win_music.stop()
 	if lose_music and lose_music.playing:
 		lose_music.stop()
+	if victory_stinger and victory_stinger.playing:
+		victory_stinger.stop()
+	if defeat_stinger and defeat_stinger.playing:
+		defeat_stinger.stop()
 
 func play_win_music() -> void:
 	stop_all_music()
@@ -1291,6 +1319,49 @@ func play_lose_music() -> void:
 	stop_all_music()
 	if lose_music and lose_music.stream:
 		lose_music.play()
+
+func _get_active_music_player() -> AudioStreamPlayer:
+	if menu_music and menu_music.playing:
+		return menu_music
+	if collect_music and collect_music.playing:
+		return collect_music
+	if command_music and command_music.playing:
+		return command_music
+	if contest_music and contest_music.playing:
+		return contest_music
+	if battle_music and battle_music.playing:
+		return battle_music
+	if main_music and main_music.playing:
+		return main_music
+	return null
+
+## Play Victory.mp3 once, then resume whatever background music was playing.
+func play_game_victory_stinger() -> void:
+	_pre_stinger_music = _get_active_music_player()
+	stop_all_music()
+	if victory_stinger and victory_stinger.stream:
+		if not victory_stinger.finished.is_connected(_on_victory_stinger_finished):
+			victory_stinger.finished.connect(_on_victory_stinger_finished)
+		victory_stinger.play()
+
+## Play Defeat.mp3 once, then resume whatever background music was playing.
+func play_game_defeat_stinger() -> void:
+	_pre_stinger_music = _get_active_music_player()
+	stop_all_music()
+	if defeat_stinger and defeat_stinger.stream:
+		if not defeat_stinger.finished.is_connected(_on_defeat_stinger_finished):
+			defeat_stinger.finished.connect(_on_defeat_stinger_finished)
+		defeat_stinger.play()
+
+func _on_victory_stinger_finished() -> void:
+	if _pre_stinger_music and _pre_stinger_music.stream:
+		_pre_stinger_music.play()
+	_pre_stinger_music = null
+
+func _on_defeat_stinger_finished() -> void:
+	if _pre_stinger_music and _pre_stinger_music.stream:
+		_pre_stinger_music.play()
+	_pre_stinger_music = null
 
 func sync_gameplay_music() -> void:
 	# Map should use collect music only.

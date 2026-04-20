@@ -148,14 +148,19 @@ func update_timer_display(time_left: float) -> void:
 
 # ── Accuracy display ──
 
-func update_accuracy_display(hits: int, total: int) -> void:
+func update_accuracy_display(hits: int, total: int, wrong: int = 0) -> void:
 	if not _accuracy_label:
 		return
 	if total == 0:
-		_accuracy_label.text = "Hits: 0 / 0"
+		_accuracy_label.text = "Acc: 0%"
 		return
-	var pct := int(float(hits) / float(total) * 100.0)
-	_accuracy_label.text = "Hits: %d / %d (%d%%)" % [hits, total, pct]
+	# Effective accuracy penalises wrong presses: each wrong cancels one hit
+	var effective_hits := maxi(0, hits - wrong)
+	var pct := int(float(effective_hits) / float(total) * 100.0)
+	if wrong > 0:
+		_accuracy_label.text = "Acc: %d%%  (-%d wrong)" % [pct, wrong]
+	else:
+		_accuracy_label.text = "Acc: %d%%  (%d / %d)" % [pct, hits, total]
 	if pct >= 75:
 		_accuracy_label.add_theme_color_override("font_color", Color(0.4, 1.0, 0.5, 1.0))
 	elif pct >= 50:

@@ -123,9 +123,9 @@ func _show_victory(player_id: int) -> void:
 				break
 
 	if local_id == player_id:
-		App.play_win_music()
+		App.play_game_victory_stinger()
 	else:
-		App.play_lose_music()
+		App.play_game_defeat_stinger()
 
 
 func _on_main_menu_pressed() -> void:
