@@ -274,7 +274,9 @@ func host_generate_and_sync_rolls() -> void:
 		push_warning("Only host can generate rolls")
 		return
 	player_rolls.clear()
-	for pid in player_races.keys():
+	var pids: Array = player_races.keys()
+	pids.sort()
+	for pid in pids:
 		player_rolls[pid] = App.game_rng.randi_range(1, 20) if App.demo_seed != 0 else randi_range(1, 20)
 	_resolve_roll_ties()
 	if DEBUG_LOGS: print("Host generated rolls: ", player_rolls)
@@ -286,16 +288,22 @@ func _resolve_roll_ties() -> void:
 	while attempts < max_attempts:
 		var has_ties := false
 		var roll_counts := {}
-		for pid in player_rolls.keys():
+		var sorted_pids: Array = player_rolls.keys()
+		sorted_pids.sort()
+		for pid in sorted_pids:
 			var roll_val: int = player_rolls[pid]
 			if not roll_counts.has(roll_val):
 				roll_counts[roll_val] = []
 			roll_counts[roll_val].append(pid)
-		for roll_val in roll_counts.keys():
+		var sorted_roll_vals: Array = roll_counts.keys()
+		sorted_roll_vals.sort()
+		for roll_val in sorted_roll_vals:
 			if roll_counts[roll_val].size() > 1:
 				has_ties = true
-				if DEBUG_LOGS: print("Tie at roll ", roll_val, " - rerolling for: ", roll_counts[roll_val])
-				for pid in roll_counts[roll_val]:
+				var tied: Array = roll_counts[roll_val]
+				tied.sort()
+				if DEBUG_LOGS: print("Tie at roll ", roll_val, " - rerolling for: ", tied)
+				for pid in tied:
 					player_rolls[pid] = App.game_rng.randi_range(1, 20) if App.demo_seed != 0 else randi_range(1, 20)
 		if not has_ties:
 			break
