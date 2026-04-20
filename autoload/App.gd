@@ -1147,6 +1147,10 @@ func setup_multiplayer_game() -> void:
 	single_player_bot_controller = null
 	territory_pending_attackers.clear()
 	territory_battle_resume_mode = ""
+	# Re-seed game_rng right before game-critical calls so all machines
+	# start from the exact same RNG state, regardless of what happened before.
+	if demo_seed != 0:
+		game_rng.seed = demo_seed
 	initialize_player_hand()
 	initialize_player_card_collection()
 	# Clear territory claims so all territories start unclaimed (multiplayer uses Net sync)
@@ -1157,8 +1161,11 @@ func setup_multiplayer_game() -> void:
 	
 	# Build player list from PlayerDataSync.player_names and PlayerDataSync.player_races
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
-	
-	for pid in PlayerDataSync.player_races.keys():
+
+	# Sort player IDs so game_players is in the same order on every machine
+	var sorted_pids: Array = PlayerDataSync.player_races.keys()
+	sorted_pids.sort()
+	for pid in sorted_pids:
 		var p := {
 			"id": int(pid),
 			"name": String(PlayerDataSync.player_names.get(pid, "Player")),
