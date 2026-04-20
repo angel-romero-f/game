@@ -714,7 +714,7 @@ func _update_battle_selection_ui() -> void:
 # ---------- HELPERS ----------
 
 func _has_peer() -> bool:
-	return multiplayer != null and _has_peer()
+	return multiplayer != null and multiplayer.has_multiplayer_peer()
 
 func _get_player_name_for_peer(peer_id: int) -> String:
 	if PlayerDataSync.player_names.has(peer_id):
