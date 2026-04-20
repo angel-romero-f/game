@@ -17,6 +17,9 @@ var _bot_collect_ran_for_current_zero_window: bool = false
 var _bot_turn_cooldown: float = 0.0
 ## Multiplayer: wall-clock delay between bot actions (frame delta is unreliable for visible pacing).
 var _mp_bot_placement_timer: Timer
+const MAX_INACTIVE_MP_WARNINGS := 10
+var _inactive_mp_warning_count: int = 0
+var _disable_mp_bot_processing: bool = false
 
 # Step-by-step placement state (shared by SP and MP paths).
 var _placing_active: bool = false
@@ -42,8 +45,7 @@ func _get_mp() -> MultiplayerAPI:
 
 
 func initialize_single_player_bots() -> void:
-	var mp := _get_mp()
-	if App.is_multiplayer and not (mp and mp.has_multiplayer_peer() and mp.is_server()):
+	if not _can_run_as_multiplayer_host():
 		return
 	_initialize_bot_hands_if_needed()
 	if not App.is_multiplayer and App.turn_order.size() > 0 and App.current_turn_player_id == -1:
@@ -52,8 +54,7 @@ func initialize_single_player_bots() -> void:
 
 
 func process_single_player_frame(delta: float) -> void:
-	var mp := _get_mp()
-	if App.is_multiplayer and not (mp and mp.has_multiplayer_peer() and mp.is_server()):
+	if not _can_run_as_multiplayer_host():
 		return
 	# Block bot actions while a phase transition overlay is animating
 	if App.phase_transition_animating:
@@ -87,12 +88,54 @@ func on_local_command_done() -> void:
 
 
 func on_battle_started_for_bots() -> void:
-	var mp := _get_mp()
-	if App.is_multiplayer and not (mp and mp.has_multiplayer_peer() and mp.is_server()):
+	if not _can_run_as_multiplayer_host():
 		return
 	for p in App.game_players:
 		if bool(p.get("is_bot", false)):
 			_battle_behavior.on_battle_started(int(p.get("id", -1)))
+
+
+func _can_run_as_multiplayer_host() -> bool:
+	# Single-player always allowed.
+	if not App.is_multiplayer:
+		return true
+	# We already observed an inactive multiplayer peer repeatedly; stop trying.
+	if _disable_mp_bot_processing:
+		return false
+
+	var mp := _get_mp()
+	if mp == null or not mp.has_multiplayer_peer() or mp.multiplayer_peer == null:
+		return false
+
+	# Avoid calling mp.is_server() while ENet is inactive/disconnected.
+	var enet_peer := mp.multiplayer_peer as ENetMultiplayerPeer
+	if enet_peer:
+		var status := enet_peer.get_connection_status()
+		if status != ENetMultiplayerPeer.CONNECTION_CONNECTED:
+			_report_inactive_mp_warning(status)
+			return false
+
+	if not mp.is_server():
+		return false
+
+	# Healthy again: reset warning state.
+	_inactive_mp_warning_count = 0
+	return true
+
+
+func _report_inactive_mp_warning(status: int) -> void:
+	if _inactive_mp_warning_count >= MAX_INACTIVE_MP_WARNINGS:
+		_disable_mp_bot_processing = true
+		return
+	_inactive_mp_warning_count += 1
+	push_warning(
+		"BotController: multiplayer peer inactive (status=%d); skipping bot frame [%d/%d]" % [
+			status, _inactive_mp_warning_count, MAX_INACTIVE_MP_WARNINGS
+		]
+	)
+	if _inactive_mp_warning_count >= MAX_INACTIVE_MP_WARNINGS:
+		_disable_mp_bot_processing = true
+		push_warning("BotController: reached inactive multiplayer warning limit; disabling multiplayer bot processing.")
 
 
 # ---------- BOT HAND INIT ----------
