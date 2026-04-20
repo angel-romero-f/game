@@ -28,8 +28,8 @@ func start_game(all_names: Dictionary = {}, all_races: Dictionary = {}, bot_ids:
 		PlayerDataSync.bot_difficulties = bot_difficulties.duplicate(true)
 	if demo_seed != 0:
 		App.demo_seed = demo_seed
-		seed(demo_seed)
-		print("[Demo] RNG seeded from host: ", demo_seed)
+		App.game_rng.seed = demo_seed
+		print("[Demo] Game RNG seeded from host: ", demo_seed)
 	App.setup_multiplayer_game()
 	App.go("res://scenes/ui/game_intro.tscn")
 

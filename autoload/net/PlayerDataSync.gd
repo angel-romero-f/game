@@ -138,15 +138,17 @@ func host_assign_bot_races_after_humans() -> void:
 	for race in RACES:
 		if not taken.has(race):
 			pool.append(race)
-	pool.shuffle()
+	if App.demo_seed != 0:
+		App.demo_shuffle(pool)
+	else:
+		pool.shuffle()
 	var idx := 0
 	for bid in need_race:
 		if idx < pool.size():
 			player_races[bid] = pool[idx]
 			idx += 1
 		else:
-			# Fallback if counts are inconsistent (should be rare)
-			player_races[bid] = RACES[randi() % RACES.size()]
+			player_races[bid] = RACES[App.game_rng.randi() % RACES.size()] if App.demo_seed != 0 else RACES[randi() % RACES.size()]
 
 
 func host_remove_bot() -> bool:
@@ -273,7 +275,7 @@ func host_generate_and_sync_rolls() -> void:
 		return
 	player_rolls.clear()
 	for pid in player_races.keys():
-		player_rolls[pid] = randi_range(1, 20)
+		player_rolls[pid] = App.game_rng.randi_range(1, 20) if App.demo_seed != 0 else randi_range(1, 20)
 	_resolve_roll_ties()
 	if DEBUG_LOGS: print("Host generated rolls: ", player_rolls)
 	_sync_player_rolls()
@@ -294,7 +296,7 @@ func _resolve_roll_ties() -> void:
 				has_ties = true
 				if DEBUG_LOGS: print("Tie at roll ", roll_val, " - rerolling for: ", roll_counts[roll_val])
 				for pid in roll_counts[roll_val]:
-					player_rolls[pid] = randi_range(1, 20)
+					player_rolls[pid] = App.game_rng.randi_range(1, 20) if App.demo_seed != 0 else randi_range(1, 20)
 		if not has_ties:
 			break
 		attempts += 1
@@ -350,7 +352,7 @@ func _resolve_single_player_ties() -> void:
 	for i in range(App.game_players.size()):
 		var current_roll: int = int(App.game_players[i].get("roll", 0))
 		if current_roll <= 0:
-			App.game_players[i]["roll"] = randi_range(1, 20)
+			App.game_players[i]["roll"] = App.game_rng.randi_range(1, 20) if App.demo_seed != 0 else randi_range(1, 20)
 			if DEBUG_LOGS: print("Fixed invalid roll for player: ", App.game_players[i].get("name", "Unknown"))
 	while attempts < max_attempts:
 		var has_ties := false
@@ -365,7 +367,7 @@ func _resolve_single_player_ties() -> void:
 				has_ties = true
 				if DEBUG_LOGS: print("Tie detected at roll ", roll, " - rerolling for tied players")
 				for idx in rolls_count[roll]:
-					var new_roll := randi_range(1, 20)
+					var new_roll: int = App.game_rng.randi_range(1, 20) if App.demo_seed != 0 else randi_range(1, 20)
 					App.game_players[idx]["roll"] = new_roll
 					if DEBUG_LOGS: print("  ", App.game_players[idx].get("name", "Unknown"), " rerolled: ", new_roll)
 		if not has_ties:

@@ -197,7 +197,7 @@ func _finish_current_roll() -> void:
 		push_warning("Invalid rolling player index: ", current_rolling_player_idx)
 		_finalize_turn_order()
 		return
-	var final_roll := randi_range(1, 20)
+	var final_roll: int = App.game_rng.randi_range(1, 20) if App.demo_seed != 0 else randi_range(1, 20)
 	App.game_players[current_rolling_player_idx]["roll"] = final_roll
 	var player_name: String = App.game_players[current_rolling_player_idx].get("name", "Player")
 	roll_result_label.text = str(final_roll)

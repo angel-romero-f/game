@@ -5,6 +5,18 @@ const DEBUG_LOGS := false
 ## Set to 0 for normal random behavior, or any other number for deterministic demo.
 var demo_seed: int = 42
 
+## Dedicated RNG for game-critical decisions (dice rolls, card shuffles, rewards).
+## Isolated from Godot's global RNG so network/UI noise can't desync it.
+var game_rng := RandomNumberGenerator.new()
+
+## Helper: shuffle an array using game_rng (Array.shuffle() uses global RNG).
+func demo_shuffle(arr: Array) -> void:
+	for i in range(arr.size() - 1, 0, -1):
+		var j := game_rng.randi_range(0, i)
+		var tmp = arr[i]
+		arr[i] = arr[j]
+		arr[j] = tmp
+
 ## Simple scene navigation helper + small UI state
 var player_name: String = ""
 var next_scene: String = ""
@@ -638,8 +650,11 @@ func initialize_player_hand(hand_size: int = 3) -> void:
 			card_pool = ORC_CARDS.duplicate()
 			if DEBUG_LOGS: print("[Hand] Using Infernal card pool")
 		_:
-			card_pool = MIXED_CARD_POOL.duplicate()	
-	card_pool.shuffle()
+			card_pool = MIXED_CARD_POOL.duplicate()
+	if demo_seed != 0:
+		demo_shuffle(card_pool)
+	else:
+		card_pool.shuffle()
 	for i in range(mini(hand_size, card_pool.size())):
 		player_hand.append(card_pool[i].duplicate())
 	if DEBUG_LOGS: print("[Hand] Initialized player hand with ", player_hand.size(), " cards")
@@ -687,7 +702,10 @@ func initialize_player_card_collection() -> void:
 			card_pool = ORC_CARDS.duplicate()
 		_:
 			card_pool = MIXED_CARD_POOL.duplicate()
-	card_pool.shuffle()
+	if demo_seed != 0:
+		demo_shuffle(card_pool)
+	else:
+		card_pool.shuffle()
 	for i in range(mini(4, card_pool.size())):
 		var c: Dictionary = card_pool[i].duplicate()
 		player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
@@ -699,7 +717,8 @@ func add_card_from_minigame_win() -> void:
 	var card_pool: Array = MIXED_CARD_POOL.duplicate()
 	if card_pool.is_empty():
 		return
-	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
+	var idx: int = game_rng.randi() % card_pool.size() if demo_seed != 0 else randi() % card_pool.size()
+	var c: Dictionary = card_pool[idx].duplicate()
 	player_card_collection.append({"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))})
 	if DEBUG_LOGS: print("[Cards] Added card from minigame win. Collection size: ", player_card_collection.size())
 	_notify_card_count_changed()
@@ -714,7 +733,8 @@ func pre_roll_minigame_reward_for_region(region_id: int) -> void:
 	if card_pool.is_empty():
 		pending_minigame_reward = {}
 		return
-	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
+	var idx: int = game_rng.randi() % card_pool.size() if demo_seed != 0 else randi() % card_pool.size()
+	var c: Dictionary = card_pool[idx].duplicate()
 	pending_minigame_reward = {"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))}
 	# Reset the persistent timer so the new minigame gets a fresh 30s
 	minigame_time_remaining = -1.0
@@ -729,7 +749,8 @@ func pre_roll_bonus_reward_for_region(region_id: int) -> void:
 	if card_pool.is_empty():
 		pending_bonus_reward = {}
 		return
-	var c: Dictionary = card_pool[randi() % card_pool.size()].duplicate()
+	var idx: int = game_rng.randi() % card_pool.size() if demo_seed != 0 else randi() % card_pool.size()
+	var c: Dictionary = card_pool[idx].duplicate()
 	pending_bonus_reward = {"path": c.get("sprite_frames", ""), "frame": int(c.get("frame_index", 0))}
 	if DEBUG_LOGS: print("[Cards] Pre-rolled region bonus reward: %s frame %d" % [pending_bonus_reward.get("path", ""), pending_bonus_reward.get("frame", 0)])
 
@@ -807,8 +828,8 @@ const MENU_MUSIC_LOOP_OFFSET: float = 1.39
 
 func _ready() -> void:
 	if demo_seed != 0:
-		seed(demo_seed)
-		print("[Demo] RNG seeded with: ", demo_seed)
+		game_rng.seed = demo_seed
+		print("[Demo] Game RNG seeded with: ", demo_seed)
 
 	# Ensure audio buses exist
 	_setup_audio_buses()
@@ -1065,10 +1086,16 @@ func setup_single_player_game() -> void:
 	for r in all_races:
 		if r != selected_race:
 			available_races.append(r)
-	available_races.shuffle()
-	
+	if demo_seed != 0:
+		demo_shuffle(available_races)
+	else:
+		available_races.shuffle()
+
 	var ai_names := ["Thorne", "Mira", "Grak", "Lyra", "Korrin", "Sable", "Dusk", "Ember"]
-	ai_names.shuffle()
+	if demo_seed != 0:
+		demo_shuffle(ai_names)
+	else:
+		ai_names.shuffle()
 	
 	for i in range(3):
 		var bot_id := i + 100  # AI IDs start at 100 (must match PlayerDataSync.is_bot_id SP rule)

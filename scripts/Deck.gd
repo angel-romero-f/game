@@ -49,8 +49,6 @@ func reset_spawned_flag() -> void:
 
 
 func _ready() -> void:
-	if App.demo_seed == 0:
-		randomize()
 	_update_deck_texture()
 	
 	if deck_area:
