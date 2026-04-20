@@ -50,6 +50,12 @@ var _has_returned: bool = false
 ## Seconds of countdown before the song begins.
 @export var intro_duration: float = 4.0
 
+## Seconds of input-live grace AFTER the countdown and BEFORE the music/notes
+## begin.  The chart is shifted forward by this much so that the first note
+## crosses the hit line the instant the music starts — nothing about the
+## music↔chart relationship changes.
+@export var play_grace_delay: float = 2.0
+
 
 # ══════════════════════════════════════════════════════════════
 #  TIMING (derived at runtime)
@@ -155,6 +161,7 @@ const FLASH_COLOR := Color(1.0, 0.95, 0.7, 0.35)
 ## Hook: for tighter sync, replace delta accumulation with:
 ##   _song_clock = _music_player.get_playback_position() + song_offset
 var _music_player: AudioStreamPlayer = null
+var _music_started: bool = false
 
 
 # ══════════════════════════════════════════════════════════════
@@ -230,20 +237,22 @@ func _process_intro() -> void:
 
 func _start_song() -> void:
 	_phase = Phase.PLAYING
+	_music_started = false
 
 	if _intro_label:
 		_intro_label.visible = false
 	if _countdown_label:
 		_countdown_label.visible = false
 
-	if _music_player and _music_player.stream:
-		_music_player.play()
+	# Music is NOT played here — it starts later in _process_playing when
+	# _song_clock reaches play_grace_delay, so the chart's first note and
+	# the music both begin on the same _song_clock tick.
 
 	var ui := get_node_or_null("UI")
 	if ui and ui.has_method("on_song_started"):
 		ui.on_song_started()
 	if ui and ui.has_method("update_timer_display"):
-		ui.update_timer_display(song_duration)
+		ui.update_timer_display(song_duration + play_grace_delay)
 	if ui and ui.has_method("update_accuracy_display"):
 		ui.update_accuracy_display(_hits, _total_notes, _wrong_presses)
 
@@ -253,18 +262,28 @@ func _start_song() -> void:
 # ══════════════════════════════════════════════════════════════
 
 func _process_playing() -> void:
+	# Fire the music exactly when the clock reaches the grace delay — same
+	# tick the first note arrives at the hit line, so they're perfectly
+	# synced regardless of frame pacing.
+	if not _music_started and _song_clock >= play_grace_delay:
+		_music_started = true
+		if _music_player and _music_player.stream:
+			_music_player.play()
+
 	_spawn_pending_notes()
 	_update_note_positions()
 	_check_missed_notes()
 
 	var ui := get_node_or_null("UI")
 	if ui and ui.has_method("update_timer_display"):
-		ui.update_timer_display(maxf(0.0, song_duration - _song_clock))
+		var time_left := song_duration + play_grace_delay - _song_clock
+		ui.update_timer_display(maxf(0.0, time_left))
 	if ui and ui.has_method("update_accuracy_display"):
 		ui.update_accuracy_display(_hits, _total_notes, _wrong_presses)
 
-	var all_done := _song_clock >= song_duration and _all_notes_resolved()
-	var hard_cap := _song_clock >= song_duration + 2.0
+	var song_end_clock := song_duration + play_grace_delay
+	var all_done := _song_clock >= song_end_clock and _all_notes_resolved()
+	var hard_cap := _song_clock >= song_end_clock + 2.0
 	if all_done or hard_cap:
 		_end_song()
 
@@ -637,18 +656,27 @@ func _generate_chart() -> void:
 	_wrong_presses = 0
 
 	# Double note definitions (0-based index) — J=lane0, K=lane1, L=lane2
+	# Indices 6/22/38/54 correspond to the 7th/23rd/39th/55th notes.
 	const DOUBLE_NOTE_LANES: Dictionary = {
-		6:  [0, 1],  # J + K
-		22: [1, 2],  # K + L
-		38: [0, 2],  # J + L
-		55: [0, 1],  # J + K
+		6:  [0, 1],  # 7th note  — J + K
+		22: [1, 2],  # 23rd note — K + L
+		38: [0, 2],  # 39th note — J + L
+		54: [0, 1],  # 55th note — J + K
 	}
 
 	var quarter: float = 60.0 / bpm
-	var t: float = song_offset
+	# Push the entire chart forward by play_grace_delay so the first note
+	# arrives at the hit line AFTER the countdown ends, giving the player
+	# input-live reaction time.  Music starts on the same _song_clock tick,
+	# so the chart stays strictly synced with the audio.
+	var t: float = song_offset + play_grace_delay
 	var note_idx: int = 0
 
-	while t <= song_duration - end_padding:
+	# Upper bound is shifted by play_grace_delay too, so notes cover the full
+	# music duration — the chart now runs from _song_clock = play_grace_delay
+	# (first note, music starts) through _song_clock = play_grace_delay +
+	# song_duration (last note, music ends).
+	while t <= song_duration + play_grace_delay - end_padding:
 		var required_lanes: Array
 		if note_idx in DOUBLE_NOTE_LANES:
 			required_lanes = DOUBLE_NOTE_LANES[note_idx].duplicate()
