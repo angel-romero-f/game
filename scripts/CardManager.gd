@@ -110,6 +110,8 @@ func _connect_card(card: Node2D):
 			area.mouse_exited.connect(_on_card_mouse_exited.bind(card))
 
 func _on_card_input_event(_viewport: Node, event: InputEvent, _shape_idx: int, card: Node2D):
+	if _is_card_input_blocked(card):
+		return
 	# Don't process input if card is currently enlarged
 	if enlarged_card == card:
 		return
@@ -148,6 +150,8 @@ func disable_dragging() -> void:
 	dragging_enabled = false
 
 func _on_card_mouse_entered(card: Node2D):
+	if _is_card_input_blocked(card):
+		return
 	# Don't hover effect if card is being dragged
 	if card == dragged_card:
 		return
@@ -156,6 +160,8 @@ func _on_card_mouse_entered(card: Node2D):
 	_scale_card_up(card)
 
 func _on_card_mouse_exited(card: Node2D):
+	if _is_card_input_blocked(card):
+		return
 	# Don't scale down if card is being dragged
 	if card == dragged_card:
 		return
@@ -186,6 +192,8 @@ func _scale_card_down(card: Node2D):
 	tween.tween_property(card, "scale", original_scale, 0.2)
 
 func _start_drag(card: Node2D, mouse_pos: Vector2):
+	if _is_card_input_blocked(card):
+		return
 	# Don't allow dragging if card is enlarged
 	if enlarged_card == card:
 		return
@@ -208,6 +216,11 @@ func _start_drag(card: Node2D, mouse_pos: Vector2):
 		parent.move_child(card, -1)
 	
 	card_drag_started.emit(card)
+
+
+func _is_card_input_blocked(card: Node2D) -> bool:
+	# Used by spectator/opponent backs so only sync logic can move them.
+	return card != null and bool(card.get_meta("disable_card_input", false))
 
 func _end_drag():
 	if dragged_card:

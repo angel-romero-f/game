@@ -1,5 +1,7 @@
 extends Node
 const DEBUG_LOGS := false
+## Verbose logs for spectator card-back sync (BattleSync + BSM merge). Set false to silence.
+const SPECTATOR_SYNC_DEBUG := true
 
 ## BattleManager
 ## Orchestrates: opponent backs on entry, start-battle gating, flip animation,
@@ -69,6 +71,8 @@ var _player_sprite: Sprite2D
 var _opponent_sprite: Sprite2D
 
 var _opponent_cards_by_slot: Dictionary = {} # slot -> card
+## Spectator: face-down backs on defender row (player slots). Incrementally updated; freed immediately on change.
+var _spectator_defender_back_by_slot: Dictionary = {} # CardSlot Node -> card Node
 
 var _is_multiplayer: bool = false
 var _is_spectator: bool = false
@@ -114,10 +118,9 @@ func _ready() -> void:
 	if _is_multiplayer:
 		# Server already cleared battle state before scene transition (in BattleSync).
 		# Do NOT clear here — it races with the other player's sync.
-		if BattleSync.battle_cards_updated.is_connected(_on_battle_cards_updated):
-			BattleSync.battle_cards_updated.disconnect(_on_battle_cards_updated)
-		if not _is_spectator:
-			BattleSync.battle_cards_updated.connect(_on_battle_cards_updated)
+		if BattleSync.battle_cards_updated.is_connected(_on_battle_cards_updated_unified):
+			BattleSync.battle_cards_updated.disconnect(_on_battle_cards_updated_unified)
+		BattleSync.battle_cards_updated.connect(_on_battle_cards_updated_unified)
 		if BattleSync.battle_start_requested.is_connected(_on_battle_start_requested):
 			BattleSync.battle_start_requested.disconnect(_on_battle_start_requested)
 		BattleSync.battle_start_requested.connect(_on_battle_start_requested)
@@ -129,8 +132,8 @@ func _ready() -> void:
 			_card_scene_ui.setup_spectator_ui(_timer_label, _timer_sub_label, _continue_label, _leave_button, _debug_add_card_button, _result_label, _player_slot_nodes, _opponent_slot_nodes, get_parent() if get_parent() else get_tree().current_scene)
 			if not _card_scene_ui.leave_pressed.is_connected(_on_leave_pressed):
 				_card_scene_ui.leave_pressed.connect(_on_leave_pressed)
-		# Run card-back setup after the scene has had a chance to receive battle state.
-		call_deferred("_setup_spectator_card_backs")
+		# Ask server for full battle_placed_cards, then build backs (handles late-loading spectators).
+		call_deferred("_spectator_initial_sync_and_backs")
 	else:
 		_setup_ui()
 
@@ -403,6 +406,13 @@ func _restore_cards_to_slots(placed: Dictionary) -> void:
 		_card_manager.call_deferred("respace_hand_cards")
 
 
+func _on_battle_cards_updated_unified() -> void:
+	if _is_spectator:
+		_on_spectator_battle_cards_updated()
+	else:
+		_on_battle_cards_updated()
+
+
 func _on_battle_cards_updated() -> void:
 	## Refresh opponent slots with face-down cards from remote player(s).
 	var state_name: String = ["SETUP", "WAITING_FOR_PLAYER", "WAITING_FOR_ALL_READY", "FLIPPING", "RESOLVED"][clampi(state, 0, 4)]
@@ -411,6 +421,201 @@ func _on_battle_cards_updated() -> void:
 		_update_opponent_cards_from_net()
 	else:
 		if DEBUG_LOGS: print("[BattleManager] _on_battle_cards_updated: SKIPPED (state=%s)" % state_name)
+
+
+func _on_spectator_battle_cards_updated() -> void:
+	## Live-update face-down backs when attackers/defenders move cards (same RPC as fighters).
+	if not _is_spectator:
+		return
+	var state_name: String = ["SETUP", "WAITING_FOR_PLAYER", "WAITING_FOR_ALL_READY", "FLIPPING", "RESOLVED"][clampi(state, 0, 4)]
+	if state != State.WAITING_FOR_PLAYER and state != State.WAITING_FOR_ALL_READY:
+		if SPECTATOR_SYNC_DEBUG:
+			print("[BattleManager][Spectator] battle_cards_updated skipped (state=%s)" % state_name)
+		return
+	if SPECTATOR_SYNC_DEBUG:
+		var mp := get_tree().get_multiplayer() if get_tree() else null
+		var uid: int = mp.get_unique_id() if mp and mp.has_multiplayer_peer() else -1
+		var ids := _resolve_spectator_territory_participant_ids()
+		print("[BattleManager][Spectator] battle_cards_updated peer=%s keys=%s sync_att=%s sync_def=%s resolved_att=%s resolved_def=%s pending_att=%s pending_def=%s" % [
+			uid,
+			str(BattleSync.battle_placed_cards.keys()) if BattleSync else "?",
+			str(BattleSync.territory_battle_attacker_id) if BattleSync else "?",
+			str(BattleSync.territory_battle_defender_id) if BattleSync else "?",
+			ids.get("attacker_id", -1),
+			ids.get("defender_id", -1),
+			App.pending_territory_battle_attacker_id if App else -1,
+			App.pending_territory_battle_defender_id if App else -1,
+		])
+	_setup_spectator_card_backs()
+
+
+func _spectator_initial_sync_and_backs() -> void:
+	if not _is_spectator:
+		return
+	if _is_multiplayer and BattleSync:
+		if SPECTATOR_SYNC_DEBUG:
+			print("[BattleManager][Spectator] request_full_sync then setup backs")
+		BattleSync.request_full_sync()
+	_setup_spectator_card_backs()
+
+
+func _spectator_slot_has_card(slots: Dictionary, slot_idx: int) -> bool:
+	if slots.is_empty():
+		return false
+	var data: Variant = slots.get(slot_idx, null)
+	if data == null:
+		data = slots.get(str(slot_idx), null)
+	if data == null:
+		for k in slots.keys():
+			if str(k) == str(slot_idx):
+				data = slots[k]
+				break
+	if data == null or not (data is Dictionary):
+		return false
+	return not String((data as Dictionary).get("path", "")).is_empty()
+
+
+func _spectator_key_matches_peer_id(raw_key: Variant, peer_id: int) -> bool:
+	if raw_key == null:
+		return false
+	if raw_key is int:
+		return int(raw_key) == peer_id
+	if raw_key is float:
+		return int(raw_key) == peer_id
+	var as_str: String = str(raw_key)
+	if as_str == str(peer_id):
+		return true
+	# Handle serialized numeric strings like "-101.0"
+	if as_str.is_valid_float():
+		return int(float(as_str)) == peer_id
+	return false
+
+
+func _spectator_get_placed_for_peer(peer_id: int) -> Dictionary:
+	if peer_id < 0 or not BattleSync:
+		return {}
+	var raw: Dictionary = BattleSync.battle_placed_cards
+	var v: Variant = raw.get(peer_id, null)
+	if v == null:
+		v = raw.get(str(peer_id), null)
+	if v == null:
+		for k in raw.keys():
+			if _spectator_key_matches_peer_id(k, peer_id):
+				v = raw[k]
+				break
+	if v is Dictionary:
+		return (v as Dictionary).duplicate(true)
+	return {}
+
+
+func _spectator_should_show_back_for_side(slot_idx: int, net_side: Dictionary, bsm_side: Dictionary) -> bool:
+	## Prefer networked placement when available; otherwise fall back to BSM seed state.
+	if not net_side.is_empty():
+		return _spectator_slot_has_card(net_side, slot_idx)
+	return _spectator_slot_has_card(bsm_side, slot_idx)
+
+
+func _spectator_peer_id_plausible(pid: int) -> bool:
+	if pid == -1:
+		return false
+	# Lobby/bot ids (see PlayerDataSync.BOT_ID_BASE)
+	if pid <= -95 and pid >= -110:
+		return true
+	if pid > 0 and pid < 1_000_000:
+		return true
+	return false
+
+
+func _resolve_spectator_territory_participant_ids() -> Dictionary:
+	## Prefer App.pending_* (set in App.enter_territory_battle); BattleSync can be wrong on some frames.
+	## Ignore garbage ints (large positive) seen as stale RPC/desync values.
+	var att: int = BattleSync.territory_battle_attacker_id if BattleSync else -1
+	var def: int = BattleSync.territory_battle_defender_id if BattleSync else -1
+	if App:
+		if _spectator_peer_id_plausible(App.pending_territory_battle_attacker_id):
+			att = App.pending_territory_battle_attacker_id
+		if _spectator_peer_id_plausible(App.pending_territory_battle_defender_id):
+			def = App.pending_territory_battle_defender_id
+	if not _spectator_peer_id_plausible(def):
+		def = -1
+		var tid_str := BattleStateManager.current_territory_id if BattleStateManager else ""
+		if not tid_str.is_empty() and str(tid_str).is_valid_int():
+			var tcs := get_node_or_null("/root/TerritoryClaimState")
+			if tcs and tcs.has_method("get_owner_id"):
+				var ov: Variant = tcs.call("get_owner_id", int(tid_str))
+				if ov != null:
+					def = int(ov)
+	if not _spectator_peer_id_plausible(att):
+		att = -1
+		var tid_str2 := BattleStateManager.current_territory_id if BattleStateManager else ""
+		if App and not tid_str2.is_empty() and str(tid_str2).is_valid_int():
+			var tid_i := int(tid_str2)
+			if App.territory_pending_attackers.has(tid_i):
+				att = int(App.territory_pending_attackers[tid_i])
+	if not _spectator_peer_id_plausible(att) and BattleSync and _spectator_peer_id_plausible(BattleSync.territory_battle_attacker_id):
+		att = BattleSync.territory_battle_attacker_id
+	if not _spectator_peer_id_plausible(def) and BattleSync and _spectator_peer_id_plausible(BattleSync.territory_battle_defender_id):
+		def = BattleSync.territory_battle_defender_id
+	return {"attacker_id": att, "defender_id": def}
+
+
+func _spectator_free_card_immediate(card: Node) -> void:
+	if card and is_instance_valid(card):
+		card.free()
+
+
+func _spectator_apply_back_to_slot(slot: Node, want_back: bool, tracked: Dictionary) -> void:
+	if not slot:
+		return
+	var existing: Variant = tracked.get(slot, null)
+	var slot_name: String = String(slot.name) if slot else "<null>"
+	if want_back:
+		if existing and is_instance_valid(existing):
+			if SPECTATOR_SYNC_DEBUG:
+				print("[BattleManager][Spectator] slot %s KEEP back (id=%s)" % [slot_name, existing.get_instance_id()])
+			existing.card_sprite_frames = CARD_BACK_FRAMES
+			existing.frame_index = CARD_BACK_FRAME_INDEX
+			if slot.has_method("force_snap_card"):
+				slot.force_snap_card(existing)
+			return
+		var card := CARD_SCENE.instantiate()
+		if not card:
+			return
+		get_tree().current_scene.add_child(card)
+		card.set_meta("disable_card_input", true)
+		var area := card.get_node_or_null("Card_Collision") as Area2D
+		if area:
+			area.input_pickable = false
+		card.card_sprite_frames = CARD_BACK_FRAMES
+		card.frame_index = CARD_BACK_FRAME_INDEX
+		if slot.has_method("force_snap_card"):
+			slot.force_snap_card(card)
+		tracked[slot] = card
+		if SPECTATOR_SYNC_DEBUG:
+			print("[BattleManager][Spectator] slot %s SPAWN back (id=%s)" % [slot_name, card.get_instance_id()])
+	else:
+		if existing and is_instance_valid(existing):
+			if SPECTATOR_SYNC_DEBUG:
+				print("[BattleManager][Spectator] slot %s REMOVE back (id=%s)" % [slot_name, existing.get_instance_id()])
+			if slot.has_method("unsnap_card"):
+				slot.unsnap_card()
+			_spectator_free_card_immediate(existing)
+			tracked.erase(slot)
+
+
+func _spectator_dispose_all_tracked_backs() -> void:
+	for slot in _spectator_defender_back_by_slot.keys():
+		var c: Variant = _spectator_defender_back_by_slot[slot]
+		if slot and is_instance_valid(slot) and slot.has_method("unsnap_card") and slot.get("snapped_card") == c:
+			slot.unsnap_card()
+		_spectator_free_card_immediate(c as Node)
+	_spectator_defender_back_by_slot.clear()
+	for slot in _opponent_cards_by_slot.keys():
+		var c2: Variant = _opponent_cards_by_slot[slot]
+		if slot and is_instance_valid(slot) and slot.has_method("unsnap_card") and slot.get("snapped_card") == c2:
+			slot.unsnap_card()
+		_spectator_free_card_immediate(c2 as Node)
+	_opponent_cards_by_slot.clear()
 
 
 func _on_battle_start_requested() -> void:
@@ -489,6 +694,7 @@ func _update_opponent_cards_from_net() -> void:
 			else:
 				var card := CARD_SCENE.instantiate()
 				get_tree().current_scene.add_child(card)
+				card.set_meta("disable_card_input", true)
 				var area := card.get_node_or_null("Card_Collision") as Area2D
 				if area:
 					area.input_pickable = false
@@ -520,56 +726,46 @@ func _clear_opponent_slot_cards() -> void:
 
 func _setup_spectator_card_backs() -> void:
 	## Spectators see the defender's battle layout with all cards face-down and non-interactive.
-	_clear_player_slots()
-	_clear_opponent_slot_cards()
+	## Incrementally update per slot and use immediate free() so queue_free cannot stack ghost cards.
+	if not _is_spectator:
+		return
+	var ids: Dictionary = _resolve_spectator_territory_participant_ids()
+	var defender_id: int = int(ids.get("defender_id", -1))
+	var attacker_id: int = int(ids.get("attacker_id", -1))
 
 	var tid: String = BattleStateManager.current_territory_id if BattleStateManager else ""
-	var defender_slots: Dictionary = {}
-	var attacker_slots: Dictionary = {}
+	var bsm_def: Dictionary = BattleStateManager.get_defending_slots(tid) if (BattleStateManager and not tid.is_empty()) else {}
+	var bsm_att: Dictionary = BattleStateManager.get_attacking_slots(tid) if (BattleStateManager and not tid.is_empty()) else {}
+	var net_def: Dictionary = _spectator_get_placed_for_peer(defender_id)
+	var net_att: Dictionary = _spectator_get_placed_for_peer(attacker_id)
 
-	if _is_multiplayer and BattleSync:
-		var defender_id := BattleSync.territory_battle_defender_id
-		var attacker_id := BattleSync.territory_battle_attacker_id
-		defender_slots = BattleSync.battle_placed_cards.get(defender_id, {}).duplicate(true)
-		attacker_slots = BattleSync.battle_placed_cards.get(attacker_id, {}).duplicate(true)
+	if SPECTATOR_SYNC_DEBUG:
+		print("[BattleManager][Spectator] setup backs tid=%s def_id=%s att_id=%s net_def_keys=%s net_att_keys=%s bsm_def=%s bsm_att=%s tracked_def=%d tracked_att=%d" % [
+			tid,
+			defender_id,
+			attacker_id,
+			str(net_def.keys()),
+			str(net_att.keys()),
+			_debug_slots_summary(bsm_def),
+			_debug_slots_summary(bsm_att),
+			_spectator_defender_back_by_slot.size(),
+			_opponent_cards_by_slot.size(),
+		])
 
-	if BattleStateManager and not tid.is_empty():
-		if defender_slots.is_empty():
-			defender_slots = BattleStateManager.get_defending_slots(tid)
-		if attacker_slots.is_empty():
-			attacker_slots = BattleStateManager.get_attacking_slots(tid)
-
+	# Bottom row = defender vantage (player slots); top = attacker (opponent slots).
 	for slot_idx in range(_player_slot_nodes.size()):
-		var slot: Node = _player_slot_nodes[slot_idx]
-		if not slot:
+		var slot_p: Node = _player_slot_nodes[slot_idx]
+		if not slot_p:
 			continue
-		if defender_slots.has(slot_idx) or defender_slots.has(str(slot_idx)):
-			_spawn_card_back_in_slot(slot, false)
+		var want_def: bool = _spectator_should_show_back_for_side(slot_idx, net_def, bsm_def)
+		_spectator_apply_back_to_slot(slot_p, want_def, _spectator_defender_back_by_slot)
 
 	for slot_idx in range(_opponent_slot_nodes.size()):
-		var slot: Node = _opponent_slot_nodes[slot_idx]
-		if not slot:
+		var slot_o: Node = _opponent_slot_nodes[slot_idx]
+		if not slot_o:
 			continue
-		if attacker_slots.has(slot_idx) or attacker_slots.has(str(slot_idx)):
-			_spawn_card_back_in_slot(slot, true)
-
-
-func _spawn_card_back_in_slot(slot: Node, is_opponent_slot: bool) -> void:
-	if not slot:
-		return
-	var card := CARD_SCENE.instantiate()
-	if not card:
-		return
-	get_tree().current_scene.add_child(card)
-	var area := card.get_node_or_null("Card_Collision") as Area2D
-	if area:
-		area.input_pickable = false
-	card.card_sprite_frames = CARD_BACK_FRAMES
-	card.frame_index = CARD_BACK_FRAME_INDEX
-	if slot.has_method("force_snap_card"):
-		slot.force_snap_card(card)
-	if is_opponent_slot:
-		_opponent_cards_by_slot[slot] = card
+		var want_att: bool = _spectator_should_show_back_for_side(slot_idx, net_att, bsm_att)
+		_spectator_apply_back_to_slot(slot_o, want_att, _opponent_cards_by_slot)
 
 
 func _setup_ui() -> void:
@@ -1239,6 +1435,7 @@ func _place_opponent_backs() -> void:
 
 		var card := CARD_SCENE.instantiate()
 		get_tree().current_scene.add_child(card)
+		card.set_meta("disable_card_input", true)
 
 		# Ensure it's not interactive.
 		var area := card.get_node_or_null("Card_Collision") as Area2D
@@ -1701,8 +1898,9 @@ func _spectator_on_battle_start() -> void:
 	# Bot-vs-bot in multiplayer: the host must apply territory state since no
 	# participant runs _apply_battle_resolution_state.
 	if _is_multiplayer and multiplayer.has_multiplayer_peer() and multiplayer.is_server():
-		var att_id := BattleSync.territory_battle_attacker_id
-		var def_id := BattleSync.territory_battle_defender_id
+		var ids_rr: Dictionary = _resolve_spectator_territory_participant_ids()
+		var att_id: int = int(ids_rr.get("attacker_id", -1))
+		var def_id: int = int(ids_rr.get("defender_id", -1))
 		if PlayerDataSync.is_bot_id(att_id) and PlayerDataSync.is_bot_id(def_id):
 			_apply_bot_vs_bot_territory_state(tid_str, _spectator_winner_role, att_id, def_id, result)
 
@@ -1764,11 +1962,12 @@ func _apply_bot_vs_bot_territory_state(tid_str: String, winner_role: String, att
 func _spectator_resolve_from_sync() -> Dictionary:
 	## Resolve the battle from BattleSync.battle_placed_cards without needing card nodes.
 	## Uses the same pairing and attribute logic as _resolve_battle.
-	var attacker_id := BattleSync.territory_battle_attacker_id
-	var defender_id := BattleSync.territory_battle_defender_id
+	var ids: Dictionary = _resolve_spectator_territory_participant_ids()
+	var attacker_id: int = int(ids.get("attacker_id", -1))
+	var defender_id: int = int(ids.get("defender_id", -1))
 
-	var attacker_cards: Dictionary = BattleSync.battle_placed_cards.get(attacker_id, {})
-	var defender_cards: Dictionary = BattleSync.battle_placed_cards.get(defender_id, {})
+	var attacker_cards: Dictionary = _spectator_get_placed_for_peer(attacker_id)
+	var defender_cards: Dictionary = _spectator_get_placed_for_peer(defender_id)
 
 	var defender_wins := 0
 	var attacker_wins := 0
@@ -1909,6 +2108,7 @@ func _auto_leave_battle() -> void:
 	if DEBUG_LOGS: print("[BattleManager] Auto-return timer expired. Leaving battle.")
 	if _is_spectator:
 		App.is_battle_spectator = false
+		_spectator_dispose_all_tracked_backs()
 		BattleSync.clear_battle_state()
 		App.switch_to_main_music()
 		App.on_battle_completed()
@@ -1933,6 +2133,7 @@ func _on_leave_pressed() -> void:
 
 	if _is_spectator:
 		App.is_battle_spectator = false
+		_spectator_dispose_all_tracked_backs()
 		BattleSync.clear_battle_state()
 		App.switch_to_main_music()
 		if state == State.RESOLVED:
