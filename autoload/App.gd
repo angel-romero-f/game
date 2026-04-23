@@ -1159,13 +1159,20 @@ func setup_multiplayer_game() -> void:
 	if tcs and tcs.has_method("clear_all"):
 		tcs.clear_all()
 	
-	# Build player list from PlayerDataSync.player_names and PlayerDataSync.player_races
+	# Build player list from PlayerDataSync in join order (consistent across all machines)
 	var my_id := multiplayer.get_unique_id() if multiplayer.has_multiplayer_peer() else 1
 
-	# Sort player IDs so game_players is in the same order on every machine
-	var sorted_pids: Array = PlayerDataSync.player_races.keys()
-	sorted_pids.sort()
-	for pid in sorted_pids:
+	# Use join_order from host so every machine iterates players in the same order.
+	# Fall back to sorted keys if join_order is empty (shouldn't happen).
+	var pid_list: Array = PlayerDataSync.join_order.duplicate()
+	if pid_list.is_empty():
+		pid_list = PlayerDataSync.player_races.keys()
+		pid_list.sort()
+	# Ensure all players in player_races are included (safety net)
+	for pid in PlayerDataSync.player_races.keys():
+		if not pid_list.has(pid):
+			pid_list.append(pid)
+	for pid in pid_list:
 		var p := {
 			"id": int(pid),
 			"name": String(PlayerDataSync.player_names.get(pid, "Player")),

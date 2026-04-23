@@ -15,6 +15,8 @@ var player_names: Dictionary = {}
 var player_races: Dictionary = {} # peer_id -> race_name (String)
 var player_rolls: Dictionary = {} # peer_id -> roll value (int)
 var _bot_ids: Dictionary = {}     # bot_id -> true  (explicit set of generated bot IDs)
+## Tracks the order players joined (host first, then clients in connect order, then bots).
+var join_order: Array = []
 ## Order bots were added (for remove-one-at-a-time: pop last).
 var _bot_id_order: Array[int] = []
 ## Per-bot difficulty: bot_id -> int [0..5].
@@ -37,6 +39,7 @@ func _on_connection_closing() -> void:
 	_bot_ids.clear()
 	_bot_id_order.clear()
 	bot_difficulties.clear()
+	join_order.clear()
 
 func _on_peer_disconnected(id: int) -> void:
 	if multiplayer.is_server():
@@ -108,6 +111,8 @@ func host_add_bot() -> bool:
 	player_races[new_id] = ""
 	_bot_ids[new_id] = true
 	_bot_id_order.append(new_id)
+	if not join_order.has(new_id):
+		join_order.append(new_id)
 	bot_difficulties[new_id] = int(bot_difficulties.get(new_id, 0))
 	_sync_player_names()
 	_sync_player_races()
@@ -212,6 +217,8 @@ func sync_player_names(names: Dictionary) -> void:
 
 func _set_player_name(id: int, player_name: String) -> void:
 	player_names[id] = player_name
+	if not join_order.has(id):
+		join_order.append(id)
 
 func _sync_player_names() -> void:
 	sync_player_names.rpc(player_names)
@@ -274,8 +281,10 @@ func host_generate_and_sync_rolls() -> void:
 		push_warning("Only host can generate rolls")
 		return
 	player_rolls.clear()
-	var pids: Array = player_races.keys()
-	pids.sort()
+	# Use join_order for deterministic iteration; fall back to sorted keys
+	var pids: Array = join_order.duplicate() if not join_order.is_empty() else player_races.keys()
+	if join_order.is_empty():
+		pids.sort()
 	for pid in pids:
 		player_rolls[pid] = App.game_rng.randi_range(1, 20) if App.demo_seed != 0 else randi_range(1, 20)
 	_resolve_roll_ties()

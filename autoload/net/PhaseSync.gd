@@ -17,7 +17,7 @@ func start_race_select() -> void:
 ## RPC: Start the game (called by host, transitions everyone to GameIntro scene).
 ## Host passes the complete names/races dicts and bot ID list so clients get bot entries atomically.
 @rpc("authority", "call_local", "reliable")
-func start_game(all_names: Dictionary = {}, all_races: Dictionary = {}, bot_ids: Array = [], bot_difficulties: Dictionary = {}, demo_seed: int = 0) -> void:
+func start_game(all_names: Dictionary = {}, all_races: Dictionary = {}, bot_ids: Array = [], bot_difficulties: Dictionary = {}, demo_seed: int = 0, host_join_order: Array = []) -> void:
 	if not all_names.is_empty():
 		PlayerDataSync.player_names = all_names.duplicate(true)
 	if not all_races.is_empty():
@@ -26,6 +26,8 @@ func start_game(all_names: Dictionary = {}, all_races: Dictionary = {}, bot_ids:
 		PlayerDataSync.register_bot_ids(bot_ids)
 	if not bot_difficulties.is_empty():
 		PlayerDataSync.bot_difficulties = bot_difficulties.duplicate(true)
+	if not host_join_order.is_empty():
+		PlayerDataSync.join_order = host_join_order.duplicate()
 	if demo_seed != 0:
 		App.demo_seed = demo_seed
 		App.game_rng.seed = demo_seed
