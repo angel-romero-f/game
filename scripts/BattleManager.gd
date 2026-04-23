@@ -492,7 +492,7 @@ func _spectator_key_matches_peer_id(raw_key: Variant, peer_id: int) -> bool:
 
 
 func _spectator_get_placed_for_peer(peer_id: int) -> Dictionary:
-	if peer_id < 0 or not BattleSync:
+	if peer_id == -1 or not BattleSync:
 		return {}
 	var raw: Dictionary = BattleSync.battle_placed_cards
 	var v: Variant = raw.get(peer_id, null)
