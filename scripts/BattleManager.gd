@@ -521,41 +521,76 @@ func _spectator_peer_id_plausible(pid: int) -> bool:
 	# Lobby/bot ids (see PlayerDataSync.BOT_ID_BASE)
 	if pid <= -95 and pid >= -110:
 		return true
-	if pid > 0 and pid < 1_000_000:
+	# ENet peer IDs can be large positive ints; accept any positive value.
+	if pid > 0:
 		return true
 	return false
 
 
 func _resolve_spectator_territory_participant_ids() -> Dictionary:
-	## Prefer App.pending_* (set in App.enter_territory_battle); BattleSync can be wrong on some frames.
-	## Ignore garbage ints (large positive) seen as stale RPC/desync values.
-	var att: int = BattleSync.territory_battle_attacker_id if BattleSync else -1
-	var def: int = BattleSync.territory_battle_defender_id if BattleSync else -1
-	if App:
-		if _spectator_peer_id_plausible(App.pending_territory_battle_attacker_id):
-			att = App.pending_territory_battle_attacker_id
-		if _spectator_peer_id_plausible(App.pending_territory_battle_defender_id):
-			def = App.pending_territory_battle_defender_id
-	if not _spectator_peer_id_plausible(def):
-		def = -1
-		var tid_str := BattleStateManager.current_territory_id if BattleStateManager else ""
-		if not tid_str.is_empty() and str(tid_str).is_valid_int():
-			var tcs := get_node_or_null("/root/TerritoryClaimState")
-			if tcs and tcs.has_method("get_owner_id"):
-				var ov: Variant = tcs.call("get_owner_id", int(tid_str))
-				if ov != null:
-					def = int(ov)
+	## Resolve participants using live BattleSync cards first; only then fallback to pending/sync fields.
+	var att: int = -1
+	var def: int = -1
+	var tid_str := BattleStateManager.current_territory_id if BattleStateManager else ""
+	var owner_id: int = -1
+	if not tid_str.is_empty() and str(tid_str).is_valid_int():
+		var tcs := get_node_or_null("/root/TerritoryClaimState")
+		if tcs and tcs.has_method("get_owner_id"):
+			var ov: Variant = tcs.call("get_owner_id", int(tid_str))
+			if ov != null:
+				owner_id = int(ov)
+
+	# Parse peer IDs from BattleSync.battle_placed_cards keys.
+	var card_peer_ids: Array[int] = []
+	if BattleSync:
+		for raw_k in BattleSync.battle_placed_cards.keys():
+			var pid: int = -1
+			if raw_k is int or raw_k is float:
+				pid = int(raw_k)
+			else:
+				var ks: String = str(raw_k)
+				if ks.is_valid_int():
+					pid = int(ks)
+				elif ks.is_valid_float():
+					pid = int(float(ks))
+			if _spectator_peer_id_plausible(pid) and not card_peer_ids.has(pid):
+				card_peer_ids.append(pid)
+
+	# Defender anchor: territory owner is authoritative when available.
+	if _spectator_peer_id_plausible(owner_id):
+		def = owner_id
+	elif App and _spectator_peer_id_plausible(App.pending_territory_battle_defender_id):
+		def = App.pending_territory_battle_defender_id
+	elif BattleSync and _spectator_peer_id_plausible(BattleSync.territory_battle_defender_id):
+		def = BattleSync.territory_battle_defender_id
+
+	# Attacker from live card keys first.
+	if not card_peer_ids.is_empty():
+		for pid in card_peer_ids:
+			if pid != def:
+				att = pid
+				break
+		# If only one side has placed cards yet, still use known attacker ids.
+		if att == -1 and card_peer_ids.size() == 1 and card_peer_ids[0] != def:
+			att = card_peer_ids[0]
+
+	# Fallback attacker chain.
 	if not _spectator_peer_id_plausible(att):
-		att = -1
-		var tid_str2 := BattleStateManager.current_territory_id if BattleStateManager else ""
-		if App and not tid_str2.is_empty() and str(tid_str2).is_valid_int():
-			var tid_i := int(tid_str2)
+		if App and _spectator_peer_id_plausible(App.pending_territory_battle_attacker_id):
+			att = App.pending_territory_battle_attacker_id
+		elif App and not tid_str.is_empty() and str(tid_str).is_valid_int():
+			var tid_i := int(tid_str)
 			if App.territory_pending_attackers.has(tid_i):
 				att = int(App.territory_pending_attackers[tid_i])
-	if not _spectator_peer_id_plausible(att) and BattleSync and _spectator_peer_id_plausible(BattleSync.territory_battle_attacker_id):
-		att = BattleSync.territory_battle_attacker_id
-	if not _spectator_peer_id_plausible(def) and BattleSync and _spectator_peer_id_plausible(BattleSync.territory_battle_defender_id):
-		def = BattleSync.territory_battle_defender_id
+		elif BattleSync and _spectator_peer_id_plausible(BattleSync.territory_battle_attacker_id):
+			att = BattleSync.territory_battle_attacker_id
+
+	# Final sanitize.
+	if not _spectator_peer_id_plausible(def):
+		def = -1
+	if not _spectator_peer_id_plausible(att):
+		att = -1
+
 	return {"attacker_id": att, "defender_id": def}
 
 
