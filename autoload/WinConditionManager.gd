@@ -165,8 +165,10 @@ func _build_ui() -> void:
 	_victory_background = TextureRect.new()
 	_victory_background.name = "VictoryBackground"
 	_victory_background.set_anchors_preset(Control.PRESET_FULL_RECT)
-	_victory_background.stretch_mode = TextureRect.STRETCH_SCALE
-	_victory_background.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
+	# Preserve image proportions on every resolution.
+	# COVERED fills the viewport and crops overflow instead of stretching.
+	_victory_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
+	_victory_background.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	_victory_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_victory_overlay.add_child(_victory_background)
 
