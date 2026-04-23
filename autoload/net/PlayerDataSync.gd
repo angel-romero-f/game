@@ -49,6 +49,7 @@ func _on_peer_disconnected(id: int) -> void:
 		if player_races.has(id):
 			player_races.erase(id)
 			_sync_player_races()
+		join_order.erase(id)
 
 func is_bot_id(id: int) -> bool:
 	if _bot_ids.has(id):
@@ -166,6 +167,7 @@ func host_remove_bot() -> bool:
 	player_races.erase(bid)
 	_bot_ids.erase(bid)
 	bot_difficulties.erase(bid)
+	join_order.erase(bid)
 	_sync_player_names()
 	_sync_player_races()
 	_sync_bot_difficulties()

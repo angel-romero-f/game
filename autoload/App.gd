@@ -1173,6 +1173,9 @@ func setup_multiplayer_game() -> void:
 		if not pid_list.has(pid):
 			pid_list.append(pid)
 	for pid in pid_list:
+		if not PlayerDataSync.player_races.has(pid):
+			if DEBUG_LOGS: print("[App] setup_multiplayer_game: skipping stale pid without race in player_races: ", pid)
+			continue
 		var p := {
 			"id": int(pid),
 			"name": String(PlayerDataSync.player_names.get(pid, "Player")),
