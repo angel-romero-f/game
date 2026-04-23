@@ -5,6 +5,13 @@ const DEBUG_LOGS := false
 ## Server-authoritative RPCs that delegate state updates to PhaseController.
 ## Also contains game flow RPCs (start_race_select, start_game).
 
+## Re-key a Dictionary so every key is int (RPC can change int keys to float/string).
+static func _int_keyed(d: Dictionary) -> Dictionary:
+	var out := {}
+	for k in d:
+		out[int(k)] = d[k]
+	return out
+
 # ---------- GAME FLOW RPCs ----------
 
 ## RPC: Start the multiplayer race selection screen (called by host).
@@ -19,15 +26,18 @@ func start_race_select() -> void:
 @rpc("authority", "call_local", "reliable")
 func start_game(all_names: Dictionary = {}, all_races: Dictionary = {}, bot_ids: Array = [], bot_difficulties: Dictionary = {}, demo_seed: int = 0, host_join_order: Array = []) -> void:
 	if not all_names.is_empty():
-		PlayerDataSync.player_names = all_names.duplicate(true)
+		PlayerDataSync.player_names = _int_keyed(all_names)
 	if not all_races.is_empty():
-		PlayerDataSync.player_races = all_races.duplicate(true)
+		PlayerDataSync.player_races = _int_keyed(all_races)
 	if not bot_ids.is_empty():
 		PlayerDataSync.register_bot_ids(bot_ids)
 	if not bot_difficulties.is_empty():
-		PlayerDataSync.bot_difficulties = bot_difficulties.duplicate(true)
+		PlayerDataSync.bot_difficulties = _int_keyed(bot_difficulties)
 	if not host_join_order.is_empty():
-		PlayerDataSync.join_order = host_join_order.duplicate()
+		var jo: Array = []
+		for pid in host_join_order:
+			jo.append(int(pid))
+		PlayerDataSync.join_order = jo
 	if demo_seed != 0:
 		App.demo_seed = demo_seed
 		App.game_rng.seed = demo_seed
