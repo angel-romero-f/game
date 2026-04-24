@@ -188,6 +188,8 @@ func _build_ui() -> void:
 	_victory_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_victory_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 	_victory_label.set_anchors_preset(Control.PRESET_FULL_RECT)
+	_victory_label.offset_top = -35.0
+	_victory_label.offset_bottom = -35.0
 	_victory_label.add_theme_font_override("font", load("res://fonts/m5x7.ttf"))
 	_victory_label.add_theme_font_size_override("font_size", 64)
 	_victory_label.add_theme_color_override("font_color", Color(1.0, 0.92, 0.55, 1.0))
@@ -201,9 +203,9 @@ func _build_ui() -> void:
 	_main_menu_button.text = "Main Menu"
 	_main_menu_button.set_anchors_preset(Control.PRESET_CENTER_BOTTOM)
 	_main_menu_button.offset_left = -80.0
-	_main_menu_button.offset_top = -100.0
+	_main_menu_button.offset_top = -135.0
 	_main_menu_button.offset_right = 80.0
-	_main_menu_button.offset_bottom = -60.0
+	_main_menu_button.offset_bottom = -95.0
 	_main_menu_button.add_theme_font_override("font", load("res://fonts/m5x7.ttf"))
 	_main_menu_button.add_theme_font_size_override("font_size", 28)
 	_main_menu_button.pressed.connect(_on_main_menu_pressed)
