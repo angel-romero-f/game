@@ -27,6 +27,7 @@ var _victory_overlay: ColorRect
 var _victory_background: TextureRect
 var _victory_label: Label
 var _main_menu_button: Button
+var _win_bg_frames: SpriteFrames = null
 
 
 func _ready() -> void:
@@ -127,6 +128,13 @@ func _show_victory(player_id: int) -> void:
 	else:
 		App.play_game_defeat_stinger()
 
+	if _victory_background and _win_bg_frames and _win_bg_frames.has_animation("default"):
+		var frame_count := _win_bg_frames.get_frame_count("default")
+		if frame_count > 0:
+			var frame_index := 0 if local_id == player_id else 1
+			frame_index = clampi(frame_index, 0, frame_count - 1)
+			_victory_background.texture = _win_bg_frames.get_frame_texture("default", frame_index)
+
 
 func _on_main_menu_pressed() -> void:
 	reset_for_menu_return()
@@ -165,16 +173,14 @@ func _build_ui() -> void:
 	_victory_background = TextureRect.new()
 	_victory_background.name = "VictoryBackground"
 	_victory_background.set_anchors_preset(Control.PRESET_FULL_RECT)
-	# Preserve image proportions on every resolution.
-	# COVERED fills the viewport and crops overflow instead of stretching.
 	_victory_background.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	_victory_background.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
 	_victory_background.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	_victory_overlay.add_child(_victory_background)
 
-	var bg_frames: SpriteFrames = load("res://assets/win_screen_bg.pxo") as SpriteFrames
-	if bg_frames and bg_frames.has_animation("default") and bg_frames.get_frame_count("default") > 0:
-		var bg_tex: Texture2D = bg_frames.get_frame_texture("default", 0)
+	_win_bg_frames = load("res://assets/win_screen_bg.pxo") as SpriteFrames
+	if _win_bg_frames and _win_bg_frames.has_animation("default") and _win_bg_frames.get_frame_count("default") > 0:
+		var bg_tex: Texture2D = _win_bg_frames.get_frame_texture("default", 0)
 		_victory_background.texture = bg_tex
 
 	_victory_label = Label.new()
