@@ -263,26 +263,23 @@ func show_win():
 	_auto_return_after_timeout(3.5)
 
 func _build_win_card_display() -> void:
-	var reward := App.pending_minigame_reward
-	if reward.is_empty():
+	var cards: Array[Dictionary] = []
+	if not App.pending_minigame_reward.is_empty():
+		cards.append(App.pending_minigame_reward)
+	if App.region_bonus_active and not App.pending_bonus_reward.is_empty():
+		cards.append(App.pending_bonus_reward)
+	if cards.is_empty():
 		return
-	var path: String = reward.get("path", "")
-	var frame: int = int(reward.get("frame", 0))
-	if path == "" or not ResourceLoader.exists(path):
-		return
-	var sf := load(path) as SpriteFrames
-	if not sf or not sf.has_animation("default"):
-		return
-	if frame < 0 or frame >= sf.get_frame_count("default"):
-		return
-
-	var card_name := _card_name_from_path(path)
 
 	var panel := PanelContainer.new()
 	panel.name = "WinCardPopup"
 	panel.set_anchors_preset(Control.PRESET_CENTER)
-	panel.offset_left = -130
-	panel.offset_right = 130
+	if cards.size() >= 2:
+		panel.offset_left = -220
+		panel.offset_right = 220
+	else:
+		panel.offset_left = -130
+		panel.offset_right = 130
 	panel.offset_top = -140
 	panel.offset_bottom = 140
 	var style := StyleBoxFlat.new()
@@ -298,16 +295,40 @@ func _build_win_card_display() -> void:
 	vbox.alignment = BoxContainer.ALIGNMENT_CENTER
 	panel.add_child(vbox)
 
-	var tex := TextureRect.new()
-	tex.texture = sf.get_frame_texture("default", frame)
-	tex.custom_minimum_size = Vector2(140, 196)
-	tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
-	tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
-	tex.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
-	vbox.add_child(tex)
+	var textures_row := HBoxContainer.new()
+	textures_row.add_theme_constant_override("separation", 10)
+	textures_row.alignment = BoxContainer.ALIGNMENT_CENTER
+	vbox.add_child(textures_row)
+
+	var card_names: PackedStringArray = []
+	for c in cards:
+		var path: String = c.get("path", "")
+		var frame: int = int(c.get("frame", 0))
+		if path == "" or not ResourceLoader.exists(path):
+			continue
+		var sf := load(path) as SpriteFrames
+		if not sf or not sf.has_animation("default"):
+			continue
+		if frame < 0 or frame >= sf.get_frame_count("default"):
+			continue
+
+		var tex := TextureRect.new()
+		tex.texture = sf.get_frame_texture("default", frame)
+		tex.custom_minimum_size = Vector2(140, 196)
+		tex.expand_mode = TextureRect.EXPAND_FIT_WIDTH_PROPORTIONAL
+		tex.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
+		tex.size_flags_horizontal = Control.SIZE_SHRINK_CENTER
+		textures_row.add_child(tex)
+		card_names.append(_card_name_from_path(path))
+
+	if card_names.is_empty():
+		return
 
 	var lbl := Label.new()
-	lbl.text = "You won: %s!" % card_name
+	if card_names.size() >= 2:
+		lbl.text = "You won: %s + %s!" % [card_names[0], card_names[1]]
+	else:
+		lbl.text = "You won: %s!" % card_names[0]
 	if _pixel_font:
 		lbl.add_theme_font_override("font", _pixel_font)
 	lbl.add_theme_font_size_override("font_size", 24)
