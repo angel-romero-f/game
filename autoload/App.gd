@@ -3,7 +3,7 @@ const DEBUG_LOGS := false
 
 ## Set to a non-zero value to make all RNG deterministic (for demos/testing).
 ## Set to 0 for normal random behavior, or any other number for deterministic demo.
-var demo_seed: int = 42
+var demo_seed: int = 0
 
 ## Dedicated RNG for game-critical decisions (dice rolls, card shuffles, rewards).
 ## Isolated from Godot's global RNG so network/UI noise can't desync it.
